@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":false,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="本文源码redis5.0.12  hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典dict的数据结构，其实现在dict.h和dict.c中">
+<meta property="og:type" content="article">
+<meta property="og:title" content="dict字典">
+<meta property="og:url" content="http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/index.html">
+<meta property="og:site_name" content="polaris_he&#39;s blog">
+<meta property="og:description" content="本文源码redis5.0.12  hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典dict的数据结构，其实现在dict.h和dict.c中">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-04-10T10:43:04.000Z">
+<meta property="article:modified_time" content="2021-04-11T10:22:50.420Z">
+<meta property="article:author" content="polaris_he">
+<meta property="article:tag" content="redis源码">
+<meta property="article:tag" content="redis数据结构">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>dict字典 | polaris_he's blog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">polaris_he's blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404/" rel="section"><i class="fa fa-heartbeat fa-fw"></i>公益 404</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he's blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          dict字典
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-04-10 18:43:04" itemprop="dateCreated datePublished" datetime="2021-04-10T18:43:04+08:00">2021-04-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-04-11 18:22:50" itemprop="dateModified" datetime="2021-04-11T18:22:50+08:00">2021-04-11</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+</blockquote>
+<p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典dict的数据结构，其实现在<code>dict.h</code>和<code>dict.c</code>中</p>
+<span id="more"></span>
+<h1>DICT数据结构</h1>
+<h2 id="Hash表节点">Hash表节点</h2>
+<p>dictEntry保存了字典中的节点，数据结构比较简单，记录了key，value和hash冲突后采用<code>链地址法</code>的链表header。</p>
+<ul>
+<li>需要注意的是，value采用了union，主要是字典在redis中被广泛使用了。如：hash指令，记录各个键的TTL等，在不同的场景下会使用不同的成员，如记录TTL时使用了<code>s64</code>。这样设计的原因也是为了节省内存。</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dictEntry</span> <span class="token punctuation">&#123;</span>
+    <span class="token comment">// key</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">;</span>
+    <span class="token comment">// value，c语言中的共用体</span>
+    <span class="token keyword">union</span> <span class="token punctuation">&#123;</span>
+        <span class="token keyword">void</span> <span class="token operator">*</span>val<span class="token punctuation">;</span>
+        <span class="token class-name">uint64_t</span> u64<span class="token punctuation">;</span>
+        <span class="token class-name">int64_t</span> s64<span class="token punctuation">;</span>
+        <span class="token keyword">double</span> d<span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span> v<span class="token punctuation">;</span>
+    <span class="token comment">// hash冲突后使用单链表存储</span>
+    <span class="token keyword">struct</span> <span class="token class-name">dictEntry</span> <span class="token operator">*</span>next<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span> dictEntry<span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Hash表">Hash表</h2>
+<p>Hash表主要记录了entry数组等信息。</p>
+<ul>
+<li>table：一维数组，hash后的数据就存在这里，相当于slot的概念</li>
+<li>size：table数组大小，最小4，必须是2^n</li>
+<li>sizemask：固定为size-1，这么做的目的是方便计算元素的索引。
+<ul>
+<li>因为size固定是<code>2^n</code>，如4，8……这样sizemask固定为：3，7……注意到3的二进制是<code>11</code>，7的二进制是<code>111</code>。这样计算<code>index=hash &amp; sizemask</code></li>
+</ul>
+</li>
+<li>used：记录Hash表中保存的数据个数</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token comment">/* This is our hash table structure. Every dictionary has two of this as we
+ * implement incremental rehashing, for the old to the new table. */</span>
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dictht</span> <span class="token punctuation">&#123;</span>
+    <span class="token comment">// 二维数组，指向kv对</span>
+    dictEntry <span class="token operator">*</span><span class="token operator">*</span>table<span class="token punctuation">;</span>			
+    <span class="token comment">// table的大小</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> size<span class="token punctuation">;</span>		
+    <span class="token comment">// 掩码，table的大小固定为2^n，sizemask为size-1，即2^n-1，这样sizemask的每一位都是1</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> sizemask<span class="token punctuation">;</span>	
+    <span class="token comment">// 已保存kv对的个数</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> used<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span> dictht<span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这个地方要注意下**table。菜鸡如我看到**table以为是个二维数组，可以通table[1][1]访问这种。其实不是，table应该理解成一维数组，使用二维指针只是方便<code>dictEntry-&gt;next</code>的访问。<br>
+<embed id="dictht" src="dictht.svg" type="image/svg+xml"></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictht <span class="token operator">*</span>ht
+<span class="token keyword">for</span> <span class="token punctuation">(</span>i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> ht<span class="token operator">-></span>size<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+	dictEntry <span class="token operator">*</span>he <span class="token operator">=</span> ht<span class="token operator">-></span>table<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+	<span class="token keyword">while</span><span class="token punctuation">(</span>he<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+		chainlen<span class="token operator">++</span><span class="token punctuation">;</span>
+		he <span class="token operator">=</span> he<span class="token operator">-></span>next<span class="token punctuation">;</span>
+	<span class="token punctuation">&#125;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Dict字典">Dict字典</h2>
+<p>有了hash table，就可以很容易得到字典数据结构。</p>
+<ul>
+<li>dictType：指向了dictType结构体，该结构体定义了这个dict的一些基本操作函数，如：hash函数</li>
+<li>privdata：该字典的metadata，配合dictType里面的函数使用</li>
+<li>ht[2]：字典最主要的数据结构，hash table
+<ul>
+<li>这里的hash table定义的是大小为2的数组，这样主要是方便rehash。</li>
+<li>平时使用的是ht[0]，rehash时，为了不阻塞操作，会在新建ht[1]，并逐步把数据迁移到ht[1]，迁移完成后ht[1]就变成了ht[0]，等待下一次rehash。这里的思想类似于java gc时的复制算法</li>
+</ul>
+</li>
+<li>rehashidx：rehash时使用，标记rehash到hash table的哪个位置了。这里可以回忆下dictht的结构，里面的table是一个一维数组，这个rehashidx就是标示table的rehash到哪儿的index。如果没有rehash，rehashidx=-1</li>
+<li>iterators：记录迭代器的数量，迭代器参考下文</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dict</span> <span class="token punctuation">&#123;</span>
+    dictType <span class="token operator">*</span>type<span class="token punctuation">;</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">;</span>
+    dictht ht<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    <span class="token keyword">long</span> rehashidx<span class="token punctuation">;</span> <span class="token comment">/* rehashing not in progress if rehashidx == -1 */</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> iterators<span class="token punctuation">;</span> <span class="token comment">/* number of iterators currently running */</span>
+<span class="token punctuation">&#125;</span> dict<span class="token punctuation">;</span>
+
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">dictType</span> <span class="token punctuation">&#123;</span>
+    <span class="token comment">// hash函数</span>
+    <span class="token class-name">uint64_t</span> <span class="token punctuation">(</span><span class="token operator">*</span>hashFunction<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// key对应的复制函数</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span><span class="token punctuation">(</span><span class="token operator">*</span>keyDup<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// val对应的复制函数</span>
+    <span class="token keyword">void</span> <span class="token operator">*</span><span class="token punctuation">(</span><span class="token operator">*</span>valDup<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>obj<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// key的compare函数</span>
+    <span class="token keyword">int</span> <span class="token punctuation">(</span><span class="token operator">*</span>keyCompare<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key1<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// key的析构函数</span>
+    <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>keyDestructor<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// val的析构函数</span>
+    <span class="token keyword">void</span> <span class="token punctuation">(</span><span class="token operator">*</span>valDestructor<span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token keyword">void</span> <span class="token operator">*</span>privdata<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>obj<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span> dictType<span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h1>DICT基本操作</h1>
+<h2 id="创建Dict">创建Dict</h2>
+<p>dict的创建很简单。注意刚创建的dict大小为0，里面的ht.table也都是null，当第一次添加元素时，会在<code>_dictExpandIfNeeded</code>函数中对ht进行初始化</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token comment">/* Create a new hash table */</span>
+dict <span class="token operator">*</span><span class="token function">dictCreate</span><span class="token punctuation">(</span>dictType <span class="token operator">*</span>type<span class="token punctuation">,</span>
+        <span class="token keyword">void</span> <span class="token operator">*</span>privDataPtr<span class="token punctuation">)</span>
+<span class="token punctuation">&#123;</span>
+    dict <span class="token operator">*</span>d <span class="token operator">=</span> <span class="token function">zmalloc</span><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token operator">*</span>d<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token function">_dictInit</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span>type<span class="token punctuation">,</span>privDataPtr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> d<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+<span class="token comment">/* Initialize the hash table */</span>
+<span class="token keyword">int</span> <span class="token function">_dictInit</span><span class="token punctuation">(</span>dict <span class="token operator">*</span>d<span class="token punctuation">,</span> dictType <span class="token operator">*</span>type<span class="token punctuation">,</span>
+        <span class="token keyword">void</span> <span class="token operator">*</span>privDataPtr<span class="token punctuation">)</span>
+<span class="token punctuation">&#123;</span>
+    <span class="token function">_dictReset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>d<span class="token operator">-></span>ht<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token function">_dictReset</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>d<span class="token operator">-></span>ht<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    d<span class="token operator">-></span>type <span class="token operator">=</span> type<span class="token punctuation">;</span>
+    d<span class="token operator">-></span>privdata <span class="token operator">=</span> privDataPtr<span class="token punctuation">;</span>
+    d<span class="token operator">-></span>rehashidx <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+    d<span class="token operator">-></span>iterators <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> DICT_OK<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+<span class="token comment">/* Reset a hash table already initialized with ht_init().
+ * NOTE: This function should only be called by ht_destroy(). */</span>
+<span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">_dictReset</span><span class="token punctuation">(</span>dictht <span class="token operator">*</span>ht<span class="token punctuation">)</span>
+<span class="token punctuation">&#123;</span>
+    ht<span class="token operator">-></span>table <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+    ht<span class="token operator">-></span>size <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    ht<span class="token operator">-></span>sizemask <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    ht<span class="token operator">-></span>used <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="添加元素">添加元素</h2>
+<p>添加元素基本逻辑很简单</p>
+<ol>
+<li>使用<code>dictAddRaw</code>找到合适的dictEntry</li>
+<li>找到后使用宏<code>dictSetVal</code>吧value放到dictEntry中
+<ul>
+<li>注意宏里面使用了，<code>do&#123;……&#125;while(0)</code>这个技巧。对c不熟悉的会摸不着头脑，其实就是保证宏在任何地方都能以期望的语义展开，可以参考这篇文章<a target="_blank" rel="noopener" href="https://www.cnblogs.com/lanxuezaipiao/p/3535626.html">do {…} while (0) 在宏定义中的作用</a></li>
+</ul>
+</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token comment">/* Add an element to the target hash table */</span>
+<span class="token keyword">int</span> <span class="token function">dictAdd</span><span class="token punctuation">(</span>dict <span class="token operator">*</span>d<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>val<span class="token punctuation">)</span>
+<span class="token punctuation">&#123;</span>
+    dictEntry <span class="token operator">*</span>entry <span class="token operator">=</span> <span class="token function">dictAddRaw</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span>key<span class="token punctuation">,</span><span class="token constant">NULL</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>entry<span class="token punctuation">)</span> <span class="token keyword">return</span> DICT_ERR<span class="token punctuation">;</span>
+    <span class="token function">dictSetVal</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span> entry<span class="token punctuation">,</span> val<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> DICT_OK<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">dictSetVal</span><span class="token expression"><span class="token punctuation">(</span>d<span class="token punctuation">,</span> entry<span class="token punctuation">,</span> _val_<span class="token punctuation">)</span> <span class="token keyword">do</span> <span class="token punctuation">&#123;</span> </span><span class="token punctuation">\</span>
+    <span class="token expression"><span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token operator">-></span>type<span class="token operator">-></span>valDup<span class="token punctuation">)</span> </span><span class="token punctuation">\</span>
+        <span class="token expression"><span class="token punctuation">(</span>entry<span class="token punctuation">)</span><span class="token operator">-></span>v<span class="token punctuation">.</span>val <span class="token operator">=</span> <span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token operator">-></span>type<span class="token operator">-></span><span class="token function">valDup</span><span class="token punctuation">(</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token operator">-></span>privdata<span class="token punctuation">,</span> _val_<span class="token punctuation">)</span><span class="token punctuation">;</span> </span><span class="token punctuation">\</span>
+    <span class="token expression"><span class="token keyword">else</span> </span><span class="token punctuation">\</span>
+        <span class="token expression"><span class="token punctuation">(</span>entry<span class="token punctuation">)</span><span class="token operator">-></span>v<span class="token punctuation">.</span>val <span class="token operator">=</span> <span class="token punctuation">(</span>_val_<span class="token punctuation">)</span><span class="token punctuation">;</span> </span><span class="token punctuation">\</span>
+<span class="token expression"><span class="token punctuation">&#125;</span> <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从上文中可以看出，<code>dictAddRaw</code>才是正文，我们继续看这个函数。</p>
+<ol>
+<li>先判断是不是在rehash过程中，判断dict.rehashidx是不是-1，如果不是-1。则执行一次rehash step，rehash过程在下文详细说明。
+<blockquote>
+<p><strong>什么是rehash step</strong><br>
+redis执行命令都是单线程操作，很明显在字典rehash的过程中会阻塞操作，为了减少这种阻塞，redis的rehash采用了渐进式的rehash。<br>
+上文提到了，dict中定义了ht数组，平时使用ht[0]，rehash时新建ht[1]，并逐步将ht[0]的数据迁移到ht[1]。没做一次迁移，就是rehash step</p>
+</blockquote>
+</li>
+<li>根据key计算数据存储所在的index，如果key在dict中已经存在，则<strong>添加错误</strong>。</li>
+<li>是否处于rehash过程中，是的话选择ht[1]，否则选择ht[0]放置数据</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictEntry <span class="token operator">*</span><span class="token function">dictAddRaw</span><span class="token punctuation">(</span>dict <span class="token operator">*</span>d<span class="token punctuation">,</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">,</span> dictEntry <span class="token operator">*</span><span class="token operator">*</span>existing<span class="token punctuation">)</span>
+<span class="token punctuation">&#123;</span>
+    <span class="token keyword">long</span> index<span class="token punctuation">;</span>
+    dictEntry <span class="token operator">*</span>entry<span class="token punctuation">;</span>
+    dictht <span class="token operator">*</span>ht<span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">dictIsRehashing</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token function">_dictRehashStep</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Get the index of the new element, or -1 if
+     * the element already exists. */</span>
+    <span class="token comment">// #define dictHashKey(d, key) (d)->type->hashFunction(key)</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>index <span class="token operator">=</span> <span class="token function">_dictKeyIndex</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span> key<span class="token punctuation">,</span> <span class="token function">dictHashKey</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span>key<span class="token punctuation">)</span><span class="token punctuation">,</span> existing<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Allocate the memory and store the new entry.
+     * Insert the element in top, with the assumption that in a database
+     * system it is more likely that recently added entries are accessed
+     * more frequently. */</span>
+    ht <span class="token operator">=</span> <span class="token function">dictIsRehashing</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span> <span class="token operator">?</span> <span class="token operator">&amp;</span>d<span class="token operator">-></span>ht<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">:</span> <span class="token operator">&amp;</span>d<span class="token operator">-></span>ht<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    entry <span class="token operator">=</span> <span class="token function">zmalloc</span><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token operator">*</span>entry<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// 如果hash冲突，放到链表中</span>
+    entry<span class="token operator">-></span>next <span class="token operator">=</span> ht<span class="token operator">-></span>table<span class="token punctuation">[</span>index<span class="token punctuation">]</span><span class="token punctuation">;</span>
+    ht<span class="token operator">-></span>table<span class="token punctuation">[</span>index<span class="token punctuation">]</span> <span class="token operator">=</span> entry<span class="token punctuation">;</span>
+    ht<span class="token operator">-></span>used<span class="token operator">++</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Set the hash entry fields. */</span>
+    <span class="token function">dictSetKey</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span> entry<span class="token punctuation">,</span> key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> entry<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">dictSetKey</span><span class="token expression"><span class="token punctuation">(</span>d<span class="token punctuation">,</span> entry<span class="token punctuation">,</span> _key_<span class="token punctuation">)</span> <span class="token keyword">do</span> <span class="token punctuation">&#123;</span> </span><span class="token punctuation">\</span>
+    <span class="token expression"><span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token operator">-></span>type<span class="token operator">-></span>keyDup<span class="token punctuation">)</span> </span><span class="token punctuation">\</span>
+        <span class="token expression"><span class="token punctuation">(</span>entry<span class="token punctuation">)</span><span class="token operator">-></span>key <span class="token operator">=</span> <span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token operator">-></span>type<span class="token operator">-></span><span class="token function">keyDup</span><span class="token punctuation">(</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token operator">-></span>privdata<span class="token punctuation">,</span> _key_<span class="token punctuation">)</span><span class="token punctuation">;</span> </span><span class="token punctuation">\</span>
+    <span class="token expression"><span class="token keyword">else</span> </span><span class="token punctuation">\</span>
+        <span class="token expression"><span class="token punctuation">(</span>entry<span class="token punctuation">)</span><span class="token operator">-></span>key <span class="token operator">=</span> <span class="token punctuation">(</span>_key_<span class="token punctuation">)</span><span class="token punctuation">;</span> </span><span class="token punctuation">\</span>
+<span class="token expression"><span class="token punctuation">&#125;</span> <span class="token keyword">while</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看完这段代码，我们发现这个的核心优势这么找到key在table中的位置，这个方法就是<code>_dictKeyIndex</code>。</p>
+<ol>
+<li>添加时先判断选是否需要扩容，如果容量不够先扩容。</li>
+<li>根据hash值和sizemask计算出数据应该存放的index。</li>
+<li>根据index，在两个ht中查找key是否存在（包括单链表），如果key已经有了，返回错误。检查完成后返回index作为数据的存放索引</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">static</span> <span class="token keyword">long</span> <span class="token function">_dictKeyIndex</span><span class="token punctuation">(</span>dict <span class="token operator">*</span>d<span class="token punctuation">,</span> <span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>key<span class="token punctuation">,</span> <span class="token class-name">uint64_t</span> hash<span class="token punctuation">,</span> dictEntry <span class="token operator">*</span><span class="token operator">*</span>existing<span class="token punctuation">)</span>
+<span class="token punctuation">&#123;</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">long</span> idx<span class="token punctuation">,</span> table<span class="token punctuation">;</span>
+    dictEntry <span class="token operator">*</span>he<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>existing<span class="token punctuation">)</span> <span class="token operator">*</span>existing <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Expand the hash table if needed */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">_dictExpandIfNeeded</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span> <span class="token operator">==</span> DICT_ERR<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>table <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> table <span class="token operator">&lt;=</span> <span class="token number">1</span><span class="token punctuation">;</span> table<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+        idx <span class="token operator">=</span> hash <span class="token operator">&amp;</span> d<span class="token operator">-></span>ht<span class="token punctuation">[</span>table<span class="token punctuation">]</span><span class="token punctuation">.</span>sizemask<span class="token punctuation">;</span>
+        <span class="token comment">/* Search if this slot does not already contain the given key */</span>
+        he <span class="token operator">=</span> d<span class="token operator">-></span>ht<span class="token punctuation">[</span>table<span class="token punctuation">]</span><span class="token punctuation">.</span>table<span class="token punctuation">[</span>idx<span class="token punctuation">]</span><span class="token punctuation">;</span>
+        <span class="token keyword">while</span><span class="token punctuation">(</span>he<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>key<span class="token operator">==</span>he<span class="token operator">-></span>key <span class="token operator">||</span> <span class="token function">dictCompareKeys</span><span class="token punctuation">(</span>d<span class="token punctuation">,</span> key<span class="token punctuation">,</span> he<span class="token operator">-></span>key<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>existing<span class="token punctuation">)</span> <span class="token operator">*</span>existing <span class="token operator">=</span> he<span class="token punctuation">;</span>
+                <span class="token keyword">return</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+            <span class="token punctuation">&#125;</span>
+            he <span class="token operator">=</span> he<span class="token operator">-></span>next<span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">dictIsRehashing</span><span class="token punctuation">(</span>d<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token keyword">break</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+    <span class="token keyword">return</span> idx<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="rehash">rehash</h2>
+<h2 id="扩容">扩容</h2>
+<h2 id="遍历">遍历</h2>
+<h1>API列表</h1>
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dict *dictCreate(dictType *type, void *privDataPtr);</td>
+<td>创建字典</td>
+</tr>
+<tr>
+<td>int dictExpand(dict *d, unsigned long size);</td>
+<td>字典扩容</td>
+</tr>
+<tr>
+<td>int dictAdd(dict *d, void *key, void *val);</td>
+<td>添加增数据，不能重复添加</td>
+</tr>
+<tr>
+<td>dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing);</td>
+<td>添加数据，如果重复添加，放入existing</td>
+</tr>
+<tr>
+<td>dictEntry *dictAddOrFind(dict *d, void *key);</td>
+<td>添加或查找</td>
+</tr>
+<tr>
+<td>int dictReplace(dict *d, void *key, void *val);</td>
+<td>添加数据，如果存在就更新，不存在就添加</td>
+</tr>
+<tr>
+<td>int dictDelete(dict *d, const void *key);</td>
+<td>删除数据</td>
+</tr>
+<tr>
+<td>dictEntry *dictUnlink(dict *ht, const void *key);</td>
+<td>删除数据（惰性删除）</td>
+</tr>
+<tr>
+<td>void dictFreeUnlinkedEntry(dict *d, dictEntry *he);</td>
+<td>释放惰性删除没有释放的内存</td>
+</tr>
+<tr>
+<td>void dictRelease(dict *d);</td>
+<td>删除字段并释放内存</td>
+</tr>
+<tr>
+<td>dictEntry * dictFind(dict *d, const void *key);</td>
+<td>根据key查找entry</td>
+</tr>
+<tr>
+<td>void *dictFetchValue(dict *d, const void *key);</td>
+<td>根据key查找value</td>
+</tr>
+<tr>
+<td>int dictResize(dict *d);</td>
+<td>调整字典大小，调整后大小为当前数据量的最小值</td>
+</tr>
+<tr>
+<td>dictIterator *dictGetIterator(dict *d);</td>
+<td>初始化普通迭代器</td>
+</tr>
+<tr>
+<td>dictIterator *dictGetSafeIterator(dict *d);</td>
+<td>初始化安全迭代器</td>
+</tr>
+<tr>
+<td>dictEntry *dictNext(dictIterator *iter);</td>
+<td>获取下一个迭代器，iter.next()</td>
+</tr>
+<tr>
+<td>void dictReleaseIterator(dictIterator *iter);</td>
+<td>释放迭代器</td>
+</tr>
+<tr>
+<td>dictEntry *dictGetRandomKey(dict *d);</td>
+<td>随机获取一个key</td>
+</tr>
+<tr>
+<td>unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);</td>
+<td>随机获取count个可用</td>
+</tr>
+<tr>
+<td>void dictGetStats(char *buf, size_t bufsize, dict *d);</td>
+<td>获取字典的状态</td>
+</tr>
+<tr>
+<td>uint64_t dictGenHashFunction(const void *key, int len);</td>
+<td>获取hash函数（大小写敏感）</td>
+</tr>
+<tr>
+<td>uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);</td>
+<td>获取hash函数（大小写不敏感）</td>
+</tr>
+<tr>
+<td>void dictEmpty(dict <em>d, void(callback)(void</em>));</td>
+<td>清空字典</td>
+</tr>
+<tr>
+<td>void dictEnableResize(void);</td>
+<td>允许resize</td>
+</tr>
+<tr>
+<td>void dictDisableResize(void);</td>
+<td>不允许resize</td>
+</tr>
+<tr>
+<td>int dictRehash(dict *d, int n);</td>
+<td>渐进式rehash，n为step</td>
+</tr>
+<tr>
+<td>int dictRehashMilliseconds(dict *d, int ms);</td>
+<td>执行若干步rehash，但rehash不能超过固定时长</td>
+</tr>
+<tr>
+<td>void dictSetHashFunctionSeed(uint8_t *seed);</td>
+<td>设置随机种子</td>
+</tr>
+<tr>
+<td>uint8_t *dictGetHashFunctionSeed(void);</td>
+<td>获取随机种子</td>
+</tr>
+<tr>
+<td>unsigned long dictScan(dict *d, unsigned long v, dictScanFunction *fn, dictScanBucketFunction *bucketfn, void *privdata);</td>
+<td>扫描字典</td>
+</tr>
+<tr>
+<td>uint64_t dictGetHash(dict *d, const void *key);</td>
+<td>获取key的hash</td>
+</tr>
+<tr>
+<td>dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);</td>
+<td>通过已经被惰性删除的数据和hash查找entry</td>
+</tr>
+</tbody>
+</table>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/redis%E6%BA%90%E7%A0%81/" rel="tag"># redis源码</a>
+              <a href="/tags/redis%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" rel="tag"># redis数据结构</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/" rel="prev" title="sds字符串">
+      <i class="fa fa-chevron-left"></i> sds字符串
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/04/15/%E5%9D%91%E7%88%B9%E7%9A%84@target/" rel="next" title="坑爹的@target">
+      坑爹的@target <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">DICT数据结构</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Hash%E8%A1%A8%E8%8A%82%E7%82%B9"><span class="nav-number">1.1.</span> <span class="nav-text">Hash表节点</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Hash%E8%A1%A8"><span class="nav-number">1.2.</span> <span class="nav-text">Hash表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Dict%E5%AD%97%E5%85%B8"><span class="nav-number">1.3.</span> <span class="nav-text">Dict字典</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">DICT基本操作</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%9B%E5%BB%BADict"><span class="nav-number">2.1.</span> <span class="nav-text">创建Dict</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E5%85%83%E7%B4%A0"><span class="nav-number">2.2.</span> <span class="nav-text">添加元素</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#rehash"><span class="nav-number">2.3.</span> <span class="nav-text">rehash</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%89%A9%E5%AE%B9"><span class="nav-number">2.4.</span> <span class="nav-text">扩容</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%81%8D%E5%8E%86"><span class="nav-number">2.5.</span> <span class="nav-text">遍历</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">3.</span> <span class="nav-text">API列表</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives">
+          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">polaris_he</span>
+</div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+</body>
+</html>
