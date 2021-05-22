@@ -160,6 +160,76 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he's blog">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/" class="post-title-link" itemprop="url">ziplist压缩列表</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2021-05-16 14:57:08 / 修改时间：16:37:33" itemprop="dateCreated datePublished" datetime="2021-05-16T14:57:08+08:00">2021-05-16</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <blockquote>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+</blockquote>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -191,7 +261,7 @@
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-05-17 23:25:02" itemprop="dateModified" datetime="2021-05-17T23:25:02+08:00">2021-05-17</time>
+                <time title="修改时间：2021-05-22 22:27:31" itemprop="dateModified" datetime="2021-05-22T22:27:31+08:00">2021-05-22</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -215,10 +285,11 @@
 
       
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+跳表的定义在<code>server.h</code>中，实现在<code>t_zset.c</code></p>
 </blockquote>
 <p>跳表是个很神奇的数据结构，简单但效率高，没有<strong>红黑树</strong>复杂，却有O(logn)的查找效率。其实我觉得<code>只有右儿子的B+树</code>和跳表挺类似的，都是多级索引来达到O(logn)的效率。<br>
-redis中，只有有序集合zset使用了跳表。代码成面看，跳表的定义在<code>server.h</code>中，实现在<code>t_zset.c</code></p>
+redis中，只有有序集合zset使用了跳表</p>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/#more" rel="contents">
@@ -460,7 +531,7 @@ redis中，只有有序集合zset使用了跳表。代码成面看，跳表的�
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-04-11 18:22:50" itemprop="dateModified" datetime="2021-04-11T18:22:50+08:00">2021-04-11</time>
+                <time title="修改时间：2021-05-22 22:26:13" itemprop="dateModified" datetime="2021-05-22T22:26:13+08:00">2021-05-22</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -484,9 +555,10 @@ redis中，只有有序集合zset使用了跳表。代码成面看，跳表的�
 
       
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code>中</p>
 </blockquote>
-<p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典dict的数据结构，其实现在<code>dict.h</code>和<code>dict.c</code>中</p>
+<p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典</p>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2021/04/10/dict%E5%93%88%E5%B8%8C/#more" rel="contents">
@@ -544,7 +616,7 @@ redis中，只有有序集合zset使用了跳表。代码成面看，跳表的�
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-04-17 11:38:38" itemprop="dateModified" datetime="2021-04-17T11:38:38+08:00">2021-04-17</time>
+                <time title="修改时间：2021-05-22 22:27:06" itemprop="dateModified" datetime="2021-05-22T22:27:06+08:00">2021-05-22</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -568,9 +640,10 @@ redis中，只有有序集合zset使用了跳表。代码成面看，跳表的�
 
       
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
 </blockquote>
-<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。Simple Dynamic String实现都在<code>sds.h</code>和<code>sds.c</code>中，从这两个文件开始sds的分析之旅。</p>
+<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。</p>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/#more" rel="contents">
@@ -660,7 +733,7 @@ redis中，只有有序集合zset使用了跳表。代码成面看，跳表的�
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
           <a href="/archives">
-          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-count">6</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>

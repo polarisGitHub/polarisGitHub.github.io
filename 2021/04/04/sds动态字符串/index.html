@@ -20,15 +20,15 @@
     var CONFIG = {"hostname":"example.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":false,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="本文源码redis5.0.12  使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。Simple Dynamic String实现都在sds.h和sds.c中，从这两个文件开始sds的分析之旅。">
+  <meta name="description" content="本文源码redis5.0.12 Simple Dynamic String定义在sds.h，实现在sds.c中  使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="sds字符串">
 <meta property="og:url" content="http://example.com/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/index.html">
 <meta property="og:site_name" content="polaris_he&#39;s blog">
-<meta property="og:description" content="本文源码redis5.0.12  使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。Simple Dynamic String实现都在sds.h和sds.c中，从这两个文件开始sds的分析之旅。">
+<meta property="og:description" content="本文源码redis5.0.12 Simple Dynamic String定义在sds.h，实现在sds.c中  使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2021-04-04T14:59:33.000Z">
-<meta property="article:modified_time" content="2021-04-17T03:38:38.042Z">
+<meta property="article:modified_time" content="2021-05-22T14:27:06.824Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="redis源码">
 <meta property="article:tag" content="redis数据结构">
@@ -197,7 +197,7 @@
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-04-17 11:38:38" itemprop="dateModified" datetime="2021-04-17T11:38:38+08:00">2021-04-17</time>
+                <time title="修改时间：2021-05-22 22:27:06" itemprop="dateModified" datetime="2021-05-22T22:27:06+08:00">2021-05-22</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -221,9 +221,10 @@
 
       
         <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
 </blockquote>
-<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。Simple Dynamic String实现都在<code>sds.h</code>和<code>sds.c</code>中，从这两个文件开始sds的分析之旅。</p>
+<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。</p>
 <span id="more"></span>
 <h1>SDS数据结构</h1>
 <p>在sds.h中定义了sds的数据结构。<code>typedef char *sds;</code>单从数据结构的定义上看，sds就是一个char数组。但和c的char数组不同。sds保存了额外的数据信息，保证<strong>高效字符串操作</strong>和<strong>二进制安全</strong>。</p>
@@ -565,7 +566,7 @@ sds <span class="token function">sdsMakeRoomFor</span><span class="token punctua
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
           <a href="/archives">
-          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-count">6</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
