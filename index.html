@@ -183,10 +183,16 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
-              
 
-              <time title="创建时间：2021-05-16 14:57:08 / 修改时间：16:37:33" itemprop="dateCreated datePublished" datetime="2021-05-16T14:57:08+08:00">2021-05-16</time>
+              <time title="创建时间：2021-05-16 14:57:08" itemprop="dateCreated datePublished" datetime="2021-05-16T14:57:08+08:00">2021-05-16</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-05-22 22:35:58" itemprop="dateModified" datetime="2021-05-22T22:35:58+08:00">2021-05-22</time>
+              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="far fa-folder"></i>
@@ -209,9 +215,33 @@
 
       
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong></p>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
 </blockquote>
-
+<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
+<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
+<ul>
+<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
+<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
+<li>hash和sort set在数据量比较少的情况下都使用了ziplist</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">
+<span class="token comment">/* The ziplist is a specially encoded dually linked list that is designed
+ * to be very memory efficient. It stores both strings and integer values,
+ * where integers are encoded as actual integers instead of a series of
+ * characters. It allows push and pop operations on either side of the list
+ * in O(1) time. However, because every operation requires a reallocation of
+ * the memory used by the ziplist, the actual complexity is related to the
+ * amount of memory used by the ziplist.
+ * /</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
