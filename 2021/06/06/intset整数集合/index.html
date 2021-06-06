@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":false,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="本文源码redis5.0.12 intset的数据结构，定义在intset.h，实现在intset.c中  intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果集合或有序集合的元素只有数字（最大264-1)，底层的数据结构很可能使用的intset。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="intset整数集合">
+<meta property="og:url" content="http://example.com/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/index.html">
+<meta property="og:site_name" content="polaris_he&#39;s blog">
+<meta property="og:description" content="本文源码redis5.0.12 intset的数据结构，定义在intset.h，实现在intset.c中  intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果集合或有序集合的元素只有数字（最大264-1)，底层的数据结构很可能使用的intset。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-06-06T05:28:32.000Z">
+<meta property="article:modified_time" content="2021-06-06T07:13:55.247Z">
+<meta property="article:author" content="polaris_he">
+<meta property="article:tag" content="redis源码">
+<meta property="article:tag" content="redis数据结构">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>intset整数集合 | polaris_he's blog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">polaris_he's blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404/" rel="section"><i class="fa fa-heartbeat fa-fw"></i>公益 404</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he's blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          intset整数集合
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2021-06-06 13:28:32 / 修改时间：15:13:55" itemprop="dateCreated datePublished" datetime="2021-06-06T13:28:32+08:00">2021-06-06</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
+</blockquote>
+<p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
+<span id="more"></span>
+<h1>数据结构</h1>
+<p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">
+<span class="token keyword">struct</span> <span class="token keyword">__attribute__</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>__packed__<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token class-name">sdshdr64</span> <span class="token punctuation">&#123;</span>
+    <span class="token class-name">uint64_t</span> len<span class="token punctuation">;</span> <span class="token comment">/* used */</span>
+    <span class="token class-name">uint64_t</span> alloc<span class="token punctuation">;</span> <span class="token comment">/* excluding the header and null terminator */</span>
+    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags<span class="token punctuation">;</span> <span class="token comment">/* 3 lsb of type, 5 unused bits */</span>
+    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span class="token punctuation">;</span>
+
+<span class="token keyword">typedef</span> <span class="token keyword">struct</span> <span class="token class-name">intset</span> <span class="token punctuation">&#123;</span>
+    <span class="token class-name">uint32_t</span> encoding<span class="token punctuation">;</span>
+    <span class="token class-name">uint32_t</span> length<span class="token punctuation">;</span>
+    <span class="token class-name">int8_t</span> contents<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span> intset<span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
+</blockquote>
+<p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INTSET_ENC_INT16</span> <span class="token expression"><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token class-name">int16_t</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INTSET_ENC_INT32</span> <span class="token expression"><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token class-name">int32_t</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">INTSET_ENC_INT64</span> <span class="token expression"><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token class-name">int64_t</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span>
+
+<span class="token comment">/* Return the required encoding for the provided value. */</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">_intsetValueEncoding</span><span class="token punctuation">(</span><span class="token class-name">int64_t</span> v<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>v <span class="token operator">&lt;</span> INT32_MIN <span class="token operator">||</span> v <span class="token operator">></span> INT32_MAX<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> INTSET_ENC_INT64<span class="token punctuation">;</span>
+    <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>v <span class="token operator">&lt;</span> INT16_MIN <span class="token operator">||</span> v <span class="token operator">></span> INT16_MAX<span class="token punctuation">)</span>
+        <span class="token keyword">return</span> INTSET_ENC_INT32<span class="token punctuation">;</span>
+    <span class="token keyword">else</span>
+        <span class="token keyword">return</span> INTSET_ENC_INT16<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<table>
+<thead>
+<tr>
+<th>encoding枚举</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>INTSET_ENC_INT16</td>
+<td>2 sizeof(int16_t)</td>
+<td>intset值范围是 [-2<sup>16</sup>,2<sup>16</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT32</td>
+<td>4 sizeof(int32_t)</td>
+<td>intset值范围是 [-2<sup>32</sup>,-2<sup>16</sup>) $\bigcup$ (2<sup>16</sup>-1,2<sup>32</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT64</td>
+<td>8 sizeof(int64_t)</td>
+<td>intset值范围是 [-2<sup>64</sup>,-2<sup>32</sup>) $\bigcup$ (2<sup>32</sup>-1,2<sup>64</sup>-1]</td>
+</tr>
+</tbody>
+</table>
+<h1>操作</h1>
+<p>整数集合没有什么复杂的操作</p>
+<h2 id="创建">创建</h2>
+<p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset <span class="token operator">*</span><span class="token function">intsetNew</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+    intset <span class="token operator">*</span>is <span class="token operator">=</span> <span class="token function">zmalloc</span><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span>intset<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    is<span class="token operator">-></span>encoding <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>INTSET_ENC_INT16<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    is<span class="token operator">-></span>length <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> is<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
+在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token punctuation">(</span>BYTE_ORDER <span class="token operator">==</span> LITTLE_ENDIAN<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">memrev16ifbe</span><span class="token expression"><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">memrev32ifbe</span><span class="token expression"><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">memrev64ifbe</span><span class="token expression"><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">void</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">intrev16ifbe</span><span class="token expression"><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token punctuation">(</span>v<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">intrev32ifbe</span><span class="token expression"><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token punctuation">(</span>v<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">intrev64ifbe</span><span class="token expression"><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token punctuation">(</span>v<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">else</span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">memrev16ifbe</span><span class="token expression"><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token function">memrev16</span><span class="token punctuation">(</span>p<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">memrev32ifbe</span><span class="token expression"><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token function">memrev32</span><span class="token punctuation">(</span>p<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">memrev64ifbe</span><span class="token expression"><span class="token punctuation">(</span>p<span class="token punctuation">)</span> <span class="token function">memrev64</span><span class="token punctuation">(</span>p<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">intrev16ifbe</span><span class="token expression"><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token function">intrev16</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">intrev32ifbe</span><span class="token expression"><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token function">intrev32</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">intrev64ifbe</span><span class="token expression"><span class="token punctuation">(</span>v<span class="token punctuation">)</span> <span class="token function">intrev64</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span></span></span>
+<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="查找">查找</h2>
+<p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
+<ol>
+<li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
+<li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token comment">/* Search for the position of "value". Return 1 when the value was found and
+ * sets "pos" to the position of the value within the intset. Return 0 when
+ * the value is not present in the intset and sets "pos" to the position
+ * where "value" can be inserted. */</span>
+<span class="token keyword">static</span> <span class="token class-name">uint8_t</span> <span class="token function">intsetSearch</span><span class="token punctuation">(</span>intset <span class="token operator">*</span>is<span class="token punctuation">,</span> <span class="token class-name">int64_t</span> value<span class="token punctuation">,</span> <span class="token class-name">uint32_t</span> <span class="token operator">*</span>pos<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+    <span class="token keyword">int</span> min <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">,</span> max <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">,</span> mid <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token class-name">int64_t</span> cur <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* The value can never be found when the set is empty */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>pos<span class="token punctuation">)</span> <span class="token operator">*</span>pos <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+        <span class="token comment">/* Check for the case where we know we cannot find the value,
+         * but do know the insert position. */</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">></span> <span class="token function">_intsetGet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>max<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>pos<span class="token punctuation">)</span> <span class="token operator">*</span>pos <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">&lt;</span> <span class="token function">_intsetGet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>pos<span class="token punctuation">)</span> <span class="token operator">*</span>pos <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span>
+    <span class="token punctuation">&#125;</span>
+
+    <span class="token keyword">while</span><span class="token punctuation">(</span>max <span class="token operator">>=</span> min<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+        mid <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">unsigned</span> <span class="token keyword">int</span><span class="token punctuation">)</span>min <span class="token operator">+</span> <span class="token punctuation">(</span><span class="token keyword">unsigned</span> <span class="token keyword">int</span><span class="token punctuation">)</span>max<span class="token punctuation">)</span> <span class="token operator">>></span> <span class="token number">1</span><span class="token punctuation">;</span>
+        cur <span class="token operator">=</span> <span class="token function">_intsetGet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>mid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">></span> cur<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            min <span class="token operator">=</span> mid<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">&lt;</span> cur<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            max <span class="token operator">=</span> mid<span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+            <span class="token keyword">break</span><span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span>
+    <span class="token punctuation">&#125;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">==</span> cur<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>pos<span class="token punctuation">)</span> <span class="token operator">*</span>pos <span class="token operator">=</span> mid<span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>pos<span class="token punctuation">)</span> <span class="token operator">*</span>pos <span class="token operator">=</span> min<span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="新增">新增</h2>
+<h3 id="add">add</h3>
+<p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
+<ol>
+<li>判断插入的value是否超过当前集合能处理的范围（encoding），如果超过了，需要<code>升级</code>整数数组。</li>
+<li>根据value查找该元素是否在intset中，intsetSearch中传入了一个参数pos，pos表示了search之后可以插入元素的位置<br>
+2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
+2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset <span class="token operator">*</span><span class="token function">intsetAdd</span><span class="token punctuation">(</span>intset <span class="token operator">*</span>is<span class="token punctuation">,</span> <span class="token class-name">int64_t</span> value<span class="token punctuation">,</span> <span class="token class-name">uint8_t</span> <span class="token operator">*</span>success<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+    <span class="token class-name">uint8_t</span> valenc <span class="token operator">=</span> <span class="token function">_intsetValueEncoding</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint32_t</span> pos<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>success<span class="token punctuation">)</span> <span class="token operator">*</span>success <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Upgrade encoding if necessary. If we need to upgrade, we know that
+     * this value should be either appended (if > 0) or prepended (if &lt; 0),
+     * because it lies outside the range of existing values. */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>valenc <span class="token operator">></span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>encoding<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+        <span class="token comment">/* This always succeeds, so we don't need to curry *success. */</span>
+        <span class="token keyword">return</span> <span class="token function">intsetUpgradeAndAdd</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+        <span class="token comment">/* Abort if the value is already present in the set.
+         * This call will populate "pos" with the right position to insert
+         * the value when it cannot be found. */</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">intsetSearch</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>value<span class="token punctuation">,</span><span class="token operator">&amp;</span>pos<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>success<span class="token punctuation">)</span> <span class="token operator">*</span>success <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> is<span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span>
+
+        is <span class="token operator">=</span> <span class="token function">intsetResize</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span><span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>pos <span class="token operator">&lt;</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token function">intsetMoveTail</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>pos<span class="token punctuation">,</span>pos<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+
+    <span class="token function">_intsetSet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>pos<span class="token punctuation">,</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    is<span class="token operator">-></span>length <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span><span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> is<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="upgradeAndAdd">upgradeAndAdd</h3>
+<p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
+<blockquote>
+<p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
+代码中使用了<code>prepend</code>这个变量来处理</p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">static</span> intset <span class="token operator">*</span><span class="token function">intsetUpgradeAndAdd</span><span class="token punctuation">(</span>intset <span class="token operator">*</span>is<span class="token punctuation">,</span> <span class="token class-name">int64_t</span> value<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+    <span class="token class-name">uint8_t</span> curenc <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>encoding<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint8_t</span> newenc <span class="token operator">=</span> <span class="token function">_intsetValueEncoding</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">int</span> length <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">int</span> prepend <span class="token operator">=</span> value <span class="token operator">&lt;</span> <span class="token number">0</span> <span class="token operator">?</span> <span class="token number">1</span> <span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* First set new encoding and resize */</span>
+    is<span class="token operator">-></span>encoding <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>newenc<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    is <span class="token operator">=</span> <span class="token function">intsetResize</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span><span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Upgrade back-to-front so we don't overwrite values.
+     * Note that the "prepend" variable is used to make sure we have an empty
+     * space at either the beginning or the end of the intset. */</span>
+    <span class="token keyword">while</span><span class="token punctuation">(</span>length<span class="token operator">--</span><span class="token punctuation">)</span>
+        <span class="token function">_intsetSet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>length<span class="token operator">+</span>prepend<span class="token punctuation">,</span><span class="token function">_intsetGetEncoded</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>length<span class="token punctuation">,</span>curenc<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment">/* Set the value at the beginning or the end. */</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>prepend<span class="token punctuation">)</span>
+        <span class="token function">_intsetSet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">,</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">else</span>
+        <span class="token function">_intsetSet</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span><span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token punctuation">,</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    is<span class="token operator">-></span>length <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span><span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> is<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="删除">删除</h2>
+<p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset <span class="token operator">*</span><span class="token function">intsetRemove</span><span class="token punctuation">(</span>intset <span class="token operator">*</span>is<span class="token punctuation">,</span> <span class="token class-name">int64_t</span> value<span class="token punctuation">,</span> <span class="token keyword">int</span> <span class="token operator">*</span>success<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+    <span class="token class-name">uint8_t</span> valenc <span class="token operator">=</span> <span class="token function">_intsetValueEncoding</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token class-name">uint32_t</span> pos<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>success<span class="token punctuation">)</span> <span class="token operator">*</span>success <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>valenc <span class="token operator">&lt;=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>encoding<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token function">intsetSearch</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>value<span class="token punctuation">,</span><span class="token operator">&amp;</span>pos<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+        <span class="token class-name">uint32_t</span> len <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>is<span class="token operator">-></span>length<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment">/* We know we can delete */</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>success<span class="token punctuation">)</span> <span class="token operator">*</span>success <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+
+        <span class="token comment">/* Overwrite value with tail and update length */</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>pos <span class="token operator">&lt;</span> <span class="token punctuation">(</span>len<span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token function">intsetMoveTail</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>pos<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">,</span>pos<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        is <span class="token operator">=</span> <span class="token function">intsetResize</span><span class="token punctuation">(</span>is<span class="token punctuation">,</span>len<span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        is<span class="token operator">-></span>length <span class="token operator">=</span> <span class="token function">intrev32ifbe</span><span class="token punctuation">(</span>len<span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+    <span class="token keyword">return</span> is<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h1>总结</h1>
+<p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/redis%E6%BA%90%E7%A0%81/" rel="tag"># redis源码</a>
+              <a href="/tags/redis%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" rel="tag"># redis数据结构</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/" rel="prev" title="ziplist压缩列表">
+      <i class="fa fa-chevron-left"></i> ziplist压缩列表
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">操作</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%9B%E5%BB%BA"><span class="nav-number">2.1.</span> <span class="nav-text">创建</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9F%A5%E6%89%BE"><span class="nav-number">2.2.</span> <span class="nav-text">查找</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%96%B0%E5%A2%9E"><span class="nav-number">2.3.</span> <span class="nav-text">新增</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#add"><span class="nav-number">2.3.1.</span> <span class="nav-text">add</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#upgradeAndAdd"><span class="nav-number">2.3.2.</span> <span class="nav-text">upgradeAndAdd</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%A0%E9%99%A4"><span class="nav-number">2.4.</span> <span class="nav-text">删除</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives">
+          <span class="site-state-item-count">7</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">polaris_he</span>
+</div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+      
+
+<script>
+  if (typeof MathJax === 'undefined') {
+    window.MathJax = {
+      loader: {
+        source: {
+          '[tex]/amsCd': '[tex]/amscd',
+          '[tex]/AMScd': '[tex]/amscd'
+        }
+      },
+      tex: {
+        inlineMath: {'[+]': [['$', '$']]},
+        tags: 'ams'
+      },
+      options: {
+        renderActions: {
+          findScript: [10, doc => {
+            document.querySelectorAll('script[type^="math/tex"]').forEach(node => {
+              const display = !!node.type.match(/; *mode=display/);
+              const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
+              const text = document.createTextNode('');
+              node.parentNode.replaceChild(text, node);
+              math.start = {node: text, delim: '', n: 0};
+              math.end = {node: text, delim: '', n: 0};
+              doc.math.push(math);
+            });
+          }, '', false],
+          insertedScript: [200, () => {
+            document.querySelectorAll('mjx-container').forEach(node => {
+              let target = node.parentNode;
+              if (target.nodeName.toLowerCase() === 'li') {
+                target.parentNode.classList.add('has-jax');
+              }
+            });
+          }, '', false]
+        }
+      }
+    };
+    (function () {
+      var script = document.createElement('script');
+      script.src = '//cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+      script.defer = true;
+      document.head.appendChild(script);
+    })();
+  } else {
+    MathJax.startup.document.state(0);
+    MathJax.texReset();
+    MathJax.typeset();
+  }
+</script>
+
+    
+
+  
+
+</body>
+</html>
