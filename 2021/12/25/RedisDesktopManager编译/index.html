@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":false,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="RedisDesktopManager是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的源代码，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。 在此感谢RedisDesktopManager的作者Igor Malinovskiy">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RedisDesktopManager编译">
+<meta property="og:url" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/index.html">
+<meta property="og:site_name" content="polaris_he&#39;s blog">
+<meta property="og:description" content="RedisDesktopManager是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的源代码，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。 在此感谢RedisDesktopManager的作者Igor Malinovskiy">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/2.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/1.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/3.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/4.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/5.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/6.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/7.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/8.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/9.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/10.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/12.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/11.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/13.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/15.png">
+<meta property="og:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/14.png">
+<meta property="article:published_time" content="2021-12-25T04:53:44.000Z">
+<meta property="article:modified_time" content="2021-12-25T10:41:48.963Z">
+<meta property="article:author" content="polaris_he">
+<meta property="article:tag" content="redis">
+<meta property="article:tag" content="RDM">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/RedisDesktopManager%E7%BC%96%E8%AF%91/2.png">
+
+<link rel="canonical" href="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>RedisDesktopManager编译 | polaris_he's blog</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">polaris_he's blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404/" rel="section"><i class="fa fa-heartbeat fa-fw"></i>公益 404</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2021/12/25/RedisDesktopManager%E7%BC%96%E8%AF%91/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he's blog">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          RedisDesktopManager编译
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2021-12-25 12:53:44 / 修改时间：18:41:48" itemprop="dateCreated datePublished" datetime="2021-12-25T12:53:44+08:00">2021-12-25</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p><a target="_blank" rel="noopener" href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a target="_blank" rel="noopener" href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
+在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
+</blockquote>
+<span id="more"></span>
+<h1>前言</h1>
+<p><a target="_blank" rel="noopener" href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
+<blockquote>
+<p>本次编译过程基于RedisDesktopManager（2021.10）</p>
+</blockquote>
+<h1>环境准备</h1>
+<h2 id="系统">系统</h2>
+<blockquote>
+<p>Windows 10 21H2</p>
+</blockquote>
+<h2 id="git-clone">git clone</h2>
+<ol>
+<li>使用以下命令clone RedisDesktopManager的项目仓库</li>
+</ol>
+<blockquote>
+<p>git clone --recursive <a target="_blank" rel="noopener" href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
+</blockquote>
+<ol start="2">
+<li>需要注意submodule处理
+<ul>
+<li>RedisDesktopManager包含submodule，在3rdparty下</li>
+<li>submodule里面也包含submodule，如3rdparty/qredisclient/hiredis等</li>
+<li>需要使用–recursive递归clone
+<ul>
+<li>如果没有使用–recursive来clone，需要保证submodule都down下来了<br>
+3.完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/2.png" alt="项目概述"></li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<h2 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h2>
+<p><a target="_blank" rel="noopener" href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/1.png" alt="选择使用C++在线安装"></p>
+<h2 id="下载QT5-15">下载QT5.15</h2>
+<p>Qt5.15只能在线安装，下载<a target="_blank" rel="noopener" href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
+<blockquote>
+<p>Qt下载时间很长，网不好容易断，请保持耐心</p>
+</blockquote>
+<p><img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/3.png" alt="Qt安装"></p>
+<h2 id="Python-3-9-9">Python 3.9.9</h2>
+<p>下载<a target="_blank" rel="noopener" href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
+<ul>
+<li>Python要装到<code>指定名称</code>的目录，不然后面需要手动指定Python的位置</li>
+</ul>
+<p><img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/4.png" alt="Python安装"><br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/5.png" alt="Python安装"><br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/6.png" alt="Python安装"></p>
+<h2 id="Cmake">Cmake</h2>
+<p>下载<a target="_blank" rel="noopener" href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
+<h2 id="nuget">nuget</h2>
+<p>下载<a target="_blank" rel="noopener" href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
+<h1>Python依赖安装</h1>
+<p>使用以下命令安装Python依赖</p>
+<blockquote>
+<p>pip3 install -r src/py/requirements.txt</p>
+</blockquote>
+<p>如果出现git仓库SSL握手失败，可以将requirements中git的https协议换成git协议。</p>
+<ul>
+<li>原始requirements内容 <pre class="line-numbers language-none"><code class="language-none">bitstring
+cbor
+msgpack
+git+https:&#x2F;&#x2F;github.com&#x2F;mrnom&#x2F;phpserialize.git#egg&#x3D;phpserialize
+git+https:&#x2F;&#x2F;github.com&#x2F;uglide&#x2F;redis-rdb-tools#egg&#x3D;rdbtools
+python-lzf<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li>替换后requirements内容 <pre class="line-numbers language-none"><code class="language-none">bitstring
+cbor
+msgpack
+git+git:&#x2F;&#x2F;github.com&#x2F;mrnom&#x2F;phpserialize.git#egg&#x3D;phpserialize
+git+git:&#x2F;&#x2F;github.com&#x2F;uglide&#x2F;redis-rdb-tools#egg&#x3D;rdbtools
+python-lzf<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+</ul>
+<h1>三方依赖编译</h1>
+<h2 id="准备工作">准备工作</h2>
+<h3 id="安装zlib">安装zlib</h3>
+<p>在<code>3rdparty</code>目录下，使用<code>nuget</code>安装zlib</p>
+<blockquote>
+<p>nuget install zlib-msvc14-x64 -Version 1.2.11.7795</p>
+</blockquote>
+<h3 id="hiredis在Windowns下编译修正">hiredis在Windowns下编译修正</h3>
+<p>在<code>3rdparty/qredisclient/3rdparty/hiredis</code>目录下，为<code>hirdis</code>打<code>patch</code></p>
+<blockquote>
+<p>git apply …/hiredis-win.patch</p>
+</blockquote>
+<h2 id="lz4编译">lz4编译</h2>
+<p>官方文档中已经给出了lz4的编译方法，只是Windows没有make命令，需要使用<code>VS</code>来替代make编译项目</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash"><span class="token builtin class-name">cd</span> 3rdparty/lz4/build/cmake
+cmake -DLZ4_BUNDLED_MODE<span class="token operator">=</span>ON  <span class="token builtin class-name">.</span>
+<span class="token function">make</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<ol>
+<li>Cmake生成编译文件<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/7.png" alt="cmake"></li>
+<li>用VS2022打开<code>LZ4.sln</code><br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/8.png" alt="cmake"></li>
+<li>编译<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/9.png" alt="cmake"></li>
+</ol>
+<h2 id="zstd编译">zstd编译</h2>
+<p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\zstd\build\cmake</code></li>
+</ol>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">cmake ./<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<ol start="2">
+<li>使用<code>4.2</code>同样的方法找到<code>zstd.sln</code>编译</li>
+</ol>
+<h2 id="snappy编译">snappy编译</h2>
+<p>官方Windows编译文档中同样没有提及\snappy。编译方式如下</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\snappy\cmake</code></li>
+</ol>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">cmake ./<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<ol start="2">
+<li>使用<code>4.2</code>同样的方法找到<code>Snappy.sln</code>编译</li>
+<li>将目录<code>3rdparty\snappy\cmake\Release</code>拷贝到<code>3rdparty\snappy</code>下</li>
+</ol>
+<h2 id="编译brotli">编译brotli</h2>
+<ol>
+<li>执行cmake执行目录为<code>3rdparty\brotli</code></li>
+</ol>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">cmake -DBUILD_SHARED_LIBS<span class="token operator">=</span>OFF<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<ol start="2">
+<li>使用<code>4.2</code>同样的方法找到<code>brotli.sln</code>编译</li>
+</ol>
+<h1>RedisDesktopManager编译</h1>
+<h2 id="编译">编译</h2>
+<ol>
+<li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/10.png" alt="qt工程"></li>
+<li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/12.png" alt="发布更新"></li>
+<li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/11.png" alt="发布更新"></li>
+<li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/13.png" alt="发布更新"></li>
+</ol>
+<h2 id="打包">打包</h2>
+<p>现在在<code>RedisDesktopManager\bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
+<ol>
+<li>
+<p>将<code>RedisDesktopManager\bin\windows\release\rdm.exe</code>拷贝到<code>RedisDesktopManager\build\windows\installer\resources</code>下</p>
+</li>
+<li>
+<p>为了提供Python运行环境，下载<a target="_blank" rel="noopener" href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>RedisDesktopManager\build\windows\installer\resources</code></p>
+</li>
+<li>
+<p>执行以下命令</p>
+<pre class="line-numbers language-none"><code class="language-none">C:\Qt\5.15.2\msvc2019_64\bin\windeployqt --release --qmldir C:\RedisDesktopManager\src\qml rdm.exe<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+</li>
+<li>
+<p>下载<a target="_blank" rel="noopener" href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
+</li>
+<li>
+<p>安装好<code>nsis</code>后打开<code>RedisDesktopManager\build\windows\installer\installer.nsi</code></p>
+<ol>
+<li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/15.png" alt="nsi"><br>
+<img src="./RedisDesktopManager%E7%BC%96%E8%AF%91/14.png" alt="nsi"></li>
+</ol>
+</li>
+<li>
+<p>等待nsis执行完毕后，当前目录就得到了安装包<code>rdm-2021.11.0.exe</code></p>
+</li>
+</ol>
+<h1>完结散花</h1>
+<p><a href="./RedisDesktopManager%E7%BC%96%E8%AF%91/rdm-2021.10.0.exe">RedisDesktopManager2021.10 Windows 64bit 安装包</a></p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/redis/" rel="tag"># redis</a>
+              <a href="/tags/RDM/" rel="tag"># RDM</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/" rel="prev" title="intset整数集合">
+      <i class="fa fa-chevron-left"></i> intset整数集合
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">环境准备</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%B3%BB%E7%BB%9F"><span class="nav-number">2.1.</span> <span class="nav-text">系统</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#git-clone"><span class="nav-number">2.2.</span> <span class="nav-text">git clone</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Microsoft-Visual-Studio-Community-2022-64-%E4%BD%8D"><span class="nav-number">2.3.</span> <span class="nav-text">Microsoft Visual Studio Community 2022 (64 位)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E8%BD%BDQT5-15"><span class="nav-number">2.4.</span> <span class="nav-text">下载QT5.15</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Python-3-9-9"><span class="nav-number">2.5.</span> <span class="nav-text">Python 3.9.9</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Cmake"><span class="nav-number">2.6.</span> <span class="nav-text">Cmake</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#nuget"><span class="nav-number">2.7.</span> <span class="nav-text">nuget</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">3.</span> <span class="nav-text">Python依赖安装</span></a></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">4.</span> <span class="nav-text">三方依赖编译</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%87%86%E5%A4%87%E5%B7%A5%E4%BD%9C"><span class="nav-number">4.1.</span> <span class="nav-text">准备工作</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%89%E8%A3%85zlib"><span class="nav-number">4.1.1.</span> <span class="nav-text">安装zlib</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#hiredis%E5%9C%A8Windowns%E4%B8%8B%E7%BC%96%E8%AF%91%E4%BF%AE%E6%AD%A3"><span class="nav-number">4.1.2.</span> <span class="nav-text">hiredis在Windowns下编译修正</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#lz4%E7%BC%96%E8%AF%91"><span class="nav-number">4.2.</span> <span class="nav-text">lz4编译</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#zstd%E7%BC%96%E8%AF%91"><span class="nav-number">4.3.</span> <span class="nav-text">zstd编译</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#snappy%E7%BC%96%E8%AF%91"><span class="nav-number">4.4.</span> <span class="nav-text">snappy编译</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BC%96%E8%AF%91brotli"><span class="nav-number">4.5.</span> <span class="nav-text">编译brotli</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">5.</span> <span class="nav-text">RedisDesktopManager编译</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BC%96%E8%AF%91"><span class="nav-number">5.1.</span> <span class="nav-text">编译</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%89%93%E5%8C%85"><span class="nav-number">5.2.</span> <span class="nav-text">打包</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">6.</span> <span class="nav-text">完结散花</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives">
+          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">8</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">polaris_he</span>
+</div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+</body>
+</html>
