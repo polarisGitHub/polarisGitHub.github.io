@@ -2,9 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
-<meta name="theme-color" content="#222">
-<meta name="generator" content="Hexo 5.4.0">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 6.0.0">
+
+
   <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
@@ -13,14 +15,12 @@
 <link rel="stylesheet" href="/css/main.css">
 
 
-<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
 
-<script id="hexo-configurations">
-    var NexT = window.NexT || {};
-    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Pisces","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":false,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
-  </script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.4/css/all.min.css" integrity="sha256-mUZM63G8m73Mcidfrv5E+Y61y7a12O5mW4ezU3bxqW4=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
 
-  <meta name="description" content="本文源码redis5.0.12 Simple Dynamic String定义在sds.h，实现在sds.c中  使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。">
+<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.9.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":false,"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
+<meta name="description" content="本文源码redis5.0.12 Simple Dynamic String定义在sds.h，实现在sds.c中  使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="sds字符串">
 <meta property="og:url" content="http://example.com/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/index.html">
@@ -34,72 +34,46 @@
 <meta property="article:tag" content="redis数据结构">
 <meta name="twitter:card" content="summary">
 
+
 <link rel="canonical" href="http://example.com/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/">
 
 
-<script id="page-configurations">
-  // https://hexo.io/docs/variables.html
-  CONFIG.page = {
-    sidebar: "",
-    isHome : false,
-    isPost : true,
-    lang   : 'zh-CN'
-  };
-</script>
 
-  <title>sds字符串 | polaris_he's blog</title>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/","path":"2021/04/04/sds动态字符串/","title":"sds字符串"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>sds字符串 | polaris_he's blog</title>
   
 
 
 
 
 
-
   <noscript>
-  <style>
-  .use-motion .brand,
-  .use-motion .menu-item,
-  .sidebar-inner,
-  .use-motion .post-block,
-  .use-motion .pagination,
-  .use-motion .comments,
-  .use-motion .post-header,
-  .use-motion .post-body,
-  .use-motion .collection-header { opacity: initial; }
-
-  .use-motion .site-title,
-  .use-motion .site-subtitle {
-    opacity: initial;
-    top: initial;
-  }
-
-  .use-motion .logo-line-before i { left: initial; }
-  .use-motion .logo-line-after i { right: initial; }
-  </style>
-</noscript>
-
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
 </head>
 
-<body itemscope itemtype="http://schema.org/WebPage">
-  <div class="container">
-    <div class="headband"></div>
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
 
+  <main class="main">
     <header class="header" itemscope itemtype="http://schema.org/WPHeader">
       <div class="header-inner"><div class="site-brand-container">
   <div class="site-nav-toggle">
-    <div class="toggle" aria-label="切换导航栏">
-      <span class="toggle-line toggle-line-first"></span>
-      <span class="toggle-line toggle-line-middle"></span>
-      <span class="toggle-line toggle-line-last"></span>
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
     </div>
   </div>
 
   <div class="site-meta">
 
     <a href="/" class="brand" rel="start">
-      <span class="logo-line-before"><i></i></span>
-      <h1 class="site-title">polaris_he's blog</h1>
-      <span class="logo-line-after"><i></i></span>
+      <i class="logo-line"></i>
+      <p class="site-title">polaris_he's blog</p>
+      <i class="logo-line"></i>
     </a>
   </div>
 
@@ -111,34 +85,12 @@
 
 
 
-
 <nav class="site-nav">
-  <ul id="menu" class="main-menu menu">
-        <li class="menu-item menu-item-home">
-
-    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
-
-  </li>
-        <li class="menu-item menu-item-about">
-
-    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
-
-  </li>
-        <li class="menu-item menu-item-tags">
-
-    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
-
-  </li>
-        <li class="menu-item menu-item-categories">
-
-    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
-
-  </li>
-        <li class="menu-item menu-item-commonweal">
-
-    <a href="/404/" rel="section"><i class="fa fa-heartbeat fa-fw"></i>公益 404</a>
-
-  </li>
+  <ul class="main-menu menu">
+        <li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li>
+        <li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li>
+        <li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li>
+        <li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li>
   </ul>
 </nav>
 
@@ -146,31 +98,99 @@
 
 
 </div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">SDS使用</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%9B%E5%BB%BA-v2"><span class="nav-number">2.1.</span> <span class="nav-text">创建</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%87%8A%E6%94%BE"><span class="nav-number">2.2.</span> <span class="nav-text">释放</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B8%85%E7%A9%BA"><span class="nav-number">2.3.</span> <span class="nav-text">清空</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%89%A9%E5%AE%B9-v2"><span class="nav-number">2.4.</span> <span class="nav-text">扩容</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
     </header>
 
     
-  <div class="back-to-top">
+  <div class="back-to-top" role="button" aria-label="返回顶部">
     <i class="fa fa-arrow-up"></i>
     <span>0%</span>
   </div>
+  <div class="reading-progress-bar"></div>
+
+  <a href="https://github.com/polarisGitHub" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
 
 
-    <main class="main">
-      <div class="main-inner">
-        <div class="content-wrap">
-          
+    <div class="main-inner post posts-expand">
 
-          <div class="content post posts-expand">
-            
 
-    
+  
+
+
+<div class="post-block">
   
   
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2021/04/04/sds%E5%8A%A8%E6%80%81%E5%AD%97%E7%AC%A6%E4%B8%B2/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="image" content="/images/avatar.gif">
       <meta itemprop="name" content="polaris_he">
       <meta itemprop="description" content="">
     </span>
@@ -183,33 +203,35 @@
           sds字符串
         </h1>
 
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
 
-              <time title="创建时间：2021-04-04 22:59:33" itemprop="dateCreated datePublished" datetime="2021-04-04T22:59:33+08:00">2021-04-04</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2021-06-06 13:31:35" itemprop="dateModified" datetime="2021-06-06T13:31:35+08:00">2021-06-06</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
-                </span>
-            </span>
+      <time title="创建时间：2021-04-04 22:59:33" itemprop="dateCreated datePublished" datetime="2021-04-04T22:59:33+08:00">2021-04-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-06-06 13:31:35" itemprop="dateModified" datetime="2021-06-06T13:31:35+08:00">2021-06-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
+        </span>
+    </span>
 
-          
+  
+</div>
 
         </div>
       </header>
@@ -218,8 +240,6 @@
     
     
     <div class="post-body" itemprop="articleBody">
-
-      
         <blockquote>
 <p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
 Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
@@ -234,70 +254,17 @@ Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>�
 <li><strong>APPEND</strong>可以在现有字符串的基础上追加字符，c中String分配的空间刚刚好存放字符，所以在append时需要对新字符串重新分配空间，这样的操作是很不划算的。解决方法就是预先分配一块空间（如java中ArrayList），这就要求有个字段记录预分配空间的大小。</li>
 </ul>
 <p>按照这个思路，早期redis的数据结构中，除了char数组外，还额为定义了预分配数组的大小和剩余空间。我们可以通过len减去free得到字符串的实际长度。并且sds指向的是char buf[]，这样就可以使用*(sds-4)和*(sds-8)直接访问free和len的地址。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">struct</span> <span class="token class-name">sdshdr</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">int</span> len<span class="token punctuation">;</span>  		<span class="token comment">// buf 已占用长度</span>
-    <span class="token keyword">int</span> free<span class="token punctuation">;</span> 		<span class="token comment">// buf 剩余可用长度</span>
-    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>    	<span class="token comment">// 实际保存字符串数据的地方</span>
-<span class="token punctuation">&#125;</span><span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sdshdr</span> &#123;</span></span><br><span class="line">    <span class="keyword">int</span> len;  		<span class="comment">// buf 已占用长度</span></span><br><span class="line">    <span class="keyword">int</span> <span class="built_in">free</span>; 		<span class="comment">// buf 剩余可用长度</span></span><br><span class="line">    <span class="keyword">char</span> buf[];    	<span class="comment">// 实际保存字符串数据的地方</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
 <p>从这个sdshdr的定义中可以看出，int类型的len和free可以描述2G的空间，但实际应用过程中我们并不需要这么大的空间。所以在redis的后续发展中，定义了一系列sdshdrX，可以根据不同大小的字符串分配不同的结构题，已达到节省空间的目的。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token comment">/* Note: sdshdr5 is never used, we just access the flags byte directly.
- * However is here to document the layout of type 5 SDS strings. */</span>
-<span class="token keyword">struct</span> <span class="token keyword">__attribute__</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>__packed__<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token class-name">sdshdr5</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags<span class="token punctuation">;</span> <span class="token comment">/* 3 lsb of type, and 5 msb of string length */</span>
-    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span class="token punctuation">;</span>
-<span class="token keyword">struct</span> <span class="token keyword">__attribute__</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>__packed__<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token class-name">sdshdr8</span> <span class="token punctuation">&#123;</span>
-    <span class="token class-name">uint8_t</span> len<span class="token punctuation">;</span> <span class="token comment">/* used */</span>
-    <span class="token class-name">uint8_t</span> alloc<span class="token punctuation">;</span> <span class="token comment">/* excluding the header and null terminator */</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags<span class="token punctuation">;</span> <span class="token comment">/* 3 lsb of type, 5 unused bits */</span>
-    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span class="token punctuation">;</span>
-<span class="token keyword">struct</span> <span class="token keyword">__attribute__</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>__packed__<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token class-name">sdshdr16</span> <span class="token punctuation">&#123;</span>
-    <span class="token class-name">uint16_t</span> len<span class="token punctuation">;</span> <span class="token comment">/* used */</span>
-    <span class="token class-name">uint16_t</span> alloc<span class="token punctuation">;</span> <span class="token comment">/* excluding the header and null terminator */</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags<span class="token punctuation">;</span> <span class="token comment">/* 3 lsb of type, 5 unused bits */</span>
-    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span class="token punctuation">;</span>
-<span class="token keyword">struct</span> <span class="token keyword">__attribute__</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>__packed__<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token class-name">sdshdr32</span> <span class="token punctuation">&#123;</span>
-    <span class="token class-name">uint32_t</span> len<span class="token punctuation">;</span> <span class="token comment">/* used */</span>
-    <span class="token class-name">uint32_t</span> alloc<span class="token punctuation">;</span> <span class="token comment">/* excluding the header and null terminator */</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags<span class="token punctuation">;</span> <span class="token comment">/* 3 lsb of type, 5 unused bits */</span>
-    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span class="token punctuation">;</span>
-<span class="token keyword">struct</span> <span class="token keyword">__attribute__</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>__packed__<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token class-name">sdshdr64</span> <span class="token punctuation">&#123;</span>
-    <span class="token class-name">uint64_t</span> len<span class="token punctuation">;</span> <span class="token comment">/* used */</span>
-    <span class="token class-name">uint64_t</span> alloc<span class="token punctuation">;</span> <span class="token comment">/* excluding the header and null terminator */</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags<span class="token punctuation">;</span> <span class="token comment">/* 3 lsb of type, 5 unused bits */</span>
-    <span class="token keyword">char</span> buf<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Note: sdshdr5 is never used, we just access the flags byte directly.</span></span><br><span class="line"><span class="comment"> * However is here to document the layout of type 5 SDS strings. */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr5</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, and 5 msb of string length */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr8</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint8_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint8_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr16</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint16_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint16_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr32</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint32_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint32_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr64</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint64_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint64_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
 <p>从数据结构可以看出，redis一共定义了5中sdshdr结构（sdshdr5并没有使用），分别可以支持长度为2<sup>5</sup>，2<sup>8</sup>，2<sup>16</sup>，2<sup>32</sup>和2<sup>64</sup>的字符串（其实Redis中字符串长度不能超过512M）。redis可以通过字符串长度选择合适的sdshdr结构体。<br>
 现在有多种sdshdr结构体了，我们就必须在结构体中存储结构体的类型，这个字段就是unsigned char flags。它使用了3位来表示这5种类型</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SDS_TYPE_5</span>  <span class="token expression"><span class="token number">0</span></span></span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SDS_TYPE_8</span>  <span class="token expression"><span class="token number">1</span></span></span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SDS_TYPE_16</span> <span class="token expression"><span class="token number">2</span></span></span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SDS_TYPE_32</span> <span class="token expression"><span class="token number">3</span></span></span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SDS_TYPE_64</span> <span class="token expression"><span class="token number">4</span></span></span>
-<span class="token keyword">static</span> <span class="token keyword">inline</span> <span class="token keyword">char</span> <span class="token function">sdsReqType</span><span class="token punctuation">(</span><span class="token class-name">size_t</span> string_size<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>string_size <span class="token operator">&lt;</span> <span class="token number">1</span><span class="token operator">&lt;&lt;</span><span class="token number">5</span><span class="token punctuation">)</span>
-        <span class="token keyword">return</span> SDS_TYPE_5<span class="token punctuation">;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>string_size <span class="token operator">&lt;</span> <span class="token number">1</span><span class="token operator">&lt;&lt;</span><span class="token number">8</span><span class="token punctuation">)</span>
-        <span class="token keyword">return</span> SDS_TYPE_8<span class="token punctuation">;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>string_size <span class="token operator">&lt;</span> <span class="token number">1</span><span class="token operator">&lt;&lt;</span><span class="token number">16</span><span class="token punctuation">)</span>
-        <span class="token keyword">return</span> SDS_TYPE_16<span class="token punctuation">;</span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">if</span> <span class="token expression"><span class="token punctuation">(</span>LONG_MAX <span class="token operator">==</span> LLONG_MAX<span class="token punctuation">)</span></span></span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>string_size <span class="token operator">&lt;</span> <span class="token number">1ll</span><span class="token operator">&lt;&lt;</span><span class="token number">32</span><span class="token punctuation">)</span>
-        <span class="token keyword">return</span> SDS_TYPE_32<span class="token punctuation">;</span>
-    <span class="token keyword">return</span> SDS_TYPE_64<span class="token punctuation">;</span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">else</span></span>
-    <span class="token keyword">return</span> SDS_TYPE_32<span class="token punctuation">;</span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_TYPE_5  0</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_TYPE_8  1</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_TYPE_16 2</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_TYPE_32 3</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_TYPE_64 4</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">char</span> <span class="title">sdsReqType</span><span class="params">(<span class="keyword">size_t</span> string_size)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (string_size &lt; <span class="number">1</span>&lt;&lt;<span class="number">5</span>)</span><br><span class="line">        <span class="keyword">return</span> SDS_TYPE_5;</span><br><span class="line">    <span class="keyword">if</span> (string_size &lt; <span class="number">1</span>&lt;&lt;<span class="number">8</span>)</span><br><span class="line">        <span class="keyword">return</span> SDS_TYPE_8;</span><br><span class="line">    <span class="keyword">if</span> (string_size &lt; <span class="number">1</span>&lt;&lt;<span class="number">16</span>)</span><br><span class="line">        <span class="keyword">return</span> SDS_TYPE_16;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> (LONG_MAX == LLONG_MAX)</span></span><br><span class="line">    <span class="keyword">if</span> (string_size &lt; <span class="number">1ll</span>&lt;&lt;<span class="number">32</span>)</span><br><span class="line">        <span class="keyword">return</span> SDS_TYPE_32;</span><br><span class="line">    <span class="keyword">return</span> SDS_TYPE_64;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span></span></span><br><span class="line">    <span class="keyword">return</span> SDS_TYPE_32;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>redis中还定义了两个宏SDS_HDR_VAR和SDS_HDR，都是根据sds的地址计算结构体sdshdr的地址。我们需要记住的是sds的地址永远指向的是char[] buf。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">SDS_HDR_VAR</span><span class="token expression"><span class="token punctuation">(</span>T<span class="token punctuation">,</span>s<span class="token punctuation">)</span> <span class="token keyword">struct</span> <span class="token class-name">sdshdr</span></span><span class="token punctuation">##</span><span class="token expression">T <span class="token operator">*</span>sh <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">void</span><span class="token operator">*</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token operator">-</span><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sdshdr</span></span><span class="token punctuation">##</span><span class="token expression">T<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span></span></span>
-<span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name function">SDS_HDR</span><span class="token expression"><span class="token punctuation">(</span>T<span class="token punctuation">,</span>s<span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sdshdr</span></span><span class="token punctuation">##</span><span class="token expression">T <span class="token operator">*</span><span class="token punctuation">)</span><span class="token punctuation">(</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token operator">-</span><span class="token punctuation">(</span><span class="token keyword">sizeof</span><span class="token punctuation">(</span><span class="token keyword">struct</span> <span class="token class-name">sdshdr</span></span><span class="token punctuation">##</span><span class="token expression">T<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))</span></span><br></pre></td></tr></table></figure>
 <h1>SDS使用</h1>
 <p>在搞清楚SDS基本数据结构后，现在来看看redis是怎么使用SDS的。</p>
-<h2 id="创建">创建</h2>
+<h2 id="创建-v2">创建</h2>
 <p>sds采用函数sdsnewlen进行创建。</p>
 <ol>
 <li>通过字符串长度获取sdshdr的实际类型。如果是sdshdr5则转换为sdshdr8</li>
@@ -305,77 +272,7 @@ Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>�
 <li>根据类型（type）使用宏SDS_HDR_VAR获取实际结构体，并把初始化header中len，alloc和type字段</li>
 <li>将传入的字符串拷贝到sds中的buf</li>
 </ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token comment">/* Create a new sds string with the content specified by the 'init' pointer
- * and 'initlen'.
- * If NULL is used for 'init' the string is initialized with zero bytes.
- * If SDS_NOINIT is used, the buffer is left uninitialized;
- *
- * The string is always null-termined (all the sds strings are, always) so
- * even if you create an sds string with:
- *
- * mystring = sdsnewlen("abc",3);
- *
- * You can print the string with printf() as there is an implicit \0 at the
- * end of the string. However the string is binary safe and can contain
- * \0 characters in the middle, as the length is stored in the sds header. */</span>
-sds <span class="token function">sdsnewlen</span><span class="token punctuation">(</span><span class="token keyword">const</span> <span class="token keyword">void</span> <span class="token operator">*</span>init<span class="token punctuation">,</span> <span class="token class-name">size_t</span> initlen<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">void</span> <span class="token operator">*</span>sh<span class="token punctuation">;</span>
-    sds s<span class="token punctuation">;</span>
-    <span class="token keyword">char</span> type <span class="token operator">=</span> <span class="token function">sdsReqType</span><span class="token punctuation">(</span>initlen<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token comment">/* Empty strings are usually created in order to append. Use type 8
-     * since type 5 is not good at this. */</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>type <span class="token operator">==</span> SDS_TYPE_5 <span class="token operator">&amp;&amp;</span> initlen <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> type <span class="token operator">=</span> SDS_TYPE_8<span class="token punctuation">;</span>
-    <span class="token keyword">int</span> hdrlen <span class="token operator">=</span> <span class="token function">sdsHdrSize</span><span class="token punctuation">(</span>type<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> <span class="token operator">*</span>fp<span class="token punctuation">;</span> <span class="token comment">/* flags pointer. */</span>
-
-    <span class="token function">assert</span><span class="token punctuation">(</span>hdrlen<span class="token operator">+</span>initlen<span class="token operator">+</span><span class="token number">1</span> <span class="token operator">></span> initlen<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">/* Catch size_t overflow */</span>
-    sh <span class="token operator">=</span> <span class="token function">s_malloc</span><span class="token punctuation">(</span>hdrlen<span class="token operator">+</span>initlen<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>init<span class="token operator">==</span>SDS_NOINIT<span class="token punctuation">)</span>
-        init <span class="token operator">=</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
-    <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>init<span class="token punctuation">)</span>
-        <span class="token function">memset</span><span class="token punctuation">(</span>sh<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> hdrlen<span class="token operator">+</span>initlen<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>sh <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span> <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
-    s <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>sh<span class="token operator">+</span>hdrlen<span class="token punctuation">;</span>
-    fp <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">unsigned</span> <span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>s<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
-    <span class="token keyword">switch</span><span class="token punctuation">(</span>type<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-        <span class="token keyword">case</span> SDS_TYPE_5<span class="token operator">:</span> <span class="token punctuation">&#123;</span>
-            <span class="token operator">*</span>fp <span class="token operator">=</span> type <span class="token operator">|</span> <span class="token punctuation">(</span>initlen <span class="token operator">&lt;&lt;</span> SDS_TYPE_BITS<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
-        <span class="token keyword">case</span> SDS_TYPE_8<span class="token operator">:</span> <span class="token punctuation">&#123;</span>
-            <span class="token function">SDS_HDR_VAR</span><span class="token punctuation">(</span><span class="token number">8</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>len <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>alloc <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            <span class="token operator">*</span>fp <span class="token operator">=</span> type<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
-        <span class="token keyword">case</span> SDS_TYPE_16<span class="token operator">:</span> <span class="token punctuation">&#123;</span>
-            <span class="token function">SDS_HDR_VAR</span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>len <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>alloc <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            <span class="token operator">*</span>fp <span class="token operator">=</span> type<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
-        <span class="token keyword">case</span> SDS_TYPE_32<span class="token operator">:</span> <span class="token punctuation">&#123;</span>
-            <span class="token function">SDS_HDR_VAR</span><span class="token punctuation">(</span><span class="token number">32</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>len <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>alloc <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            <span class="token operator">*</span>fp <span class="token operator">=</span> type<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
-        <span class="token keyword">case</span> SDS_TYPE_64<span class="token operator">:</span> <span class="token punctuation">&#123;</span>
-            <span class="token function">SDS_HDR_VAR</span><span class="token punctuation">(</span><span class="token number">64</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>len <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            sh<span class="token operator">-></span>alloc <span class="token operator">=</span> initlen<span class="token punctuation">;</span>
-            <span class="token operator">*</span>fp <span class="token operator">=</span> type<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
-    <span class="token punctuation">&#125;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>initlen <span class="token operator">&amp;&amp;</span> init<span class="token punctuation">)</span>
-        <span class="token function">memcpy</span><span class="token punctuation">(</span>s<span class="token punctuation">,</span> init<span class="token punctuation">,</span> initlen<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    s<span class="token punctuation">[</span>initlen<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">'\0'</span><span class="token punctuation">;</span>
-    <span class="token keyword">return</span> s<span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Create a new sds string with the content specified by the &#x27;init&#x27; pointer</span></span><br><span class="line"><span class="comment"> * and &#x27;initlen&#x27;.</span></span><br><span class="line"><span class="comment"> * If NULL is used for &#x27;init&#x27; the string is initialized with zero bytes.</span></span><br><span class="line"><span class="comment"> * If SDS_NOINIT is used, the buffer is left uninitialized;</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * The string is always null-termined (all the sds strings are, always) so</span></span><br><span class="line"><span class="comment"> * even if you create an sds string with:</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * mystring = sdsnewlen(&quot;abc&quot;,3);</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * You can print the string with printf() as there is an implicit \0 at the</span></span><br><span class="line"><span class="comment"> * end of the string. However the string is binary safe and can contain</span></span><br><span class="line"><span class="comment"> * \0 characters in the middle, as the length is stored in the sds header. */</span></span><br><span class="line"><span class="function">sds <span class="title">sdsnewlen</span><span class="params">(<span class="keyword">const</span> <span class="keyword">void</span> *init, <span class="keyword">size_t</span> initlen)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">void</span> *sh;</span><br><span class="line">    sds s;</span><br><span class="line">    <span class="keyword">char</span> type = sdsReqType(initlen);</span><br><span class="line">    <span class="comment">/* Empty strings are usually created in order to append. Use type 8</span></span><br><span class="line"><span class="comment">     * since type 5 is not good at this. */</span></span><br><span class="line">    <span class="keyword">if</span> (type == SDS_TYPE_5 &amp;&amp; initlen == <span class="number">0</span>) type = SDS_TYPE_8;</span><br><span class="line">    <span class="keyword">int</span> hdrlen = sdsHdrSize(type);</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> *fp; <span class="comment">/* flags pointer. */</span></span><br><span class="line"></span><br><span class="line">    assert(hdrlen+initlen+<span class="number">1</span> &gt; initlen); <span class="comment">/* Catch size_t overflow */</span></span><br><span class="line">    sh = s_malloc(hdrlen+initlen+<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (init==SDS_NOINIT)</span><br><span class="line">        init = <span class="literal">NULL</span>;</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (!init)</span><br><span class="line">        <span class="built_in">memset</span>(sh, <span class="number">0</span>, hdrlen+initlen+<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">if</span> (sh == <span class="literal">NULL</span>) <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">    s = (<span class="keyword">char</span>*)sh+hdrlen;</span><br><span class="line">    fp = ((<span class="keyword">unsigned</span> <span class="keyword">char</span>*)s)<span class="number">-1</span>;</span><br><span class="line">    <span class="keyword">switch</span>(type) &#123;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_5: &#123;</span><br><span class="line">            *fp = type | (initlen &lt;&lt; SDS_TYPE_BITS);</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_8: &#123;</span><br><span class="line">            SDS_HDR_VAR(<span class="number">8</span>,s);</span><br><span class="line">            sh-&gt;len = initlen;</span><br><span class="line">            sh-&gt;alloc = initlen;</span><br><span class="line">            *fp = type;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_16: &#123;</span><br><span class="line">            SDS_HDR_VAR(<span class="number">16</span>,s);</span><br><span class="line">            sh-&gt;len = initlen;</span><br><span class="line">            sh-&gt;alloc = initlen;</span><br><span class="line">            *fp = type;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_32: &#123;</span><br><span class="line">            SDS_HDR_VAR(<span class="number">32</span>,s);</span><br><span class="line">            sh-&gt;len = initlen;</span><br><span class="line">            sh-&gt;alloc = initlen;</span><br><span class="line">            *fp = type;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_64: &#123;</span><br><span class="line">            SDS_HDR_VAR(<span class="number">64</span>,s);</span><br><span class="line">            sh-&gt;len = initlen;</span><br><span class="line">            sh-&gt;alloc = initlen;</span><br><span class="line">            *fp = type;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (initlen &amp;&amp; init)</span><br><span class="line">        <span class="built_in">memcpy</span>(s, init, initlen);</span><br><span class="line">    s[initlen] = <span class="string">&#x27;\0&#x27;</span>;</span><br><span class="line">    <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <h2 id="释放">释放</h2>
 <p>sds的释放比较简单</p>
 <ol>
@@ -384,92 +281,17 @@ sds <span class="token function">sdsnewlen</span><span class="token punctuation"
 <li>(char*)s-sdsHdrSize(s[-1])直接指向了结构体地址</li>
 <li>释放空间，这里没有对buf释放因为申请空间的时候buf作为结构体一起申请了。</li>
 </ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">void</span> <span class="token function">sdsfree</span><span class="token punctuation">(</span>sds s<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>s <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span> <span class="token keyword">return</span><span class="token punctuation">;</span>
-    <span class="token function">s_free</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>s<span class="token operator">-</span><span class="token function">sdsHdrSize</span><span class="token punctuation">(</span>s<span class="token punctuation">[</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sdsfree</span><span class="params">(sds s)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (s == <span class="literal">NULL</span>) <span class="keyword">return</span>;</span><br><span class="line">    s_free((<span class="keyword">char</span>*)s-sdsHdrSize(s[<span class="number">-1</span>]));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <h2 id="清空">清空</h2>
 <p>redis中更多的是使用清空操作（惰性删除），只是把字符串的长度设置为0，并不释放空间。下一次使用的时候就可以使用清空的sds，避免内存的分配操作</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token keyword">void</span> <span class="token function">sdsclear</span><span class="token punctuation">(</span>sds s<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-    <span class="token function">sdssetlen</span><span class="token punctuation">(</span>s<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    s<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token string">'\0'</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span>
-<span class="token keyword">static</span> <span class="token keyword">inline</span> <span class="token keyword">void</span> <span class="token function">sdssetlen</span><span class="token punctuation">(</span>sds s<span class="token punctuation">,</span> <span class="token class-name">size_t</span> newlen<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">unsigned</span> <span class="token keyword">char</span> flags <span class="token operator">=</span> s<span class="token punctuation">[</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
-    <span class="token keyword">switch</span><span class="token punctuation">(</span>flags<span class="token operator">&amp;</span>SDS_TYPE_MASK<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-        <span class="token keyword">case</span> SDS_TYPE_5<span class="token operator">:</span>
-            <span class="token punctuation">&#123;</span>
-                <span class="token keyword">unsigned</span> <span class="token keyword">char</span> <span class="token operator">*</span>fp <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">unsigned</span> <span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>s<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
-                <span class="token operator">*</span>fp <span class="token operator">=</span> SDS_TYPE_5 <span class="token operator">|</span> <span class="token punctuation">(</span>newlen <span class="token operator">&lt;&lt;</span> SDS_TYPE_BITS<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            <span class="token punctuation">&#125;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token keyword">case</span> SDS_TYPE_8<span class="token operator">:</span>
-            <span class="token function">SDS_HDR</span><span class="token punctuation">(</span><span class="token number">8</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token operator">-></span>len <span class="token operator">=</span> newlen<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token keyword">case</span> SDS_TYPE_16<span class="token operator">:</span>
-            <span class="token function">SDS_HDR</span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token operator">-></span>len <span class="token operator">=</span> newlen<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token keyword">case</span> SDS_TYPE_32<span class="token operator">:</span>
-            <span class="token function">SDS_HDR</span><span class="token punctuation">(</span><span class="token number">32</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token operator">-></span>len <span class="token operator">=</span> newlen<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-        <span class="token keyword">case</span> SDS_TYPE_64<span class="token operator">:</span>
-            <span class="token function">SDS_HDR</span><span class="token punctuation">(</span><span class="token number">64</span><span class="token punctuation">,</span>s<span class="token punctuation">)</span><span class="token operator">-></span>len <span class="token operator">=</span> newlen<span class="token punctuation">;</span>
-            <span class="token keyword">break</span><span class="token punctuation">;</span>
-    <span class="token punctuation">&#125;</span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="扩容">扩容</h2>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sdsclear</span><span class="params">(sds s)</span> </span>&#123;</span><br><span class="line">    sdssetlen(s, <span class="number">0</span>);</span><br><span class="line">    s[<span class="number">0</span>] = <span class="string">&#x27;\0&#x27;</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">inline</span> <span class="keyword">void</span> <span class="title">sdssetlen</span><span class="params">(sds s, <span class="keyword">size_t</span> newlen)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags = s[<span class="number">-1</span>];</span><br><span class="line">    <span class="keyword">switch</span>(flags&amp;SDS_TYPE_MASK) &#123;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_5:</span><br><span class="line">            &#123;</span><br><span class="line">                <span class="keyword">unsigned</span> <span class="keyword">char</span> *fp = ((<span class="keyword">unsigned</span> <span class="keyword">char</span>*)s)<span class="number">-1</span>;</span><br><span class="line">                *fp = SDS_TYPE_5 | (newlen &lt;&lt; SDS_TYPE_BITS);</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_8:</span><br><span class="line">            SDS_HDR(<span class="number">8</span>,s)-&gt;len = newlen;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_16:</span><br><span class="line">            SDS_HDR(<span class="number">16</span>,s)-&gt;len = newlen;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_32:</span><br><span class="line">            SDS_HDR(<span class="number">32</span>,s)-&gt;len = newlen;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        <span class="keyword">case</span> SDS_TYPE_64:</span><br><span class="line">            SDS_HDR(<span class="number">64</span>,s)-&gt;len = newlen;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="扩容-v2">扩容</h2>
 <p>扩容的思想很简单</p>
 <ol>
 <li>计算出扩容后需要空间大小。需要注意的是扩容策略：如果新字符串大小（newlen）小于SDS_MAX_PREALLOC（1M）， 则扩容空间是newlen的两倍；否则扩容空间是newlen+SDS_MAX_PREALLOC</li>
 <li>根据新字符串大小（newlen）判断是否需要升级sdshdr，如果不需要升级，在原有sdshdr基础上重新分配空间即可；如果需要升级，新建sdshdr赋值，然后将老的sdshdr释放</li>
 </ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">define</span> <span class="token macro-name">SDS_MAX_PREALLOC</span> <span class="token expression"><span class="token punctuation">(</span><span class="token number">1024</span><span class="token operator">*</span><span class="token number">1024</span><span class="token punctuation">)</span></span></span>
-sds <span class="token function">sdsMakeRoomFor</span><span class="token punctuation">(</span>sds s<span class="token punctuation">,</span> <span class="token class-name">size_t</span> addlen<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-    <span class="token keyword">void</span> <span class="token operator">*</span>sh<span class="token punctuation">,</span> <span class="token operator">*</span>newsh<span class="token punctuation">;</span>
-    <span class="token class-name">size_t</span> avail <span class="token operator">=</span> <span class="token function">sdsavail</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token class-name">size_t</span> len<span class="token punctuation">,</span> newlen<span class="token punctuation">;</span>
-    <span class="token keyword">char</span> type<span class="token punctuation">,</span> oldtype <span class="token operator">=</span> s<span class="token punctuation">[</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">&amp;</span> SDS_TYPE_MASK<span class="token punctuation">;</span>
-    <span class="token keyword">int</span> hdrlen<span class="token punctuation">;</span>
-
-    <span class="token comment">/* Return ASAP if there is enough space left. */</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>avail <span class="token operator">>=</span> addlen<span class="token punctuation">)</span> <span class="token keyword">return</span> s<span class="token punctuation">;</span>
-
-    len <span class="token operator">=</span> <span class="token function">sdslen</span><span class="token punctuation">(</span>s<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    sh <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>s<span class="token operator">-</span><span class="token function">sdsHdrSize</span><span class="token punctuation">(</span>oldtype<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    newlen <span class="token operator">=</span> <span class="token punctuation">(</span>len<span class="token operator">+</span>addlen<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token function">assert</span><span class="token punctuation">(</span>newlen <span class="token operator">></span> len<span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">/* Catch size_t overflow */</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>newlen <span class="token operator">&lt;</span> SDS_MAX_PREALLOC<span class="token punctuation">)</span>
-        newlen <span class="token operator">*=</span> <span class="token number">2</span><span class="token punctuation">;</span>
-    <span class="token keyword">else</span>
-        newlen <span class="token operator">+=</span> SDS_MAX_PREALLOC<span class="token punctuation">;</span>
-
-    type <span class="token operator">=</span> <span class="token function">sdsReqType</span><span class="token punctuation">(</span>newlen<span class="token punctuation">)</span><span class="token punctuation">;</span>
-
-    <span class="token comment">/* Don't use type 5: the user is appending to the string and type 5 is
-     * not able to remember empty space, so sdsMakeRoomFor() must be called
-     * at every appending operation. */</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>type <span class="token operator">==</span> SDS_TYPE_5<span class="token punctuation">)</span> type <span class="token operator">=</span> SDS_TYPE_8<span class="token punctuation">;</span>
-
-    hdrlen <span class="token operator">=</span> <span class="token function">sdsHdrSize</span><span class="token punctuation">(</span>type<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token function">assert</span><span class="token punctuation">(</span>hdrlen<span class="token operator">+</span>newlen<span class="token operator">+</span><span class="token number">1</span> <span class="token operator">></span> len<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">/* Catch size_t overflow */</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span>oldtype<span class="token operator">==</span>type<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-        newsh <span class="token operator">=</span> <span class="token function">s_realloc</span><span class="token punctuation">(</span>sh<span class="token punctuation">,</span> hdrlen<span class="token operator">+</span>newlen<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token keyword">if</span> <span class="token punctuation">(</span>newsh <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span> <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
-        s <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>newsh<span class="token operator">+</span>hdrlen<span class="token punctuation">;</span>
-    <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
-        <span class="token comment">/* Since the header size changes, need to move the string forward,
-         * and can't use realloc */</span>
-        newsh <span class="token operator">=</span> <span class="token function">s_malloc</span><span class="token punctuation">(</span>hdrlen<span class="token operator">+</span>newlen<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token keyword">if</span> <span class="token punctuation">(</span>newsh <span class="token operator">==</span> <span class="token constant">NULL</span><span class="token punctuation">)</span> <span class="token keyword">return</span> <span class="token constant">NULL</span><span class="token punctuation">;</span>
-        <span class="token function">memcpy</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>newsh<span class="token operator">+</span>hdrlen<span class="token punctuation">,</span> s<span class="token punctuation">,</span> len<span class="token operator">+</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token function">s_free</span><span class="token punctuation">(</span>sh<span class="token punctuation">)</span><span class="token punctuation">;</span>
-        s <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">char</span><span class="token operator">*</span><span class="token punctuation">)</span>newsh<span class="token operator">+</span>hdrlen<span class="token punctuation">;</span>
-        s<span class="token punctuation">[</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">=</span> type<span class="token punctuation">;</span>
-        <span class="token function">sdssetlen</span><span class="token punctuation">(</span>s<span class="token punctuation">,</span> len<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token punctuation">&#125;</span>
-    <span class="token function">sdssetalloc</span><span class="token punctuation">(</span>s<span class="token punctuation">,</span> newlen<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token keyword">return</span> s<span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> SDS_MAX_PREALLOC (1024*1024)</span></span><br><span class="line"><span class="function">sds <span class="title">sdsMakeRoomFor</span><span class="params">(sds s, <span class="keyword">size_t</span> addlen)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">void</span> *sh, *newsh;</span><br><span class="line">    <span class="keyword">size_t</span> avail = sdsavail(s);</span><br><span class="line">    <span class="keyword">size_t</span> len, newlen;</span><br><span class="line">    <span class="keyword">char</span> type, oldtype = s[<span class="number">-1</span>] &amp; SDS_TYPE_MASK;</span><br><span class="line">    <span class="keyword">int</span> hdrlen;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Return ASAP if there is enough space left. */</span></span><br><span class="line">    <span class="keyword">if</span> (avail &gt;= addlen) <span class="keyword">return</span> s;</span><br><span class="line"></span><br><span class="line">    len = sdslen(s);</span><br><span class="line">    sh = (<span class="keyword">char</span>*)s-sdsHdrSize(oldtype);</span><br><span class="line">    newlen = (len+addlen);</span><br><span class="line">    assert(newlen &gt; len);   <span class="comment">/* Catch size_t overflow */</span></span><br><span class="line">    <span class="keyword">if</span> (newlen &lt; SDS_MAX_PREALLOC)</span><br><span class="line">        newlen *= <span class="number">2</span>;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        newlen += SDS_MAX_PREALLOC;</span><br><span class="line"></span><br><span class="line">    type = sdsReqType(newlen);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Don&#x27;t use type 5: the user is appending to the string and type 5 is</span></span><br><span class="line"><span class="comment">     * not able to remember empty space, so sdsMakeRoomFor() must be called</span></span><br><span class="line"><span class="comment">     * at every appending operation. */</span></span><br><span class="line">    <span class="keyword">if</span> (type == SDS_TYPE_5) type = SDS_TYPE_8;</span><br><span class="line"></span><br><span class="line">    hdrlen = sdsHdrSize(type);</span><br><span class="line">    assert(hdrlen+newlen+<span class="number">1</span> &gt; len);  <span class="comment">/* Catch size_t overflow */</span></span><br><span class="line">    <span class="keyword">if</span> (oldtype==type) &#123;</span><br><span class="line">        newsh = s_realloc(sh, hdrlen+newlen+<span class="number">1</span>);</span><br><span class="line">        <span class="keyword">if</span> (newsh == <span class="literal">NULL</span>) <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">        s = (<span class="keyword">char</span>*)newsh+hdrlen;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* Since the header size changes, need to move the string forward,</span></span><br><span class="line"><span class="comment">         * and can&#x27;t use realloc */</span></span><br><span class="line">        newsh = s_malloc(hdrlen+newlen+<span class="number">1</span>);</span><br><span class="line">        <span class="keyword">if</span> (newsh == <span class="literal">NULL</span>) <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">        <span class="built_in">memcpy</span>((<span class="keyword">char</span>*)newsh+hdrlen, s, len+<span class="number">1</span>);</span><br><span class="line">        s_free(sh);</span><br><span class="line">        s = (<span class="keyword">char</span>*)newsh+hdrlen;</span><br><span class="line">        s[<span class="number">-1</span>] = type;</span><br><span class="line">        sdssetlen(s, len);</span><br><span class="line">    &#125;</span><br><span class="line">    sdssetalloc(s, newlen);</span><br><span class="line">    <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
     </div>
 
@@ -477,7 +299,7 @@ sds <span class="token function">sdsMakeRoomFor</span><span class="token punctua
     
     
 
-      <footer class="post-footer">
+    <footer class="post-footer">
           <div class="post-tags">
               <a href="/tags/redis%E6%BA%90%E7%A0%81/" rel="tag"># redis源码</a>
               <a href="/tags/redis%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" rel="tag"># redis数据结构</a>
@@ -485,160 +307,48 @@ sds <span class="token function">sdsMakeRoomFor</span><span class="token punctua
 
         
 
-
-        
-    <div class="post-nav">
-      <div class="post-nav-item"></div>
-      <div class="post-nav-item">
-    <a href="/2021/04/10/dict%E5%93%88%E5%B8%8C/" rel="next" title="dict字典">
-      dict字典 <i class="fa fa-chevron-right"></i>
-    </a></div>
-    </div>
-      </footer>
-    
-  </article>
-  
-  
-  
-
-
-
+          <div class="post-nav">
+            <div class="post-nav-item">
+            </div>
+            <div class="post-nav-item">
+                <a href="/2021/04/10/dict%E5%93%88%E5%B8%8C/" rel="next" title="dict字典">
+                  dict字典 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
           </div>
-          
-
-<script>
-  window.addEventListener('tabs:register', () => {
-    let { activeClass } = CONFIG.comments;
-    if (CONFIG.comments.storage) {
-      activeClass = localStorage.getItem('comments_active') || activeClass;
-    }
-    if (activeClass) {
-      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
-      if (activeTab) {
-        activeTab.click();
-      }
-    }
-  });
-  if (CONFIG.comments.storage) {
-    window.addEventListener('tabs:click', event => {
-      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
-      let commentClass = event.target.classList[1];
-      localStorage.setItem('comments_active', commentClass);
-    });
-  }
-</script>
-
-        </div>
-          
-  
-  <div class="toggle sidebar-toggle">
-    <span class="toggle-line toggle-line-first"></span>
-    <span class="toggle-line toggle-line-middle"></span>
-    <span class="toggle-line toggle-line-last"></span>
-  </div>
-
-  <aside class="sidebar">
-    <div class="sidebar-inner">
-
-      <ul class="sidebar-nav motion-element">
-        <li class="sidebar-nav-toc">
-          文章目录
-        </li>
-        <li class="sidebar-nav-overview">
-          站点概览
-        </li>
-      </ul>
-
-      <!--noindex-->
-      <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a></li><li class="nav-item nav-level-1"><a class="nav-link"><span class="nav-number">2.</span> <span class="nav-text">SDS使用</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%9B%E5%BB%BA"><span class="nav-number">2.1.</span> <span class="nav-text">创建</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%87%8A%E6%94%BE"><span class="nav-number">2.2.</span> <span class="nav-text">释放</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B8%85%E7%A9%BA"><span class="nav-number">2.3.</span> <span class="nav-text">清空</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%89%A9%E5%AE%B9"><span class="nav-number">2.4.</span> <span class="nav-text">扩容</span></a></li></ol></li></ol></div>
-      </div>
-      <!--/noindex-->
-
-      <div class="site-overview-wrap sidebar-panel">
-        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
-    <img class="site-author-image" itemprop="image" alt="polaris_he"
-      src="/images/avatar.jpeg">
-  <p class="site-author-name" itemprop="name">polaris_he</p>
-  <div class="site-description" itemprop="description"></div>
-</div>
-<div class="site-state-wrap motion-element">
-  <nav class="site-state">
-      <div class="site-state-item site-state-posts">
-          <a href="/archives">
-          <span class="site-state-item-count">8</span>
-          <span class="site-state-item-name">日志</span>
-        </a>
-      </div>
-      <div class="site-state-item site-state-categories">
-            <a href="/categories/">
-          
-        <span class="site-state-item-count">2</span>
-        <span class="site-state-item-name">分类</span></a>
-      </div>
-      <div class="site-state-item site-state-tags">
-            <a href="/tags/">
-          
-        <span class="site-state-item-count">8</span>
-        <span class="site-state-item-name">标签</span></a>
-      </div>
-  </nav>
+    </footer>
+  </article>
 </div>
 
 
 
-      </div>
-
-    </div>
-  </aside>
-  <div id="sidebar-dimmer"></div>
 
 
-      </div>
-    </main>
 
-    <footer class="footer">
-      <div class="footer-inner">
-        
+</div>
+  </main>
 
-        
+  <footer class="footer">
+    <div class="footer-inner">
+
 
 <div class="copyright">
-  
   &copy; 
-  <span itemprop="copyrightYear">2021</span>
+  <span itemprop="copyrightYear">2022</span>
   <span class="with-love">
     <i class="fa fa-heart"></i>
   </span>
   <span class="author" itemprop="copyrightHolder">polaris_he</span>
 </div>
-
-        
-
-
-
-
-
-
-
-
-      </div>
-    </footer>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
   </div>
 
+    </div>
+  </footer>
+
   
-  <script src="/lib/anime.min.js"></script>
-
-<script src="/js/utils.js"></script>
-
-
-<script src="/js/schemes/pisces.js"></script>
-
-
-<script src="/js/next-boot.js"></script>
-
-
-
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
 
   
 
@@ -646,21 +356,11 @@ sds <span class="token function">sdsMakeRoomFor</span><span class="token punctua
 
 
 
-
-
-
-
-
-
-
-
-
-
   
 
-  
 
-  
+
+
 
 </body>
 </html>
