@@ -1,0 +1,27 @@
+@startuml
+together {
+    abstract class SpringBootCondition
+    interface Condition
+}
+
+together {
+    class OnCloudPlatformCondition
+    class OnExpressionCondition
+    class OnJavaCondition
+    class OnJndiCondition
+    class OnPropertyCondition
+    class OnResourceCondition
+    class OnWarDeploymentCondition
+}
+
+OnCloudPlatformCondition --|> SpringBootCondition
+OnExpressionCondition --|> SpringBootCondition
+OnJavaCondition --|> SpringBootCondition
+OnJndiCondition --|> SpringBootCondition
+
+OnPropertyCondition --|> SpringBootCondition
+OnResourceCondition --|> SpringBootCondition
+OnWarDeploymentCondition --|> SpringBootCondition
+
+SpringBootCondition --|> Condition
+@enduml

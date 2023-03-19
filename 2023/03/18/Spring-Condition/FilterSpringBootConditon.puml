@@ -1,0 +1,30 @@
+@startuml
+
+together {
+interface AutoConfigurationImportFilter
+    interface BeanFactoryAware
+    interface BeanClassLoaderAware
+    abstract class FilteringSpringBootCondition
+    abstract class SpringBootCondition
+    interface ConfigurationCondition
+    interface Condition
+}
+
+together {
+    class OnClassCondition
+    class OnBeanCondition
+    class OnWebApplicationCondition
+}
+OnClassCondition --|> FilteringSpringBootCondition
+OnWebApplicationCondition --|> FilteringSpringBootCondition
+OnBeanCondition --|> FilteringSpringBootCondition
+OnBeanCondition --|> ConfigurationCondition
+ConfigurationCondition --|> Condition
+
+FilteringSpringBootCondition --|> AutoConfigurationImportFilter
+FilteringSpringBootCondition --|> BeanFactoryAware
+FilteringSpringBootCondition --|> SpringBootCondition
+FilteringSpringBootCondition --|> BeanClassLoaderAware
+
+SpringBootCondition --|> Condition
+@enduml
