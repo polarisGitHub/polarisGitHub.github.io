@@ -11,19 +11,20 @@
   <link rel="mask-icon" href="/images/logo.svg" color="#222">
 
 <link rel="stylesheet" href="/css/main.css">
-
+<link rel="stylesheet" href="/css/prism/prism.css">
+<link rel="stylesheet" href="">
 
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" integrity="sha256-/4UQcSmErDzPCMAiuOiWPVVsNN2s3ZY/NsmXNcj0IFc=" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
 
-<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
+<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
 
     <meta name="description" content="本文源码redis5.0.12 dict的数据结构，定义在dict.h，实现在dict.c中  hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典">
 <meta property="og:type" content="article">
 <meta property="og:title" content="dict字典">
 <meta property="og:url" content="http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/index.html">
-<meta property="og:site_name" content="polaris_he&#39;s blog">
+<meta property="og:site_name" content="polaris_he">
 <meta property="og:description" content="本文源码redis5.0.12 dict的数据结构，定义在dict.h，实现在dict.c中  hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/dictht.svg">
@@ -43,7 +44,7 @@
 <script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/","path":"2021/04/10/dict哈希/","title":"dict字典"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>dict字典 | polaris_he's blog</title>
+<title>dict字典 | polaris_he</title>
   
 
 
@@ -56,7 +57,7 @@
   <noscript>
     <link rel="stylesheet" href="/css/noscript.css">
   </noscript>
-</head>
+<style>.darkmode--activated{--body-bg-color:#282828;--content-bg-color:#333;--card-bg-color:#555;--text-color:#ccc;--blockquote-color:#bbb;--link-color:#ccc;--link-hover-color:#eee;--brand-color:#ddd;--brand-hover-color:#ddd;--table-row-odd-bg-color:#282828;--table-row-hover-bg-color:#363636;--menu-item-bg-color:#555;--btn-default-bg:#222;--btn-default-color:#ccc;--btn-default-border-color:#555;--btn-default-hover-bg:#666;--btn-default-hover-color:#ccc;--btn-default-hover-border-color:#666;--highlight-background:#282b2e;--highlight-foreground:#a9b7c6;--highlight-gutter-background:#34393d;--highlight-gutter-foreground:#9ca9b6}.darkmode--activated img{opacity:.75}.darkmode--activated img:hover{opacity:.9}.darkmode--activated code{color:#69dbdc;background:0 0}button.darkmode-toggle{z-index:9999}.darkmode-ignore,img{display:flex!important}.beian img{display:inline-block!important}</style></head>
 
 <body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
   <div class="headband"></div>
@@ -76,13 +77,14 @@
 
     <a href="/" class="brand" rel="start">
       <i class="logo-line"></i>
-      <p class="site-title">polaris_he's blog</p>
+      <p class="site-title">polaris_he</p>
       <i class="logo-line"></i>
     </a>
+      <p class="site-subtitle" itemprop="description">just do it</p>
   </div>
 
   <div class="site-nav-right">
-    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+    <div class="toggle popup-trigger" aria-label="搜索 | search" role="button">
     </div>
   </div>
 </div>
@@ -90,7 +92,7 @@
 
 
 <nav class="site-nav">
-  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li>
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
   </ul>
 </nav>
 
@@ -121,6 +123,8 @@
 
         <div class="site-overview-wrap sidebar-panel">
           <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
   <p class="site-author-name" itemprop="name">polaris_he</p>
   <div class="site-description" itemprop="description"></div>
 </div>
@@ -128,7 +132,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-count">10</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -144,6 +148,14 @@
       </div>
   </nav>
 </div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
 
         </div>
       </div>
@@ -169,17 +181,17 @@
     <link itemprop="mainEntityOfPage" href="http://example.com/2021/04/10/dict%E5%93%88%E5%B8%8C/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="image" content="/images/avatar.jpeg">
       <meta itemprop="name" content="polaris_he">
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="polaris_he's blog">
+      <meta itemprop="name" content="polaris_he">
       <meta itemprop="description" content="">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="dict字典 | polaris_he's blog">
+      <meta itemprop="name" content="dict字典 | polaris_he">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -215,6 +227,21 @@
     </span>
 
   
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>8 分钟</span>
+    </span>
 </div>
 
         </div>
@@ -236,7 +263,19 @@ dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code
 <ul>
 <li>需要注意的是，value采用了union，主要是字典在redis中被广泛使用了。如：hash指令，记录各个键的TTL等，在不同的场景下会使用不同的成员，如记录TTL时使用了<code>s64</code>。这样设计的原因也是为了节省内存。</li>
 </ul>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictEntry</span> &#123;</span></span><br><span class="line">    <span class="comment">// key</span></span><br><span class="line">    <span class="type">void</span> *key;</span><br><span class="line">    <span class="comment">// value，c语言中的共用体</span></span><br><span class="line">    <span class="class"><span class="keyword">union</span> &#123;</span></span><br><span class="line">        <span class="type">void</span> *val;</span><br><span class="line">        <span class="type">uint64_t</span> u64;</span><br><span class="line">        <span class="type">int64_t</span> s64;</span><br><span class="line">        <span class="type">double</span> d;</span><br><span class="line">    &#125; v;</span><br><span class="line">    <span class="comment">// hash冲突后使用单链表存储</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">dictEntry</span> *<span class="title">next</span>;</span></span><br><span class="line">&#125; dictEntry;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dictEntry &#123;
+    &#x2F;&#x2F; key
+    void *key;
+    &#x2F;&#x2F; value，c语言中的共用体
+    union &#123;
+        void *val;
+        uint64_t u64;
+        int64_t s64;
+        double d;
+    &#125; v;
+    &#x2F;&#x2F; hash冲突后使用单链表存储
+    struct dictEntry *next;
+&#125; dictEntry;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h3 id="Hash表">Hash表</h3>
 <p>Hash表主要记录了entry数组等信息。</p>
 <ul>
@@ -249,10 +288,28 @@ dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code
 </li>
 <li>used：记录Hash表中保存的数据个数</li>
 </ul>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* This is our hash table structure. Every dictionary has two of this as we</span></span><br><span class="line"><span class="comment"> * implement incremental rehashing, for the old to the new table. */</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictht</span> &#123;</span></span><br><span class="line">    <span class="comment">// 二维数组，指向kv对</span></span><br><span class="line">    dictEntry **table;   </span><br><span class="line">    <span class="comment">// table的大小</span></span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> size;  </span><br><span class="line">    <span class="comment">// 掩码，table的大小固定为2^n，sizemask为size-1，即2^n-1，这样sizemask的每一位都是1</span></span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> sizemask; </span><br><span class="line">    <span class="comment">// 已保存kv对的个数</span></span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> used;</span><br><span class="line">&#125; dictht;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* This is our hash table structure. Every dictionary has two of this as we
+ * implement incremental rehashing, for the old to the new table. *&#x2F;
+typedef struct dictht &#123;
+    &#x2F;&#x2F; 二维数组，指向kv对
+    dictEntry **table;   
+    &#x2F;&#x2F; table的大小
+    unsigned long size;  
+    &#x2F;&#x2F; 掩码，table的大小固定为2^n，sizemask为size-1，即2^n-1，这样sizemask的每一位都是1
+    unsigned long sizemask; 
+    &#x2F;&#x2F; 已保存kv对的个数
+    unsigned long used;
+&#125; dictht;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <p>这个地方要注意下**table。菜鸡如我看到**table以为是个二维数组，可以通table[1][1]访问这种。其实不是，table应该理解成一维数组，使用二维指针只是方便<code>dictEntry-&gt;next</code>的访问。<br>
 <img src="./dictht.svg" alt="dict"></p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">dictht *ht</span><br><span class="line"><span class="title function_">for</span> <span class="params">(i = <span class="number">0</span>; i &lt; ht-&gt;size; i++)</span> &#123;</span><br><span class="line"> dictEntry *he = ht-&gt;table[i];</span><br><span class="line"> <span class="keyword">while</span>(he) &#123;</span><br><span class="line">  chainlen++;</span><br><span class="line">  he = he-&gt;next;</span><br><span class="line"> &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictht *ht
+for (i &#x3D; 0; i &lt; ht-&gt;size; i++) &#123;
+ dictEntry *he &#x3D; ht-&gt;table[i];
+ while(he) &#123;
+  chainlen++;
+  he &#x3D; he-&gt;next;
+ &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h3 id="Dict字典">Dict字典</h3>
 <p>有了hash table，就可以很容易得到字典数据结构。</p>
 <ul>
@@ -267,11 +324,61 @@ dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code
 <li>rehashidx：rehash时使用，标记rehash到hash table的哪个位置了。这里可以回忆下dictht的结构，里面的table是一个一维数组，这个rehashidx就是标示table的rehash到哪儿的index。如果没有rehash，rehashidx=-1</li>
 <li>iterators：记录迭代器的数量，迭代器参考下文</li>
 </ul>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dict</span> &#123;</span></span><br><span class="line">    dictType *type;</span><br><span class="line">    <span class="type">void</span> *privdata;</span><br><span class="line">    dictht ht[<span class="number">2</span>];</span><br><span class="line">    <span class="type">long</span> rehashidx; <span class="comment">/* rehashing not in progress if rehashidx == -1 */</span></span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> iterators; <span class="comment">/* number of iterators currently running */</span></span><br><span class="line">&#125; dict;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictType</span> &#123;</span></span><br><span class="line">    <span class="comment">// hash函数</span></span><br><span class="line">    <span class="type">uint64_t</span> (*hashFunction)(<span class="type">const</span> <span class="type">void</span> *key);</span><br><span class="line">    <span class="comment">// key对应的复制函数</span></span><br><span class="line">    <span class="type">void</span> *(*keyDup)(<span class="type">void</span> *privdata, <span class="type">const</span> <span class="type">void</span> *key);</span><br><span class="line">    <span class="comment">// val对应的复制函数</span></span><br><span class="line">    <span class="type">void</span> *(*valDup)(<span class="type">void</span> *privdata, <span class="type">const</span> <span class="type">void</span> *obj);</span><br><span class="line">    <span class="comment">// key的compare函数</span></span><br><span class="line">    <span class="type">int</span> (*keyCompare)(<span class="type">void</span> *privdata, <span class="type">const</span> <span class="type">void</span> *key1, <span class="type">const</span> <span class="type">void</span> *key2);</span><br><span class="line">    <span class="comment">// key的析构函数</span></span><br><span class="line">    <span class="type">void</span> (*keyDestructor)(<span class="type">void</span> *privdata, <span class="type">void</span> *key);</span><br><span class="line">    <span class="comment">// val的析构函数</span></span><br><span class="line">    <span class="type">void</span> (*valDestructor)(<span class="type">void</span> *privdata, <span class="type">void</span> *obj);</span><br><span class="line">&#125; dictType;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dict &#123;
+    dictType *type;
+    void *privdata;
+    dictht ht[2];
+    long rehashidx; &#x2F;* rehashing not in progress if rehashidx &#x3D;&#x3D; -1 *&#x2F;
+    unsigned long iterators; &#x2F;* number of iterators currently running *&#x2F;
+&#125; dict;
+
+typedef struct dictType &#123;
+    &#x2F;&#x2F; hash函数
+    uint64_t (*hashFunction)(const void *key);
+    &#x2F;&#x2F; key对应的复制函数
+    void *(*keyDup)(void *privdata, const void *key);
+    &#x2F;&#x2F; val对应的复制函数
+    void *(*valDup)(void *privdata, const void *obj);
+    &#x2F;&#x2F; key的compare函数
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    &#x2F;&#x2F; key的析构函数
+    void (*keyDestructor)(void *privdata, void *key);
+    &#x2F;&#x2F; val的析构函数
+    void (*valDestructor)(void *privdata, void *obj);
+&#125; dictType;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h2 id="DICT基本操作">DICT基本操作</h2>
 <h3 id="创建Dict">创建Dict</h3>
 <p>dict的创建很简单。注意刚创建的dict大小为0，里面的ht.table也都是null，当第一次添加元素时，会在<code>_dictExpandIfNeeded</code>函数中对ht进行初始化</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Create a new hash table */</span></span><br><span class="line">dict *<span class="title function_">dictCreate</span><span class="params">(dictType *type,</span></span><br><span class="line"><span class="params">        <span class="type">void</span> *privDataPtr)</span></span><br><span class="line">&#123;</span><br><span class="line">    dict *d = zmalloc(<span class="keyword">sizeof</span>(*d));</span><br><span class="line"></span><br><span class="line">    _dictInit(d,type,privDataPtr);</span><br><span class="line">    <span class="keyword">return</span> d;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/* Initialize the hash table */</span></span><br><span class="line"><span class="type">int</span> _dictInit(dict *d, dictType *type,</span><br><span class="line">        <span class="type">void</span> *privDataPtr)</span><br><span class="line">&#123;</span><br><span class="line">    _dictReset(&amp;d-&gt;ht[<span class="number">0</span>]);</span><br><span class="line">    _dictReset(&amp;d-&gt;ht[<span class="number">1</span>]);</span><br><span class="line">    d-&gt;type = type;</span><br><span class="line">    d-&gt;privdata = privDataPtr;</span><br><span class="line">    d-&gt;rehashidx = <span class="number">-1</span>;</span><br><span class="line">    d-&gt;iterators = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">return</span> DICT_OK;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/* Reset a hash table already initialized with ht_init().</span></span><br><span class="line"><span class="comment"> * <span class="doctag">NOTE:</span> This function should only be called by ht_destroy(). */</span></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> _dictReset(dictht *ht)</span><br><span class="line">&#123;</span><br><span class="line">    ht-&gt;table = <span class="literal">NULL</span>;</span><br><span class="line">    ht-&gt;size = <span class="number">0</span>;</span><br><span class="line">    ht-&gt;sizemask = <span class="number">0</span>;</span><br><span class="line">    ht-&gt;used = <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new hash table *&#x2F;
+dict *dictCreate(dictType *type,
+        void *privDataPtr)
+&#123;
+    dict *d &#x3D; zmalloc(sizeof(*d));
+
+    _dictInit(d,type,privDataPtr);
+    return d;
+&#125;
+&#x2F;* Initialize the hash table *&#x2F;
+int _dictInit(dict *d, dictType *type,
+        void *privDataPtr)
+&#123;
+    _dictReset(&amp;d-&gt;ht[0]);
+    _dictReset(&amp;d-&gt;ht[1]);
+    d-&gt;type &#x3D; type;
+    d-&gt;privdata &#x3D; privDataPtr;
+    d-&gt;rehashidx &#x3D; -1;
+    d-&gt;iterators &#x3D; 0;
+    return DICT_OK;
+&#125;
+&#x2F;* Reset a hash table already initialized with ht_init().
+ * NOTE: This function should only be called by ht_destroy(). *&#x2F;
+static void _dictReset(dictht *ht)
+&#123;
+    ht-&gt;table &#x3D; NULL;
+    ht-&gt;size &#x3D; 0;
+    ht-&gt;sizemask &#x3D; 0;
+    ht-&gt;used &#x3D; 0;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h3 id="添加元素">添加元素</h3>
 <p>添加元素基本逻辑很简单</p>
 <ol>
@@ -281,7 +388,22 @@ dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code
 <ul>
 <li>注意宏里面使用了，<code>do&#123;……&#125;while(0)</code>这个技巧。对c不熟悉的会摸不着头脑，其实就是保证宏在任何地方都能以期望的语义展开，可以参考这篇文章<a target="_blank" rel="noopener" href="https://www.cnblogs.com/lanxuezaipiao/p/3535626.html">do {…} while (0) 在宏定义中的作用</a></li>
 </ul>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Add an element to the target hash table */</span></span><br><span class="line"><span class="type">int</span> <span class="title function_">dictAdd</span><span class="params">(dict *d, <span class="type">void</span> *key, <span class="type">void</span> *val)</span></span><br><span class="line">&#123;</span><br><span class="line">    dictEntry *entry = dictAddRaw(d,key,<span class="literal">NULL</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!entry) <span class="keyword">return</span> DICT_ERR;</span><br><span class="line">    dictSetVal(d, entry, val);</span><br><span class="line">    <span class="keyword">return</span> DICT_OK;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> dictSetVal(d, entry, _val_) do &#123; \</span></span><br><span class="line"><span class="meta">    <span class="keyword">if</span> ((d)-&gt;type-&gt;valDup) \</span></span><br><span class="line"><span class="meta">        (entry)-&gt;v.val = (d)-&gt;type-&gt;valDup((d)-&gt;privdata, _val_); \</span></span><br><span class="line"><span class="meta">    <span class="keyword">else</span> \</span></span><br><span class="line"><span class="meta">        (entry)-&gt;v.val = (_val_); \</span></span><br><span class="line"><span class="meta">&#125; while(0)</span></span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Add an element to the target hash table *&#x2F;
+int dictAdd(dict *d, void *key, void *val)
+&#123;
+    dictEntry *entry &#x3D; dictAddRaw(d,key,NULL);
+
+    if (!entry) return DICT_ERR;
+    dictSetVal(d, entry, val);
+    return DICT_OK;
+&#125;
+
+#define dictSetVal(d, entry, _val_) do &#123; \
+    if ((d)-&gt;type-&gt;valDup) \
+        (entry)-&gt;v.val &#x3D; (d)-&gt;type-&gt;valDup((d)-&gt;privdata, _val_); \
+    else \
+        (entry)-&gt;v.val &#x3D; (_val_); \
+&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <p>从上文中可以看出，<code>dictAddRaw</code>才是正文，我们继续看这个函数。</p>
 <ol>
 <li>先判断是不是在rehash过程中，判断dict.rehashidx是不是-1，如果不是-1。则执行一次rehash step，rehash过程在下文详细说明。</li>
@@ -295,14 +417,72 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
 <li>根据key计算数据存储所在的index，如果key在dict中已经存在，则<strong>添加错误</strong>。</li>
 <li>是否处于rehash过程中，是的话选择ht[1]，否则选择ht[0]放置数据</li>
 </ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line">dictEntry *<span class="title function_">dictAddRaw</span><span class="params">(dict *d, <span class="type">void</span> *key, dictEntry **existing)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">long</span> index;</span><br><span class="line">    dictEntry *entry;</span><br><span class="line">    dictht *ht;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (dictIsRehashing(d)) _dictRehashStep(d);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Get the index of the new element, or -1 if</span></span><br><span class="line"><span class="comment">     * the element already exists. */</span></span><br><span class="line">    <span class="comment">// #define dictHashKey(d, key) (d)-&gt;type-&gt;hashFunction(key)</span></span><br><span class="line">    <span class="keyword">if</span> ((index = _dictKeyIndex(d, key, dictHashKey(d,key), existing)) == <span class="number">-1</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Allocate the memory and store the new entry.</span></span><br><span class="line"><span class="comment">     * Insert the element in top, with the assumption that in a database</span></span><br><span class="line"><span class="comment">     * system it is more likely that recently added entries are accessed</span></span><br><span class="line"><span class="comment">     * more frequently. */</span></span><br><span class="line">    ht = dictIsRehashing(d) ? &amp;d-&gt;ht[<span class="number">1</span>] : &amp;d-&gt;ht[<span class="number">0</span>];</span><br><span class="line">    entry = zmalloc(<span class="keyword">sizeof</span>(*entry));</span><br><span class="line">    <span class="comment">// 如果hash冲突，放到链表中</span></span><br><span class="line">    entry-&gt;next = ht-&gt;table[index];</span><br><span class="line">    ht-&gt;table[index] = entry;</span><br><span class="line">    ht-&gt;used++;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Set the hash entry fields. */</span></span><br><span class="line">    dictSetKey(d, entry, key);</span><br><span class="line">    <span class="keyword">return</span> entry;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> dictSetKey(d, entry, _key_) do &#123; \</span></span><br><span class="line"><span class="meta">    <span class="keyword">if</span> ((d)-&gt;type-&gt;keyDup) \</span></span><br><span class="line"><span class="meta">        (entry)-&gt;key = (d)-&gt;type-&gt;keyDup((d)-&gt;privdata, _key_); \</span></span><br><span class="line"><span class="meta">    <span class="keyword">else</span> \</span></span><br><span class="line"><span class="meta">        (entry)-&gt;key = (_key_); \</span></span><br><span class="line"><span class="meta">&#125; while(0)</span></span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
+&#123;
+    long index;
+    dictEntry *entry;
+    dictht *ht;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+
+    &#x2F;* Get the index of the new element, or -1 if
+     * the element already exists. *&#x2F;
+    &#x2F;&#x2F; #define dictHashKey(d, key) (d)-&gt;type-&gt;hashFunction(key)
+    if ((index &#x3D; _dictKeyIndex(d, key, dictHashKey(d,key), existing)) &#x3D;&#x3D; -1)
+        return NULL;
+
+    &#x2F;* Allocate the memory and store the new entry.
+     * Insert the element in top, with the assumption that in a database
+     * system it is more likely that recently added entries are accessed
+     * more frequently. *&#x2F;
+    ht &#x3D; dictIsRehashing(d) ? &amp;d-&gt;ht[1] : &amp;d-&gt;ht[0];
+    entry &#x3D; zmalloc(sizeof(*entry));
+    &#x2F;&#x2F; 如果hash冲突，放到链表中
+    entry-&gt;next &#x3D; ht-&gt;table[index];
+    ht-&gt;table[index] &#x3D; entry;
+    ht-&gt;used++;
+
+    &#x2F;* Set the hash entry fields. *&#x2F;
+    dictSetKey(d, entry, key);
+    return entry;
+&#125;
+
+#define dictSetKey(d, entry, _key_) do &#123; \
+    if ((d)-&gt;type-&gt;keyDup) \
+        (entry)-&gt;key &#x3D; (d)-&gt;type-&gt;keyDup((d)-&gt;privdata, _key_); \
+    else \
+        (entry)-&gt;key &#x3D; (_key_); \
+&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <p>看完这段代码，我们发现这个的核心优势这么找到key在table中的位置，这个方法就是<code>_dictKeyIndex</code>。</p>
 <ol>
 <li>添加时先判断选是否需要扩容，如果容量不够先扩容。</li>
 <li>根据hash值和sizemask计算出数据应该存放的index。</li>
 <li>根据index，在两个ht中查找key是否存在（包括单链表），如果key已经有了，返回错误。检查完成后返回index作为数据的存放索引</li>
 </ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">long</span> _dictKeyIndex(dict *d, <span class="type">const</span> <span class="type">void</span> *key, <span class="type">uint64_t</span> hash, dictEntry **existing)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">long</span> idx, table;</span><br><span class="line">    dictEntry *he;</span><br><span class="line">    <span class="keyword">if</span> (existing) *existing = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Expand the hash table if needed */</span></span><br><span class="line">    <span class="keyword">if</span> (_dictExpandIfNeeded(d) == DICT_ERR)</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    <span class="keyword">for</span> (table = <span class="number">0</span>; table &lt;= <span class="number">1</span>; table++) &#123;</span><br><span class="line">        idx = hash &amp; d-&gt;ht[table].sizemask;</span><br><span class="line">        <span class="comment">/* Search if this slot does not already contain the given key */</span></span><br><span class="line">        he = d-&gt;ht[table].table[idx];</span><br><span class="line">        <span class="keyword">while</span>(he) &#123;</span><br><span class="line">            <span class="keyword">if</span> (key==he-&gt;key || dictCompareKeys(d, key, he-&gt;key)) &#123;</span><br><span class="line">                <span class="keyword">if</span> (existing) *existing = he;</span><br><span class="line">                <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            he = he-&gt;next;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (!dictIsRehashing(d)) <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> idx;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **existing)
+&#123;
+    unsigned long idx, table;
+    dictEntry *he;
+    if (existing) *existing &#x3D; NULL;
+
+    &#x2F;* Expand the hash table if needed *&#x2F;
+    if (_dictExpandIfNeeded(d) &#x3D;&#x3D; DICT_ERR)
+        return -1;
+    for (table &#x3D; 0; table &lt;&#x3D; 1; table++) &#123;
+        idx &#x3D; hash &amp; d-&gt;ht[table].sizemask;
+        &#x2F;* Search if this slot does not already contain the given key *&#x2F;
+        he &#x3D; d-&gt;ht[table].table[idx];
+        while(he) &#123;
+            if (key&#x3D;&#x3D;he-&gt;key || dictCompareKeys(d, key, he-&gt;key)) &#123;
+                if (existing) *existing &#x3D; he;
+                return -1;
+            &#125;
+            he &#x3D; he-&gt;next;
+        &#125;
+        if (!dictIsRehashing(d)) break;
+    &#125;
+    return idx;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h3 id="rehash">rehash</h3>
 <h3 id="扩容">扩容</h3>
 <h3 id="遍历">遍历</h3>
@@ -496,6 +676,20 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
   </span>
   <span class="author" itemprop="copyrightHolder">polaris_he</span>
 </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+    <span title="站点总字数">17k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">56 分钟</span>
+  </span>
+</div>
   <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
   </div>
 
@@ -507,6 +701,9 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
     <i class="fa fa-arrow-up fa-lg"></i>
     <span>0%</span>
   </div>
+  <div class="reading-progress-bar"></div>
+
+  <a href="https://github.com/polarisGitHub" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
 
 <noscript>
   <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
@@ -515,7 +712,7 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
 
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
-<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+<script src="/js/comments.js"></script><script src="/js/prism/prism.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
 
   
 

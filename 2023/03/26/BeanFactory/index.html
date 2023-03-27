@@ -20,29 +20,31 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
 
-    <meta name="description" content="本文源码redis5.0.12 压缩列表的定义在ziplist.h中，实现在ziplist.c  压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的压缩两字就注明了这是一个不寻常的数据结构。 我们可以在ziplist.h中找到官方对ziplist的定义  ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符">
+    <meta name="description" content="本文基于Spring Boot 2.7.9与Spring Framework 5.3.25  BeanFactory，Spring IOC核心接口，承担了Bean管理的职责。本文来看看BeanFactory在Spring体系中是怎么发挥作用的">
 <meta property="og:type" content="article">
-<meta property="og:title" content="ziplist压缩列表">
-<meta property="og:url" content="http://example.com/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/index.html">
+<meta property="og:title" content="BeanFactory">
+<meta property="og:url" content="http://example.com/2023/03/26/BeanFactory/index.html">
 <meta property="og:site_name" content="polaris_he">
-<meta property="og:description" content="本文源码redis5.0.12 压缩列表的定义在ziplist.h中，实现在ziplist.c  压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的压缩两字就注明了这是一个不寻常的数据结构。 我们可以在ziplist.h中找到官方对ziplist的定义  ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符">
+<meta property="og:description" content="本文基于Spring Boot 2.7.9与Spring Framework 5.3.25  BeanFactory，Spring IOC核心接口，承担了Bean管理的职责。本文来看看BeanFactory在Spring体系中是怎么发挥作用的">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2021-05-16T06:57:08.000Z">
-<meta property="article:modified_time" content="2023-03-18T13:09:10.274Z">
+<meta property="og:image" content="http://example.com/2023/03/26/BeanFactory/BeanFactory.svg">
+<meta property="og:image" content="http://example.com/2023/03/26/BeanFactory/DefaultListableBeanFactory.svg">
+<meta property="article:published_time" content="2023-03-26T04:16:25.000Z">
+<meta property="article:modified_time" content="2023-03-27T14:56:51.184Z">
 <meta property="article:author" content="polaris_he">
-<meta property="article:tag" content="redis源码">
-<meta property="article:tag" content="redis数据结构">
+<meta property="article:tag" content="Spring IOC">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/2023/03/26/BeanFactory/BeanFactory.svg">
 
 
-<link rel="canonical" href="http://example.com/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/">
+<link rel="canonical" href="http://example.com/2023/03/26/BeanFactory/">
 
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/","path":"2021/05/16/ziplist压缩列表/","title":"ziplist压缩列表"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2023/03/26/BeanFactory/","path":"2023/03/26/BeanFactory/","title":"BeanFactory"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>ziplist压缩列表 | polaris_he</title>
+<title>BeanFactory | polaris_he</title>
   
 
 
@@ -115,7 +117,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#BeanFactory"><span class="nav-number">1.1.</span> <span class="nav-text">BeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ListableBeanFactory"><span class="nav-number">1.2.</span> <span class="nav-text">ListableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HierarchicalBeanFactory"><span class="nav-number">1.3.</span> <span class="nav-text">HierarchicalBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableBeanFactory"><span class="nav-number">1.4.</span> <span class="nav-text">ConfigurableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AutowireCapableBeanFactory"><span class="nav-number">1.5.</span> <span class="nav-text">AutowireCapableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableListableBeanFactory"><span class="nav-number">1.6.</span> <span class="nav-text">ConfigurableListableBeanFactory</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#StaticListableBeanFactory"><span class="nav-number">2.</span> <span class="nav-text">StaticListableBeanFactory</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DefaultListableBeanFactory"><span class="nav-number">3.</span> <span class="nav-text">DefaultListableBeanFactory</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -176,7 +178,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2023/03/26/BeanFactory/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.jpeg">
@@ -189,12 +191,12 @@
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="ziplist压缩列表 | polaris_he">
+      <meta itemprop="name" content="BeanFactory | polaris_he">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          ziplist压缩列表
+          BeanFactory
         </h1>
 
         <div class="post-meta-container">
@@ -205,14 +207,14 @@
       </span>
       <span class="post-meta-item-text">发表于</span>
 
-      <time title="创建时间：2021-05-16 14:57:08" itemprop="dateCreated datePublished" datetime="2021-05-16T14:57:08+08:00">2021-05-16</time>
+      <time title="创建时间：2023-03-26 12:16:25" itemprop="dateCreated datePublished" datetime="2023-03-26T12:16:25+08:00">2023-03-26</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2023-03-18 21:09:10" itemprop="dateModified" datetime="2023-03-18T21:09:10+08:00">2023-03-18</time>
+      <time title="修改时间：2023-03-27 22:56:51" itemprop="dateModified" datetime="2023-03-27T22:56:51+08:00">2023-03-27</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -220,7 +222,7 @@
       </span>
       <span class="post-meta-item-text">分类于</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
+          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
         </span>
     </span>
 
@@ -231,7 +233,7 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>489</span>
+      <span>600</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
@@ -250,47 +252,95 @@
     
     <div class="post-body" itemprop="articleBody">
         <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
+<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
 </blockquote>
-<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
-<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
+<p>BeanFactory，Spring IOC核心接口，承担了Bean管理的职责。本文来看看BeanFactory在Spring体系中是怎么发挥作用的</p>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p>从依赖图中可以看出，BeanFactory接口依赖相对简单</p>
 <ul>
-<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
-<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
-<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
+<li><code>BeanFactory</code>是最底层的类，提供了简单的bean获取和bean信息获取的能力</li>
+<li>ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory继承BeanFactory，提供了更为高级的抽象
+<ul>
+<li><code>ListableBeanFactory</code>：可以一次获取多个bean</li>
+<li><code>HierarchicalBeanFactory</code>：提供获取父级BeanFactory能力</li>
+<li><code>AutowireCapableBeanFactory</code>：提供自动装配的能力</li>
 </ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
- * to be very memory efficient. It stores both strings and integer values,
- * where integers are encoded as actual integers instead of a series of
- * characters. It allows push and pop operations on either side of the list
- * in O(1) time. However, because every operation requires a reallocation of
- * the memory used by the ziplist, the actual complexity is related to the
- * amount of memory used by the ziplist.
- * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
- <span id="more"></span>
-<h2 id="数据结构">数据结构</h2>
-<p>和其他数据类型不一样，我们在<code>ziplist.h</code>中没有找到任何结构体的定义<br>
-我们在来看下创建ziplist的代码，好家伙，ziplist就是个一维数组</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new empty ziplist. *&#x2F;
-unsigned char *ziplistNew(void) &#123;
-    unsigned int bytes &#x3D; ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
-    unsigned char *zl &#x3D; zmalloc(bytes);
-    ZIPLIST_BYTES(zl) &#x3D; intrev32ifbe(bytes);
-    ZIPLIST_TAIL_OFFSET(zl) &#x3D; intrev32ifbe(ZIPLIST_HEADER_SIZE);
-    ZIPLIST_LENGTH(zl) &#x3D; 0;
-    zl[bytes-1] &#x3D; ZIP_END;
-    return zl;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里我们要回到<code>ziplist.h</code>中，官方很详细的写了ziplist的设计思路</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* ZIPLIST OVERALL LAYOUT
-* &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
-*
-* The general layout of the ziplist is as follows:
-*
-* &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; &lt;entry&gt; ... &lt;entry&gt; &lt;zlend&gt;
-* ………………
-* &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li><code>ConfigurableBeanFactory</code>继承了HierarchicalBeanFactory，为BeanFactory提供了BeanPostProcessor，依赖关系处理，手动注册bean等能力</li>
+<li><code>ConfigurableListableBeanFactory</code>：继承了ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory，提供高级管理能力，如：bean预初始化，BeanFactory冻结等</li>
+<li>Spring提供了四种BeanFactory的实现：XmlBeanFactory，SimpleJndiBeanFactory，StaticListableBeanFactory和DefaultListableBeanFactory
+<ul>
+<li><code>XmlBeanFactory</code>：继承于DefaultListableBeanFactory，官方已经不推荐使用，推荐使用DefaultListableBeanFactory</li>
+<li><code>SimpleJndiBeanFactory</code>：基于JNDI去加载bean，直接继承了BeanFactory，由于JNDI已经慢慢淡出的java体系，本文就不再分析该BeanFactory了</li>
+<li><code>StaticListableBeanFactory</code>：简单的BeanFactory实现，底层通过Map&lt;String,Object&gt;保存bean，只能手动添加bean</li>
+<li><code>DefaultListableBeanFactory</code>：spring种最核心的BeanFactory，Spring所有功能都是围绕该BeanFactory完成的，提供了完整的bean管理能力</li>
+</ul>
+</li>
+</ul>
+<p><img src="./BeanFactory.svg" alt="BeanFactory"></p>
+<h3 id="BeanFactory">BeanFactory</h3>
+<p>BeanFactory顾名思义，作为Bean的工厂，是IOC中绝对核心接口，也是Bean工厂中最简单的一个</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanFactory &#123;
+
+    &#x2F;**
+    * 工厂bean的特有前缀
+    * 所有FactoryBean的名称都以&amp;开头
+    * 所有以&amp;开头的bean都被认为是FactoryBean
+    *&#x2F;
+    String FACTORY_BEAN_PREFIX &#x3D; &quot;&amp;&quot;;
+
+    &#x2F;**
+    * 从BeanFactory中获取一个Bean
+    * 注意，BeanFactory的方法只能获取到一个bean
+    * 如果有bean设置了Primary属性，优先获取，如果都没有，获取最后一个
+    *&#x2F;
+    Object getBean(String name) throws BeansException;
+    &lt;T&gt; T getBean(String name, Class&lt;T&gt; requiredType) throws BeansException;
+    Object getBean(String name, Object... args) throws BeansException;
+    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType) throws BeansException;
+    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType, Object... args) throws BeansException;
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType);
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType);
+
+    &#x2F;**
+    * 判断是否包含特定name的bean
+    *&#x2F;
+    boolean containsBean(String name);
+
+    &#x2F;**
+    * 判断给定bean是Singleton还是Prototype
+    *&#x2F;
+    boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
+    boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+    * 判断给定bean是否和特定的type匹配
+    *&#x2F;
+    boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
+    boolean isTypeMatch(String name, Class&lt;?&gt; typeToMatch) throws NoSuchBeanDefinitionException;
+    
+    &#x2F;**
+    * 获取给定bean的type是什么
+    *&#x2F;
+    @Nullable
+    Class&lt;?&gt; getType(String name) throws NoSuchBeanDefinitionException;
+    @Nullable
+    Class&lt;?&gt; getType(String name, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+    * 获取bean的别名
+    *&#x2F;
+    String[] getAliases(String name);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ListableBeanFactory">ListableBeanFactory</h3>
+<h3 id="HierarchicalBeanFactory">HierarchicalBeanFactory</h3>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<h3 id="AutowireCapableBeanFactory">AutowireCapableBeanFactory</h3>
+<h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
+<h2 id="StaticListableBeanFactory">StaticListableBeanFactory</h2>
+<h2 id="DefaultListableBeanFactory">DefaultListableBeanFactory</h2>
+<p><img src="./DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
 
     </div>
 
@@ -300,22 +350,18 @@ unsigned char *ziplistNew(void) &#123;
 
     <footer class="post-footer">
           <div class="post-tags">
-              <a href="/tags/redis%E6%BA%90%E7%A0%81/" rel="tag"># redis源码</a>
-              <a href="/tags/redis%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" rel="tag"># redis数据结构</a>
+              <a href="/tags/Spring-IOC/" rel="tag"># Spring IOC</a>
           </div>
 
         
 
           <div class="post-nav">
             <div class="post-nav-item">
-                <a href="/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/" rel="prev" title="skiplist跳表">
-                  <i class="fa fa-chevron-left"></i> skiplist跳表
+                <a href="/2023/03/18/Spring-Condition/" rel="prev" title="Spring Condition">
+                  <i class="fa fa-chevron-left"></i> Spring Condition
                 </a>
             </div>
             <div class="post-nav-item">
-                <a href="/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/" rel="next" title="intset整数集合">
-                  intset整数集合 <i class="fa fa-chevron-right"></i>
-                </a>
             </div>
           </div>
     </footer>

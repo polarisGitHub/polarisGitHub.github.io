@@ -1,0 +1,28 @@
+@startuml
+
+interface BeanFactory
+together {
+    interface HierarchicalBeanFactory
+    interface AutowireCapableBeanFactory
+    interface ListableBeanFactory
+}
+interface ConfigurableBeanFactory
+interface ConfigurableListableBeanFactory
+together {
+    class DefaultListableBeanFactory
+    class StaticListableBeanFactory
+}
+
+HierarchicalBeanFactory --|> BeanFactory
+ListableBeanFactory --|> BeanFactory
+AutowireCapableBeanFactory --|> BeanFactory
+ConfigurableBeanFactory --|> HierarchicalBeanFactory
+ConfigurableBeanFactory --|> SingletonBeanRegistry
+ConfigurableListableBeanFactory --|> ListableBeanFactory
+ConfigurableListableBeanFactory --|> AutowireCapableBeanFactory
+ConfigurableListableBeanFactory --|> ConfigurableBeanFactory
+
+DefaultListableBeanFactory --|> ConfigurableListableBeanFactory
+StaticListableBeanFactory --|> ListableBeanFactory
+
+@enduml

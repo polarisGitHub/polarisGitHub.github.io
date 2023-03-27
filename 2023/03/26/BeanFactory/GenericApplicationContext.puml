@@ -1,0 +1,39 @@
+@startuml
+abstract class AbstractApplicationContext
+
+class GenericApplicationContext
+interface BeanDefinitionRegistry
+GenericApplicationContext --|> AbstractApplicationContext
+GenericApplicationContext --|> BeanDefinitionRegistry
+
+class GenericWebApplicationContext
+'class StaticWebApplicationContext
+interface ConfigurableWebApplicationContext
+GenericWebApplicationContext --|> GenericApplicationContext
+GenericWebApplicationContext --|> ConfigurableWebApplicationContext
+'StaticWebApplicationContext --|> StaticApplicationContext
+'StaticWebApplicationContext --|> ConfigurableWebApplicationContext
+
+class AnnotationConfigApplicationContext
+'class StaticApplicationContext
+class GenericXmlApplicationContext
+interface AnnotationConfigRegistry
+AnnotationConfigApplicationContext --|> GenericApplicationContext
+AnnotationConfigApplicationContext --|> AnnotationConfigRegistry
+'StaticApplicationContext --|> GenericApplicationContext
+GenericXmlApplicationContext --|> GenericApplicationContext
+
+class AnnotationConfigServletWebApplicationContext
+class AnnotationConfigServletWebServerApplicationContext
+class ServletWebServerApplicationContext
+class XmlServletWebServerApplicationContext
+interface ConfigurableWebServerApplicationContext
+AnnotationConfigServletWebApplicationContext --|> GenericWebApplicationContext
+AnnotationConfigServletWebApplicationContext --|> AnnotationConfigRegistry
+AnnotationConfigServletWebServerApplicationContext --|> ServletWebServerApplicationContext
+AnnotationConfigServletWebServerApplicationContext --|> AnnotationConfigRegistry
+ServletWebServerApplicationContext --|> GenericWebApplicationContext
+ServletWebServerApplicationContext --|> ConfigurableWebServerApplicationContext
+XmlServletWebServerApplicationContext --|> ServletWebServerApplicationContext
+
+@enduml

@@ -1,0 +1,46 @@
+@startuml
+
+together{
+    interface FilteringSpringBootCondition
+    interface SpringBootCondition
+        interface AutoConfigurationImportFilter
+        interface BeanFactoryAware
+        interface BeanClassLoaderAware
+           interface ConfigurationCondition
+            interface Condition
+}
+
+together{
+    class OnClassCondition
+    class OnBeanCondition
+    class OnCloudPlatformCondition
+    class OnExpressionCondition
+    class OnJavaCondition
+    class OnJndiCondition
+    class OnWebApplicationCondition
+    class OnPropertyCondition
+    class OnResourceCondition
+    class OnWarDeploymentCondition
+}
+OnClassCondition --|> FilteringSpringBootCondition
+OnWebApplicationCondition --|> FilteringSpringBootCondition
+OnBeanCondition --|> FilteringSpringBootCondition
+OnBeanCondition --|> ConfigurationCondition
+ConfigurationCondition --|> Condition
+
+OnCloudPlatformCondition --|> SpringBootCondition
+OnExpressionCondition --|> SpringBootCondition
+OnJavaCondition --|> SpringBootCondition
+OnJndiCondition --|> SpringBootCondition
+
+OnPropertyCondition --|> SpringBootCondition
+OnResourceCondition --|> SpringBootCondition
+OnWarDeploymentCondition --|> SpringBootCondition
+
+FilteringSpringBootCondition --|> SpringBootCondition
+FilteringSpringBootCondition --|> AutoConfigurationImportFilter
+FilteringSpringBootCondition --|> BeanFactoryAware
+FilteringSpringBootCondition --|> BeanClassLoaderAware
+
+SpringBootCondition --|> Condition
+@enduml

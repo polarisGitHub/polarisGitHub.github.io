@@ -11,19 +11,20 @@
   <link rel="mask-icon" href="/images/logo.svg" color="#222">
 
 <link rel="stylesheet" href="/css/main.css">
-
+<link rel="stylesheet" href="/css/prism/prism.css">
+<link rel="stylesheet" href="">
 
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" integrity="sha256-/4UQcSmErDzPCMAiuOiWPVVsNN2s3ZY/NsmXNcj0IFc=" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
 
-<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
+<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
 
     <meta name="description" content="本文源码redis5.0.12 intset的数据结构，定义在intset.h，实现在intset.c中  intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果集合或有序集合的元素只有数字（最大264-1)，底层的数据结构很可能使用的intset。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="intset整数集合">
 <meta property="og:url" content="http://example.com/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/index.html">
-<meta property="og:site_name" content="polaris_he&#39;s blog">
+<meta property="og:site_name" content="polaris_he">
 <meta property="og:description" content="本文源码redis5.0.12 intset的数据结构，定义在intset.h，实现在intset.c中  intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果集合或有序集合的元素只有数字（最大264-1)，底层的数据结构很可能使用的intset。">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2021-06-06T05:28:32.000Z">
@@ -41,7 +42,7 @@
 <script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/","path":"2021/06/06/intset整数集合/","title":"intset整数集合"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>intset整数集合 | polaris_he's blog</title>
+<title>intset整数集合 | polaris_he</title>
   
 
 
@@ -54,7 +55,7 @@
   <noscript>
     <link rel="stylesheet" href="/css/noscript.css">
   </noscript>
-</head>
+<style>.darkmode--activated{--body-bg-color:#282828;--content-bg-color:#333;--card-bg-color:#555;--text-color:#ccc;--blockquote-color:#bbb;--link-color:#ccc;--link-hover-color:#eee;--brand-color:#ddd;--brand-hover-color:#ddd;--table-row-odd-bg-color:#282828;--table-row-hover-bg-color:#363636;--menu-item-bg-color:#555;--btn-default-bg:#222;--btn-default-color:#ccc;--btn-default-border-color:#555;--btn-default-hover-bg:#666;--btn-default-hover-color:#ccc;--btn-default-hover-border-color:#666;--highlight-background:#282b2e;--highlight-foreground:#a9b7c6;--highlight-gutter-background:#34393d;--highlight-gutter-foreground:#9ca9b6}.darkmode--activated img{opacity:.75}.darkmode--activated img:hover{opacity:.9}.darkmode--activated code{color:#69dbdc;background:0 0}button.darkmode-toggle{z-index:9999}.darkmode-ignore,img{display:flex!important}.beian img{display:inline-block!important}</style></head>
 
 <body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
   <div class="headband"></div>
@@ -74,13 +75,14 @@
 
     <a href="/" class="brand" rel="start">
       <i class="logo-line"></i>
-      <p class="site-title">polaris_he's blog</p>
+      <p class="site-title">polaris_he</p>
       <i class="logo-line"></i>
     </a>
+      <p class="site-subtitle" itemprop="description">just do it</p>
   </div>
 
   <div class="site-nav-right">
-    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+    <div class="toggle popup-trigger" aria-label="搜索 | search" role="button">
     </div>
   </div>
 </div>
@@ -88,7 +90,7 @@
 
 
 <nav class="site-nav">
-  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li>
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
   </ul>
 </nav>
 
@@ -119,6 +121,8 @@
 
         <div class="site-overview-wrap sidebar-panel">
           <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
   <p class="site-author-name" itemprop="name">polaris_he</p>
   <div class="site-description" itemprop="description"></div>
 </div>
@@ -126,7 +130,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-count">10</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -142,6 +146,14 @@
       </div>
   </nav>
 </div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
 
         </div>
       </div>
@@ -167,17 +179,17 @@
     <link itemprop="mainEntityOfPage" href="http://example.com/2021/06/06/intset%E6%95%B4%E6%95%B0%E9%9B%86%E5%90%88/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="image" content="/images/avatar.jpeg">
       <meta itemprop="name" content="polaris_he">
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="polaris_he's blog">
+      <meta itemprop="name" content="polaris_he">
       <meta itemprop="description" content="">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="intset整数集合 | polaris_he's blog">
+      <meta itemprop="name" content="intset整数集合 | polaris_he">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -213,6 +225,21 @@
     </span>
 
   
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>5 分钟</span>
+    </span>
 </div>
 
         </div>
@@ -230,12 +257,35 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
 <span id="more"></span>
 <h2 id="数据结构">数据结构</h2>
 <p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr64</span> &#123;</span></span><br><span class="line">    <span class="type">uint64_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="type">uint64_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="type">unsigned</span> <span class="type">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="type">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">intset</span> &#123;</span></span><br><span class="line">    <span class="type">uint32_t</span> encoding;</span><br><span class="line">    <span class="type">uint32_t</span> length;</span><br><span class="line">    <span class="type">int8_t</span> contents[];</span><br><span class="line">&#125; intset;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct __attribute__ ((__packed__)) sdshdr64 &#123;
+    uint64_t len; &#x2F;* used *&#x2F;
+    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+
+typedef struct intset &#123;
+    uint32_t encoding;
+    uint32_t length;
+    int8_t contents[];
+&#125; intset;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <blockquote>
 <p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
 </blockquote>
 <p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> INTSET_ENC_INT16 (sizeof(int16_t))</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> INTSET_ENC_INT32 (sizeof(int32_t))</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> INTSET_ENC_INT64 (sizeof(int64_t))</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/* Return the required encoding for the provided value. */</span></span><br><span class="line"><span class="type">static</span> <span class="type">uint8_t</span> _intsetValueEncoding(<span class="type">int64_t</span> v) &#123;</span><br><span class="line">    <span class="keyword">if</span> (v &lt; INT32_MIN || v &gt; INT32_MAX)</span><br><span class="line">        <span class="keyword">return</span> INTSET_ENC_INT64;</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (v &lt; INT16_MIN || v &gt; INT16_MAX)</span><br><span class="line">        <span class="keyword">return</span> INTSET_ENC_INT32;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        <span class="keyword">return</span> INTSET_ENC_INT16;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define INTSET_ENC_INT16 (sizeof(int16_t))
+#define INTSET_ENC_INT32 (sizeof(int32_t))
+#define INTSET_ENC_INT64 (sizeof(int64_t))
+
+&#x2F;* Return the required encoding for the provided value. *&#x2F;
+static uint8_t _intsetValueEncoding(int64_t v) &#123;
+    if (v &lt; INT32_MIN || v &gt; INT32_MAX)
+        return INTSET_ENC_INT64;
+    else if (v &lt; INT16_MIN || v &gt; INT16_MAX)
+        return INTSET_ENC_INT32;
+    else
+        return INTSET_ENC_INT16;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <table>
 <thead>
 <tr>
@@ -266,19 +316,81 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
 <p>整数集合没有什么复杂的操作</p>
 <h3 id="创建">创建</h3>
 <p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">intset *<span class="title function_">intsetNew</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    intset *is = zmalloc(<span class="keyword">sizeof</span>(intset));</span><br><span class="line">    is-&gt;encoding = intrev32ifbe(INTSET_ENC_INT16);</span><br><span class="line">    is-&gt;length = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">return</span> is;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetNew(void) &#123;
+    intset *is &#x3D; zmalloc(sizeof(intset));
+    is-&gt;encoding &#x3D; intrev32ifbe(INTSET_ENC_INT16);
+    is-&gt;length &#x3D; 0;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <blockquote>
 <p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
 在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
 </blockquote>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">if</span> (BYTE_ORDER == LITTLE_ENDIAN)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> memrev16ifbe(p) ((void)(0))</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> memrev32ifbe(p) ((void)(0))</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> memrev64ifbe(p) ((void)(0))</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> intrev16ifbe(v) (v)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> intrev32ifbe(v) (v)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> intrev64ifbe(v) (v)</span></span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> memrev16ifbe(p) memrev16(p)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> memrev32ifbe(p) memrev32(p)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> memrev64ifbe(p) memrev64(p)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> intrev16ifbe(v) intrev16(v)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> intrev32ifbe(v) intrev32(v)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> intrev64ifbe(v) intrev64(v)</span></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#if (BYTE_ORDER &#x3D;&#x3D; LITTLE_ENDIAN)
+#define memrev16ifbe(p) ((void)(0))
+#define memrev32ifbe(p) ((void)(0))
+#define memrev64ifbe(p) ((void)(0))
+#define intrev16ifbe(v) (v)
+#define intrev32ifbe(v) (v)
+#define intrev64ifbe(v) (v)
+#else
+#define memrev16ifbe(p) memrev16(p)
+#define memrev32ifbe(p) memrev32(p)
+#define memrev64ifbe(p) memrev64(p)
+#define intrev16ifbe(v) intrev16(v)
+#define intrev32ifbe(v) intrev32(v)
+#define intrev64ifbe(v) intrev64(v)
+#endif<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h3 id="查找">查找</h3>
 <p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
 <ol>
 <li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
 <li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
 </ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Search for the position of &quot;value&quot;. Return 1 when the value was found and</span></span><br><span class="line"><span class="comment"> * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when</span></span><br><span class="line"><span class="comment"> * the value is not present in the intset and sets &quot;pos&quot; to the position</span></span><br><span class="line"><span class="comment"> * where &quot;value&quot; can be inserted. */</span></span><br><span class="line"><span class="type">static</span> <span class="type">uint8_t</span> <span class="title function_">intsetSearch</span><span class="params">(intset *is, <span class="type">int64_t</span> value, <span class="type">uint32_t</span> *pos)</span> &#123;</span><br><span class="line">    <span class="type">int</span> min = <span class="number">0</span>, max = intrev32ifbe(is-&gt;length)<span class="number">-1</span>, mid = <span class="number">-1</span>;</span><br><span class="line">    <span class="type">int64_t</span> cur = <span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* The value can never be found when the set is empty */</span></span><br><span class="line">    <span class="keyword">if</span> (intrev32ifbe(is-&gt;length) == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (pos) *pos = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* Check for the case where we know we cannot find the value,</span></span><br><span class="line"><span class="comment">         * but do know the insert position. */</span></span><br><span class="line">        <span class="keyword">if</span> (value &gt; _intsetGet(is,max)) &#123;</span><br><span class="line">            <span class="keyword">if</span> (pos) *pos = intrev32ifbe(is-&gt;length);</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (value &lt; _intsetGet(is,<span class="number">0</span>)) &#123;</span><br><span class="line">            <span class="keyword">if</span> (pos) *pos = <span class="number">0</span>;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span>(max &gt;= min) &#123;</span><br><span class="line">        mid = ((<span class="type">unsigned</span> <span class="type">int</span>)min + (<span class="type">unsigned</span> <span class="type">int</span>)max) &gt;&gt; <span class="number">1</span>;</span><br><span class="line">        cur = _intsetGet(is,mid);</span><br><span class="line">        <span class="keyword">if</span> (value &gt; cur) &#123;</span><br><span class="line">            min = mid+<span class="number">1</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (value &lt; cur) &#123;</span><br><span class="line">            max = mid<span class="number">-1</span>;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (value == cur) &#123;</span><br><span class="line">        <span class="keyword">if</span> (pos) *pos = mid;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (pos) *pos = min;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Search for the position of &quot;value&quot;. Return 1 when the value was found and
+ * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when
+ * the value is not present in the intset and sets &quot;pos&quot; to the position
+ * where &quot;value&quot; can be inserted. *&#x2F;
+static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) &#123;
+    int min &#x3D; 0, max &#x3D; intrev32ifbe(is-&gt;length)-1, mid &#x3D; -1;
+    int64_t cur &#x3D; -1;
+
+    &#x2F;* The value can never be found when the set is empty *&#x2F;
+    if (intrev32ifbe(is-&gt;length) &#x3D;&#x3D; 0) &#123;
+        if (pos) *pos &#x3D; 0;
+        return 0;
+    &#125; else &#123;
+        &#x2F;* Check for the case where we know we cannot find the value,
+         * but do know the insert position. *&#x2F;
+        if (value &gt; _intsetGet(is,max)) &#123;
+            if (pos) *pos &#x3D; intrev32ifbe(is-&gt;length);
+            return 0;
+        &#125; else if (value &lt; _intsetGet(is,0)) &#123;
+            if (pos) *pos &#x3D; 0;
+            return 0;
+        &#125;
+    &#125;
+
+    while(max &gt;&#x3D; min) &#123;
+        mid &#x3D; ((unsigned int)min + (unsigned int)max) &gt;&gt; 1;
+        cur &#x3D; _intsetGet(is,mid);
+        if (value &gt; cur) &#123;
+            min &#x3D; mid+1;
+        &#125; else if (value &lt; cur) &#123;
+            max &#x3D; mid-1;
+        &#125; else &#123;
+            break;
+        &#125;
+    &#125;
+
+    if (value &#x3D;&#x3D; cur) &#123;
+        if (pos) *pos &#x3D; mid;
+        return 1;
+    &#125; else &#123;
+        if (pos) *pos &#x3D; min;
+        return 0;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h3 id="新增">新增</h3>
 <h4 id="add">add</h4>
 <p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
@@ -288,17 +400,84 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
 2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
 2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
 </ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">intset *<span class="title function_">intsetAdd</span><span class="params">(intset *is, <span class="type">int64_t</span> value, <span class="type">uint8_t</span> *success)</span> &#123;</span><br><span class="line">    <span class="type">uint8_t</span> valenc = _intsetValueEncoding(value);</span><br><span class="line">    <span class="type">uint32_t</span> pos;</span><br><span class="line">    <span class="keyword">if</span> (success) *success = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Upgrade encoding if necessary. If we need to upgrade, we know that</span></span><br><span class="line"><span class="comment">     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),</span></span><br><span class="line"><span class="comment">     * because it lies outside the range of existing values. */</span></span><br><span class="line">    <span class="keyword">if</span> (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;</span><br><span class="line">        <span class="comment">/* This always succeeds, so we don&#x27;t need to curry *success. */</span></span><br><span class="line">        <span class="keyword">return</span> intsetUpgradeAndAdd(is,value);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* Abort if the value is already present in the set.</span></span><br><span class="line"><span class="comment">         * This call will populate &quot;pos&quot; with the right position to insert</span></span><br><span class="line"><span class="comment">         * the value when it cannot be found. */</span></span><br><span class="line">        <span class="keyword">if</span> (intsetSearch(is,value,&amp;pos)) &#123;</span><br><span class="line">            <span class="keyword">if</span> (success) *success = <span class="number">0</span>;</span><br><span class="line">            <span class="keyword">return</span> is;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        is = intsetResize(is,intrev32ifbe(is-&gt;length)+<span class="number">1</span>);</span><br><span class="line">        <span class="keyword">if</span> (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    _intsetSet(is,pos,value);</span><br><span class="line">    is-&gt;length = intrev32ifbe(intrev32ifbe(is-&gt;length)+<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">return</span> is;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetAdd(intset *is, int64_t value, uint8_t *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 1;
+
+    &#x2F;* Upgrade encoding if necessary. If we need to upgrade, we know that
+     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),
+     * because it lies outside the range of existing values. *&#x2F;
+    if (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;
+        &#x2F;* This always succeeds, so we don&#39;t need to curry *success. *&#x2F;
+        return intsetUpgradeAndAdd(is,value);
+    &#125; else &#123;
+        &#x2F;* Abort if the value is already present in the set.
+         * This call will populate &quot;pos&quot; with the right position to insert
+         * the value when it cannot be found. *&#x2F;
+        if (intsetSearch(is,value,&amp;pos)) &#123;
+            if (success) *success &#x3D; 0;
+            return is;
+        &#125;
+
+        is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+        if (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+1);
+    &#125;
+
+    _intsetSet(is,pos,value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h4 id="upgradeAndAdd">upgradeAndAdd</h4>
 <p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
 <blockquote>
 <p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
 代码中使用了<code>prepend</code>这个变量来处理</p>
 </blockquote>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> intset *<span class="title function_">intsetUpgradeAndAdd</span><span class="params">(intset *is, <span class="type">int64_t</span> value)</span> &#123;</span><br><span class="line">    <span class="type">uint8_t</span> curenc = intrev32ifbe(is-&gt;encoding);</span><br><span class="line">    <span class="type">uint8_t</span> newenc = _intsetValueEncoding(value);</span><br><span class="line">    <span class="type">int</span> length = intrev32ifbe(is-&gt;length);</span><br><span class="line">    <span class="type">int</span> prepend = value &lt; <span class="number">0</span> ? <span class="number">1</span> : <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* First set new encoding and resize */</span></span><br><span class="line">    is-&gt;encoding = intrev32ifbe(newenc);</span><br><span class="line">    is = intsetResize(is,intrev32ifbe(is-&gt;length)+<span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Upgrade back-to-front so we don&#x27;t overwrite values.</span></span><br><span class="line"><span class="comment">     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty</span></span><br><span class="line"><span class="comment">     * space at either the beginning or the end of the intset. */</span></span><br><span class="line">    <span class="keyword">while</span>(length--)</span><br><span class="line">        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Set the value at the beginning or the end. */</span></span><br><span class="line">    <span class="keyword">if</span> (prepend)</span><br><span class="line">        _intsetSet(is,<span class="number">0</span>,value);</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        _intsetSet(is,intrev32ifbe(is-&gt;length),value);</span><br><span class="line">    is-&gt;length = intrev32ifbe(intrev32ifbe(is-&gt;length)+<span class="number">1</span>);</span><br><span class="line">    <span class="keyword">return</span> is;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static intset *intsetUpgradeAndAdd(intset *is, int64_t value) &#123;
+    uint8_t curenc &#x3D; intrev32ifbe(is-&gt;encoding);
+    uint8_t newenc &#x3D; _intsetValueEncoding(value);
+    int length &#x3D; intrev32ifbe(is-&gt;length);
+    int prepend &#x3D; value &lt; 0 ? 1 : 0;
+
+    &#x2F;* First set new encoding and resize *&#x2F;
+    is-&gt;encoding &#x3D; intrev32ifbe(newenc);
+    is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+
+    &#x2F;* Upgrade back-to-front so we don&#39;t overwrite values.
+     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty
+     * space at either the beginning or the end of the intset. *&#x2F;
+    while(length--)
+        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));
+
+    &#x2F;* Set the value at the beginning or the end. *&#x2F;
+    if (prepend)
+        _intsetSet(is,0,value);
+    else
+        _intsetSet(is,intrev32ifbe(is-&gt;length),value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h2 id="删除">删除</h2>
 <p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">intset *<span class="title function_">intsetRemove</span><span class="params">(intset *is, <span class="type">int64_t</span> value, <span class="type">int</span> *success)</span> &#123;</span><br><span class="line">    <span class="type">uint8_t</span> valenc = _intsetValueEncoding(value);</span><br><span class="line">    <span class="type">uint32_t</span> pos;</span><br><span class="line">    <span class="keyword">if</span> (success) *success = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (valenc &lt;= intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;</span><br><span class="line">        <span class="type">uint32_t</span> len = intrev32ifbe(is-&gt;length);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* We know we can delete */</span></span><br><span class="line">        <span class="keyword">if</span> (success) *success = <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* Overwrite value with tail and update length */</span></span><br><span class="line">        <span class="keyword">if</span> (pos &lt; (len<span class="number">-1</span>)) intsetMoveTail(is,pos+<span class="number">1</span>,pos);</span><br><span class="line">        is = intsetResize(is,len<span class="number">-1</span>);</span><br><span class="line">        is-&gt;length = intrev32ifbe(len<span class="number">-1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> is;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetRemove(intset *is, int64_t value, int *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 0;
+
+    if (valenc &lt;&#x3D; intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;
+        uint32_t len &#x3D; intrev32ifbe(is-&gt;length);
+
+        &#x2F;* We know we can delete *&#x2F;
+        if (success) *success &#x3D; 1;
+
+        &#x2F;* Overwrite value with tail and update length *&#x2F;
+        if (pos &lt; (len-1)) intsetMoveTail(is,pos+1,pos);
+        is &#x3D; intsetResize(is,len-1);
+        is-&gt;length &#x3D; intrev32ifbe(len-1);
+    &#125;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h2 id="总结">总结</h2>
 <p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
 
@@ -352,6 +531,20 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
   </span>
   <span class="author" itemprop="copyrightHolder">polaris_he</span>
 </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+    <span title="站点总字数">17k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">56 分钟</span>
+  </span>
+</div>
   <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
   </div>
 
@@ -363,6 +556,9 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
     <i class="fa fa-arrow-up fa-lg"></i>
     <span>0%</span>
   </div>
+  <div class="reading-progress-bar"></div>
+
+  <a href="https://github.com/polarisGitHub" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
 
 <noscript>
   <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
@@ -371,7 +567,7 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
 
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
-<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+<script src="/js/comments.js"></script><script src="/js/prism/prism.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
 
   
 
