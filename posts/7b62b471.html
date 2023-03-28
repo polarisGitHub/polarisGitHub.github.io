@@ -18,30 +18,30 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" integrity="sha256-/4UQcSmErDzPCMAiuOiWPVVsNN2s3ZY/NsmXNcj0IFc=" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
 
-<script class="next-config" data-name="main" type="application/json">{"hostname":"example.com","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
+<script class="next-config" data-name="main" type="application/json">{"hostname":"polarisgithub.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"}}</script><script src="/js/config.js"></script>
 
     <meta name="description" content="本文源码redis5.0.12 跳表的定义在server.h中，实现在t_zset.c  跳表是个很神奇的数据结构，简单但效率高，没有红黑树复杂，却有O(logn)的查找效率。其实我觉得只有右儿子的B+树和跳表挺类似的，都是多级索引来达到O(logn)的效率。 redis中，只有有序集合zset使用了跳表">
 <meta property="og:type" content="article">
 <meta property="og:title" content="skiplist跳表">
-<meta property="og:url" content="http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/index.html">
+<meta property="og:url" content="https://polarisgithub.github.io/posts/7b62b471.html">
 <meta property="og:site_name" content="polaris_he">
 <meta property="og:description" content="本文源码redis5.0.12 跳表的定义在server.h中，实现在t_zset.c  跳表是个很神奇的数据结构，简单但效率高，没有红黑树复杂，却有O(logn)的查找效率。其实我觉得只有右儿子的B+树和跳表挺类似的，都是多级索引来达到O(logn)的效率。 redis中，只有有序集合zset使用了跳表">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/skiplist.svg">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/skiplist.svg">
 <meta property="article:published_time" content="2021-05-02T01:43:22.000Z">
-<meta property="article:modified_time" content="2023-03-18T13:13:31.944Z">
+<meta property="article:modified_time" content="2023-03-28T14:20:08.605Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="redis源码">
 <meta property="article:tag" content="redis数据结构">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/skiplist.svg">
+<meta name="twitter:image" content="https://polarisgithub.github.io/posts/skiplist.svg">
 
 
-<link rel="canonical" href="http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/">
+<link rel="canonical" href="https://polarisgithub.github.io/posts/7b62b471.html">
 
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/","path":"2021/05/02/skiplist跳表/","title":"skiplist跳表"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://polarisgithub.github.io/posts/7b62b471.html","path":"posts/7b62b471.html","title":"skiplist跳表"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
 <title>skiplist跳表 | polaris_he</title>
@@ -92,7 +92,7 @@
 
 
 <nav class="site-nav">
-  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li><li class="menu-item menu-item-sitemap"><a href="/sitemap.xml" rel="section"><i class="fa fa-sitemap fa-fw"></i>站点地图 | sitemap</a></li>
   </ul>
 </nav>
 
@@ -178,7 +178,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2021/05/02/skiplist%E8%B7%B3%E8%A1%A8/">
+    <link itemprop="mainEntityOfPage" href="https://polarisgithub.github.io/posts/7b62b471.html">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.jpeg">
@@ -214,7 +214,7 @@
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2023-03-18 21:13:31" itemprop="dateModified" datetime="2023-03-18T21:13:31+08:00">2023-03-18</time>
+      <time title="修改时间：2023-03-28 22:20:08" itemprop="dateModified" datetime="2023-03-28T22:20:08+08:00">2023-03-28</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -469,12 +469,12 @@ span的作用在这里就体现了，它记录了下一个节点的距离，没�
 
           <div class="post-nav">
             <div class="post-nav-item">
-                <a href="/2021/04/15/MockMvc%E5%AF%B9form-multipart%E6%94%AF%E6%8C%81%E7%9A%84%E9%97%AE%E9%A2%98/" rel="prev" title="MockMvc对form/multipart支持的问题">
+                <a href="/posts/ddf27974.html" rel="prev" title="MockMvc对form/multipart支持的问题">
                   <i class="fa fa-chevron-left"></i> MockMvc对form/multipart支持的问题
                 </a>
             </div>
             <div class="post-nav-item">
-                <a href="/2021/05/16/ziplist%E5%8E%8B%E7%BC%A9%E5%88%97%E8%A1%A8/" rel="next" title="ziplist压缩列表">
+                <a href="/posts/2bd24f59.html" rel="next" title="ziplist压缩列表">
                   ziplist压缩列表 <i class="fa fa-chevron-right"></i>
                 </a>
             </div>
@@ -514,7 +514,7 @@ span的作用在这里就体现了，它记录了下一个节点的距离，没�
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">56 分钟</span>
+    <span title="站点阅读时长">57 分钟</span>
   </span>
 </div>
   <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
