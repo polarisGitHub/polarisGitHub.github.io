@@ -1,0 +1,2760 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>BeanFactory</title>
+    <url>/posts/f5f30183.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
+</blockquote>
+<p>BeanFactory，Spring IOC核心接口，承担了Bean管理的职责。本文来看看BeanFactory在Spring体系中是怎么发挥作用的</p>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p>从依赖图中可以看出，BeanFactory接口依赖相对简单</p>
+<p><img src="./BeanFactory.svg" alt="BeanFactory"></p>
+<ul>
+<li><code>BeanFactory</code>是最底层的类，提供了简单的bean获取和bean信息获取的能力</li>
+<li>ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory继承BeanFactory，提供了更为高级的抽象
+<ul>
+<li><code>ListableBeanFactory</code>：可以一次获取多个bean</li>
+<li><code>HierarchicalBeanFactory</code>：提供获取父级BeanFactory能力</li>
+<li><code>AutowireCapableBeanFactory</code>：提供自动装配的能力</li>
+</ul>
+</li>
+<li><code>ConfigurableBeanFactory</code>继承了HierarchicalBeanFactory，为BeanFactory提供了BeanPostProcessor，依赖关系处理，手动注册bean等能力</li>
+<li><code>ConfigurableListableBeanFactory</code>：继承了ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory，提供高级管理能力，如：bean预初始化，BeanFactory冻结等</li>
+<li>Spring提供了四种BeanFactory的实现：XmlBeanFactory，SimpleJndiBeanFactory，StaticListableBeanFactory和DefaultListableBeanFactory
+<ul>
+<li><code>XmlBeanFactory</code>：继承于DefaultListableBeanFactory，官方已经不推荐使用，推荐使用DefaultListableBeanFactory</li>
+<li><code>SimpleJndiBeanFactory</code>：基于JNDI去加载bean，直接继承了BeanFactory，由于JNDI已经慢慢淡出的java体系，本文就不再分析该BeanFactory了</li>
+<li><code>StaticListableBeanFactory</code>：简单的BeanFactory实现，底层通过Map&lt;String,Object&gt;保存bean，只能手动添加bean</li>
+<li><code>DefaultListableBeanFactory</code>：spring种最核心的BeanFactory，Spring所有功能都是围绕该BeanFactory完成的，提供了完整的bean管理能力</li>
+</ul>
+</li>
+</ul>
+<h3 id="BeanFactory">BeanFactory</h3>
+<p>BeanFactory顾名思义，作为Bean的工厂，是IOC中绝对核心，也是Bean工厂中最单纯的</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanFactory &#123;
+
+    &#x2F;**
+    * 工厂bean的特有前缀
+    * 所有FactoryBean的名称都以&amp;开头
+    * 所有以&amp;开头的bean都被认为是FactoryBean
+    *&#x2F;
+    String FACTORY_BEAN_PREFIX &#x3D; &quot;&amp;&quot;;
+
+    &#x2F;**
+    * 从BeanFactory中获取一个Bean，
+    * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
+    * 注意，BeanFactory的方法只能获取到一个bean
+    * 如果有bean设置了Primary属性，优先获取，如果都没有，获取最后一个
+    *&#x2F;
+    Object getBean(String name) throws BeansException;
+    &lt;T&gt; T getBean(String name, Class&lt;T&gt; requiredType) throws BeansException;
+    Object getBean(String name, Object... args) throws BeansException;
+    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType) throws BeansException;
+    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType, Object... args) throws BeansException;
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType);
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType);
+
+    &#x2F;**
+    * 判断是否包含特定name的bean
+    * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
+    *&#x2F;
+    boolean containsBean(String name);
+
+    &#x2F;**
+    * 判断给定bean是Singleton还是Prototype
+    *&#x2F;
+    boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
+    boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+    * 判断给定bean是否和特定的type匹配
+    *&#x2F;
+    boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
+    boolean isTypeMatch(String name, Class&lt;?&gt; typeToMatch) throws NoSuchBeanDefinitionException;
+    
+    &#x2F;**
+    * 获取给定bean的type是什么
+    *&#x2F;
+    @Nullable
+    Class&lt;?&gt; getType(String name) throws NoSuchBeanDefinitionException;
+    @Nullable
+    Class&lt;?&gt; getType(String name, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+    * 获取bean的别名
+    *&#x2F;
+    String[] getAliases(String name);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从接口定义中可以看出，BeanFactory提供以下能力</p>
+<ul>
+<li>定义了工厂bean的潜规则</li>
+<li>根据name或type获取bean</li>
+<li>获取bean作用域</li>
+<li>bean和特定type是否匹配</li>
+<li>获取bean别名</li>
+</ul>
+<p>从BeanFactory能力上看，只能一个一个获取对应信息<br>
+如果对应的BeanFactory有继承关系，所有对bean的查找都会查看父BeanFactory</p>
+<h3 id="ListableBeanFactory">ListableBeanFactory</h3>
+<p>ListableBeanFactory是Spring官方推荐使用的BeanFactory，毕竟Spring中唯一大量使用的BeanFactory叫做<code>DefaultListableBeanFactory</code><br>
+ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取多个bean的方法，但是还是有些细微的差别</p>
+<ul>
+<li>对可继承的BeanFactory，BeanFactory会去检测父BeanFactory，而ListableBeanFactory不会</li>
+<li>对通过<code>registerSingleton</code>手动加入的bean，BeanFactory的getBean方法可以获取到，而ListableBeanFactory中获取bean的方法均获取不到，</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ListableBeanFactory extends BeanFactory &#123;
+
+   &#x2F;**
+    * 检查当前容器的BeanDefinition
+    *&#x2F;
+    boolean containsBeanDefinition(String beanName);
+    int getBeanDefinitionCount();
+    String[] getBeanDefinitionNames();
+
+   &#x2F;**
+    * 获取bean，这里引入了延迟加载的概念
+    *&#x2F;
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType, boolean allowEagerInit);
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType, boolean allowEagerInit);
+
+    &#x2F;**
+    * 提供了更丰富的获取bean的手段，但对手动注册的bean不能获取
+    * 可以一次获取满足条件的一系列bean
+    * 可以控制bean获取是否要延迟加载
+    * 可以控制获取bean是否为singletons
+    *&#x2F;
+    String[] getBeanNamesForType(ResolvableType type);
+    String[] getBeanNamesForType(ResolvableType type, boolean includeNonSingletons, boolean allowEagerInit);
+    String[] getBeanNamesForType(@Nullable Class&lt;?&gt; type);
+    String[] getBeanNamesForType(@Nullable Class&lt;?&gt; type, boolean includeNonSingletons, boolean allowEagerInit);
+    &lt;T&gt; Map&lt;String, T&gt; getBeansOfType(@Nullable Class&lt;T&gt; type) throws BeansException;
+    &lt;T&gt; Map&lt;String, T&gt; getBeansOfType(@Nullable Class&lt;T&gt; type, boolean includeNonSingletons, boolean allowEagerInit) throws BeansException;
+    String[] getBeanNamesForAnnotation(Class&lt;? extends Annotation&gt; annotationType);
+    Map&lt;String, Object&gt; getBeansWithAnnotation(Class&lt;? extends Annotation&gt; annotationType) throws BeansException;
+    @Nullable
+    &lt;A extends Annotation&gt; A findAnnotationOnBean(String beanName, Class&lt;A&gt; annotationType) throws NoSuchBeanDefinitionException;
+    @Nullable
+    &lt;A extends Annotation&gt; A findAnnotationOnBean(String beanName, Class&lt;A&gt; annotationType, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="HierarchicalBeanFactory">HierarchicalBeanFactory</h3>
+<p>HierarchicalBeanFactory通过<code>getParentBeanFactory</code>引入了BeanFactory分层的思想，可以定义父子两个BeanFactory，两者相互不影响<br>
+这种分层思想在Spring MVC中发挥的淋漓尽致</p>
+<ul>
+<li>使用父容器控制数据访问等逻辑</li>
+<li>使用子容器控制视图层逻辑</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface HierarchicalBeanFactory extends BeanFactory &#123;
+
+     &#x2F;**
+      * 获取父BeanFactory
+      *&#x2F;
+    @Nullable
+    BeanFactory getParentBeanFactory();
+
+    &#x2F;**
+      * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
+      *&#x2F;
+    boolean containsLocalBean(String name);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<h3 id="AutowireCapableBeanFactory">AutowireCapableBeanFactory</h3>
+<h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
+<h2 id="StaticListableBeanFactory">StaticListableBeanFactory</h2>
+<h2 id="DefaultListableBeanFactory">DefaultListableBeanFactory</h2>
+<p><img src="./DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring IOC</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RedisDesktopManager编译</title>
+    <url>/posts/cfa83ab0.html</url>
+    <content><![CDATA[<blockquote>
+<p><a href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
+在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p><a href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
+<blockquote>
+<p>本次编译过程基于RedisDesktopManager（2021.10）</p>
+</blockquote>
+<h2 id="环境准备">环境准备</h2>
+<h3 id="系统">系统</h3>
+<blockquote>
+<p>Windows 10 21H2</p>
+</blockquote>
+<h3 id="git-clone">git clone</h3>
+<ol>
+<li>使用以下命令clone RedisDesktopManager的项目仓库
+<blockquote>
+<p>git clone --recursive <a href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
+</blockquote>
+</li>
+<li>需要注意submodule处理
+<ul>
+<li>RedisDesktopManager包含submodule，在3rdparty下</li>
+<li>submodule里面也包含submodule，如3rdparty/qredisclient/hiredis等</li>
+<li>需要使用--recursive递归clone</li>
+<li>如果没有使用--recursive来clone，需要人为保证submodule都down下来了</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
+<img src="./2.png" alt="项目概述"></p>
+</blockquote>
+<h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
+<p><a href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
+<img src="./1.png" alt="选择使用C++在线安装"></p>
+<h3 id="下载QT5-15">下载QT5.15</h3>
+<p>Qt5.15只能在线安装，下载<a href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
+<blockquote>
+<p>Qt下载时间很长，网不好容易断，请保持耐心</p>
+</blockquote>
+<p><img src="./3.png" alt="Qt安装"></p>
+<h3 id="Python-3-9-9">Python 3.9.9</h3>
+<p>下载<a href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
+<ul>
+<li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
+</ul>
+<p><img src="./4.png" alt="Python安装"><br>
+<img src="./5.png" alt="Python安装"><br>
+<img src="./6.png" alt="Python安装"></p>
+<h3 id="Cmake">Cmake</h3>
+<p>下载<a href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
+<h3 id="nuget">nuget</h3>
+<p>下载<a href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
+<h2 id="Python依赖安装">Python依赖安装</h2>
+<p>使用以下命令安装Python依赖</p>
+<blockquote>
+<p>pip3 install -r src/py/requirements.txt</p>
+</blockquote>
+<p>如果出现git仓库SSL握手失败，可以将requirements中git的https协议换成git协议。</p>
+<ul>
+<li>原始requirements内容
+<blockquote>
+<p>bitstring<br>
+cbor<br>
+msgpack<br>
+git+<a href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
+git+<a href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
+python-lzf</p>
+</blockquote>
+</li>
+<li>替换后requirements内容
+<blockquote>
+<p>bitstring<br>
+cbor<br>
+msgpack<br>
+git+git://github.com/mrnom/phpserialize.git#egg=phpserialize<br>
+git+git://github.com/uglide/redis-rdb-tools#egg=rdbtools<br>
+python-lzf</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="三方依赖编译">三方依赖编译</h2>
+<h3 id="准备工作">准备工作</h3>
+<h4 id="安装zlib">安装zlib</h4>
+<p>在<code>3rdparty</code>目录下，使用<code>nuget</code>安装zlib</p>
+<blockquote>
+<p>nuget install zlib-msvc14-x64 -Version 1.2.11.7795</p>
+</blockquote>
+<h4 id="hiredis在Windowns下编译修正">hiredis在Windowns下编译修正</h4>
+<p>在<code>3rdparty/qredisclient/3rdparty/hiredis</code>目录下，为<code>hirdis</code>打<code>patch</code></p>
+<blockquote>
+<p>git apply …/hiredis-win.patch</p>
+</blockquote>
+<h3 id="lz4编译">lz4编译</h3>
+<p>官方文档中已经给出了lz4的编译方法，只是Windows没有make命令，需要使用<code>VS</code>来替代make编译项目</p>
+<blockquote>
+<p>cd 3rdparty/lz4/build/cmake<br>
+cmake -DLZ4_BUNDLED_MODE=ON  .<br>
+make</p>
+</blockquote>
+<ol>
+<li>Cmake生成编译文件<br>
+<img src="./7.png" alt="cmake"></li>
+<li>用VS2022打开<code>LZ4.sln</code><br>
+<img src="./8.png" alt="cmake"></li>
+<li>编译<br>
+<img src="./9.png" alt="cmake"></li>
+</ol>
+<h3 id="zstd编译">zstd编译</h3>
+<p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\zstd\build\cmake</code>
+<blockquote>
+<p>cmake ./</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>zstd.sln</code>编译</li>
+</ol>
+<h3 id="snappy编译">snappy编译</h3>
+<p>官方Windows编译文档中同样没有提及\snappy。编译方式如下</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\snappy\cmake</code>
+<blockquote>
+<p>cmake ./</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>Snappy.sln</code>编译</li>
+<li>将目录<code>3rdparty\snappy\cmake\Release</code>拷贝到<code>3rdparty\snappy</code>下</li>
+</ol>
+<h3 id="brotli编译">brotli编译</h3>
+<ol>
+<li>执行cmake执行目录为<code>3rdparty\brotli</code>
+<blockquote>
+<p>cmake -DBUILD_SHARED_LIBS=OFF</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>brotli.sln</code>编译</li>
+</ol>
+<h2 id="RedisDesktopManager编译">RedisDesktopManager编译</h2>
+<h3 id="编译">编译</h3>
+<ol>
+<li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
+<img src="./10.png" alt="qt工程"></li>
+<li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
+<img src="./12.png" alt="发布更新"></li>
+<li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
+<img src="./11.png" alt="发布更新"></li>
+<li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
+<img src="./13.png" alt="发布更新"></li>
+</ol>
+<h3 id="打包">打包</h3>
+<p>现在在<code>bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
+<ol>
+<li>
+<p>将<code>bin\windows\release\rdm.exe</code>拷贝到<code>build\windows\installer\resources</code>下</p>
+</li>
+<li>
+<p>为了提供Python运行环境，下载<a href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
+</li>
+<li>
+<p>执行以下命令</p>
+<blockquote>
+<p>C:\Qt\5.15.2\msvc2019_64\bin\windeployqt --release --qmldir C:\RedisDesktopManager\src\qml rdm.exe</p>
+</blockquote>
+</li>
+<li>
+<p>下载<a href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
+</li>
+<li>
+<p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
+<ol>
+<li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
+<img src="./15.png" alt="nsi"><br>
+<img src="./14.png" alt="nsi"></li>
+</ol>
+</li>
+<li>
+<p>等待nsis执行完毕后，当前目录就得到了安装包<code>rdm-2021.11.0.exe</code></p>
+</li>
+</ol>
+<h2 id="完结散花">完结散花</h2>
+<p><a href="./rdm-2021.10.0.exe">RedisDesktopManager2021.10 Windows 64bit 安装包</a></p>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis</tag>
+        <tag>RDM</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring Condition</title>
+    <url>/posts/a7ee6b02.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
+</blockquote>
+<p>Spring Boot中，一个很方便也是很重要的机制就是<code>spring-boot-starter</code>，只需要在pom中引入组件对于的spring-boot-starter就可以引入并使用该组件。<br>
+Spring Boot Starter中，条件加载时很重要的一个特性，本文就看看条件加载在Spring中是怎么发挥作用的。</p>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p>条件加载<code>Condition</code>是Spring4引入的一个新特性，Spring Framework中，Condition只用一个使用场景：<code>Profile</code>。但进入Spring Boot时代，Condition作为<code>autoconfigure</code>的核心基石，在Spring Boot中发扬光大</p>
+<h2 id="Spring-Framework">Spring Framework</h2>
+<h3 id="核心类">核心类</h3>
+<p>在<code>org.springframework.context.annotation</code>下，我们可以很容易找到两个和条件加载相关的类：</p>
+<ul>
+<li>
+<p>@Conditional：注解，用于标识bean是否需要条件加载，对应Condition接口用于判断是否能条件加载</p>
+   <pre class="line-numbers language-java" data-language="java"><code class="language-java">public @interface Conditional &#123;
+    Class&lt;? extends Condition&gt;[] value();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+</li>
+<li>
+<p>Condition：接口，其实现类和@Conditional一起判断bean是否条件加载。该接口有两个参数，分别用户获取应用上下文的相关信息和bean对应的注解信息</p>
+  <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface Condition &#123;
+    boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<p>从ConditionContext接口可以看出，该接口可以获取到应用上下文（ApplicationContext）中的几乎所有信息，这些信息可以为bean条件加载提供基础数据</p>
+  <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConditionContext &#123;
+
+    &#x2F;**
+    * 获取beanDefinitionRegistry
+    *&#x2F;
+    BeanDefinitionRegistry getRegistry();
+
+    &#x2F;**
+    * 获取beanFactory
+    *&#x2F;
+    ConfigurableListableBeanFactory getBeanFactory();
+
+    &#x2F;**
+    * 获取enviroment
+    *&#x2F;
+    Environment getEnvironment();
+
+    &#x2F;**
+    * 获取resourceLoader
+    *&#x2F;
+    ResourceLoader getResourceLoader();
+
+    &#x2F;**
+    * 获取classLoader
+    *&#x2F;
+    ClassLoader getClassLoader();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从AnnotatedTypeMetadata接口中可以看出，该接口可以获取bean上面的注解相关信息，我们可以在自己的bean上添加合适的注解，作为bean条件加载的业务输入数据</p>
+  <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AnnotatedTypeMetadata &#123;
+
+    &#x2F;**
+    * 获取bean上的Annotation，已经处理过@AliasFor等Spring自己提供的方法工具
+    *&#x2F;
+    MergedAnnotations getAnnotations();
+
+    &#x2F;**
+    * 对应注解是否存在
+    *&#x2F;
+    default boolean isAnnotated(String annotationName) &#123;
+        return getAnnotations().isPresent(annotationName);
+    &#125;
+
+    &#x2F;**
+    * 获取注解属性
+    *&#x2F;
+    @Nullable
+    default Map&lt;String, Object&gt; getAnnotationAttributes(String annotationName) &#123;
+        return getAnnotationAttributes(annotationName, false);
+    &#125;
+
+    &#x2F;**
+    * 获取注解属性
+    *&#x2F;
+    @Nullable
+    default Map&lt;String, Object&gt; getAnnotationAttributes(String annotationName,
+            boolean classValuesAsString) &#123;
+
+        MergedAnnotation&lt;Annotation&gt; annotation &#x3D; getAnnotations().get(annotationName,
+                null, MergedAnnotationSelectors.firstDirectlyDeclared());
+        if (!annotation.isPresent()) &#123;
+            return null;
+        &#125;
+        return annotation.asAnnotationAttributes(Adapt.values(classValuesAsString, true));
+    &#125;
+    
+    &#x2F;**
+    * 获取注解属性
+    *&#x2F;
+    @Nullable
+    default MultiValueMap&lt;String, Object&gt; getAllAnnotationAttributes(String annotationName) &#123;
+        return getAllAnnotationAttributes(annotationName, false);
+    &#125;
+
+    &#x2F;**
+    * 获取注解属性
+    *&#x2F;
+    @Nullable
+    default MultiValueMap&lt;String, Object&gt; getAllAnnotationAttributes(
+            String annotationName, boolean classValuesAsString) &#123;
+
+        Adapt[] adaptations &#x3D; Adapt.values(classValuesAsString, true);
+        return getAnnotations().stream(annotationName)
+                .filter(MergedAnnotationPredicates.unique(MergedAnnotation::getMetaTypes))
+                .map(MergedAnnotation::withNonMergedAttributes)
+                .collect(MergedAnnotationCollectors.toMultiValueMap(map -&gt;
+                        map.isEmpty() ? null : map, adaptations));
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+</ul>
+<h3 id="原理">原理</h3>
+<p>bean条件加载和bean的声明息息相关，在Spring中，我们声明一个bean一般有一下几种方式</p>
+<ol>
+<li>xml中直接定义bean</li>
+<li>使用<code>@Service</code>等，并配置bean扫描</li>
+<li>使用<code>@Configuration</code>和<code>@Bean</code>，并配置bean扫描</li>
+<li>使用<code>&lt;import&gt;</code>或者<code>@Import</code>导入</li>
+</ol>
+<h4 id="xml中直接声明bean或者FactoryBean">xml中直接声明bean或者FactoryBean</h4>
+<h5 id="直接声明bean">直接声明bean</h5>
+<pre class="line-numbers language-markup" data-language="markup"><code class="language-markup"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>xxxx<span class="token punctuation">"</span></span><span class="token punctuation">/></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>我们可以在xml中直接声明bean，该段xml会被<code>DefaultBeanDefinitionDocumentReader</code>中的<code>processBeanDefinition</code>解析为BeanDefinition并注册到BeanFactory中。<br>
+从下文代码中可以看出，直接声明时，Spring对Conditon没有做任何处理，所以<code>xml直接声明bean，条件加载并不起效</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected void processBeanDefinition(Element ele, BeanDefinitionParserDelegate delegate) &#123;
+    &#x2F;&#x2F; 从xml中解析出BeanDefinition
+    BeanDefinitionHolder bdHolder &#x3D; delegate.parseBeanDefinitionElement(ele);
+    if (bdHolder !&#x3D; null) &#123;
+        &#x2F;&#x2F; 处理自定义标签
+        bdHolder &#x3D; delegate.decorateBeanDefinitionIfRequired(ele, bdHolder);
+        try &#123;
+            &#x2F;&#x2F; 将bean注册到BeanFactory中
+            BeanDefinitionReaderUtils.registerBeanDefinition(bdHolder, getReaderContext().getRegistry());
+        &#125; catch (BeanDefinitionStoreException ex) &#123;
+            getReaderContext().error(&quot;Failed to register bean definition with name &#39;&quot; +
+                    bdHolder.getBeanName() + &quot;&#39;&quot;, ele, ex);
+        &#125;
+        &#x2F;&#x2F; 发送bean注册事件
+        getReaderContext().fireComponentRegistered(new BeanComponentDefinition(bdHolder));
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="直接声明FactoryBean">直接声明FactoryBean</h5>
+<h4 id="使用-Service，并配置Conditon">使用@Service，并配置Conditon</h4>
+<p>在代码中使用使用了@Service注解，这时@Conditonal一定是配置在Class上的，这个时候，我们在扫描bean时就可以知道这个bean是否时需要加载的bean<br>
+Spring中bean扫描一般由两种方式</p>
+<ul>
+<li>&lt;context:component-scan/&gt;</li>
+<li>@ComponentScan</li>
+</ul>
+<h5 id="context-component-scan">&lt;context:component-scan/&gt;</h5>
+<p><code>&lt;context:component-scan/&gt;</code>是Spring定义的名字空间，该名字空间由<code>ComponentScanBeanDefinitionParser</code>处理，并且使用<code>ClassPathBeanDefinitionScanner</code>扫描所有bean</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public BeanDefinition parse(Element element, ParserContext parserContext) &#123;
+    &#x2F;&#x2F; 包路径
+    String basePackage &#x3D; element.getAttribute(BASE_PACKAGE_ATTRIBUTE);
+    basePackage &#x3D; parserContext.getReaderContext().getEnvironment().resolvePlaceholders(basePackage);
+    String[] basePackages &#x3D; StringUtils.tokenizeToStringArray(basePackage,
+            ConfigurableApplicationContext.CONFIG_LOCATION_DELIMITERS);
+    &#x2F;&#x2F; 配置扫描器
+    ClassPathBeanDefinitionScanner scanner &#x3D; configureScanner(parserContext, element);
+    &#x2F;&#x2F; 扫描bean
+    Set&lt;BeanDefinitionHolder&gt; beanDefinitions &#x3D; scanner.doScan(basePackages);
+    &#x2F;&#x2F; 注册bean
+    registerComponents(parserContext.getReaderContext(), beanDefinitions, element);
+
+    return null;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>接着跟踪下去，在扫描器扫描Components中，有一段逻辑<code>isCandidateComponent(metadataReader)</code>，这个逻辑在过滤扫描出来的Class是否要注册为BeanDefinition。因为component-scan本身是有filter的，同时Condition也是在这里面处理的</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;&#x2F; 扫描BeanDefinition，去除无关代码
+private Set&lt;BeanDefinition&gt; scanCandidateComponents(String basePackage) &#123;
+    Set&lt;BeanDefinition&gt; candidates &#x3D; new LinkedHashSet&lt;&gt;();
+    String packageSearchPath &#x3D; ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX +
+            resolveBasePackage(basePackage) + &#39;&#x2F;&#39; + this.resourcePattern;
+    Resource[] resources &#x3D; getResourcePatternResolver().getResources(packageSearchPath);
+    for (Resource resource : resources) &#123;
+        try &#123;
+            MetadataReader metadataReader &#x3D; getMetadataReaderFactory().getMetadataReader(resource);
+            &#x2F;&#x2F; 判断是否要加入BeanDefinition
+            if (isCandidateComponent(metadataReader)) &#123;
+                ScannedGenericBeanDefinition sbd &#x3D; new ScannedGenericBeanDefinition(metadataReader);
+                sbd.setSource(resource);
+                if (isCandidateComponent(sbd)) &#123;
+                    candidates.add(sbd);
+                &#125;
+            &#125;
+        &#125; catch (FileNotFoundException ex) &#123;
+        &#125; catch (Throwable ex) &#123;
+        &#125;
+    &#125;
+    return candidates;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>进入<code>isCandidateComponent</code>逻辑</p>
+<ol>
+<li>被excludeFilters命中，直接pass</li>
+<li>被includeFilters命中，再检查condition</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected boolean isCandidateComponent(MetadataReader metadataReader) throws IOException &#123;
+    for (TypeFilter tf : this.excludeFilters) &#123;
+        &#x2F;&#x2F; 被excludeFilters命中，直接pass
+        if (tf.match(metadataReader, getMetadataReaderFactory())) &#123;
+            return false;
+        &#125;
+    &#125;
+    for (TypeFilter tf : this.includeFilters) &#123;
+        if (tf.match(metadataReader, getMetadataReaderFactory())) &#123;
+            &#x2F;&#x2F; 被includeFilters命中，再检查condition
+            return isConditionMatch(metadataReader);
+        &#125;
+    &#125;
+    return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>进入<code>isConditionMatch</code>，Condition的处理进入了眼帘，这里有个<code>ConfigurationPhase</code>定义了解析的类型</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private boolean isConditionMatch(MetadataReader metadataReader) &#123;
+    if (this.conditionEvaluator &#x3D;&#x3D; null) &#123;
+        this.conditionEvaluator &#x3D;
+                new ConditionEvaluator(getRegistry(), this.environment, this.resourcePatternResolver);
+    &#125;
+    return !this.conditionEvaluator.shouldSkip(metadataReader.getAnnotationMetadata());
+&#125;
+
+public boolean shouldSkip(@Nullable AnnotatedTypeMetadata metadata, @Nullable ConfigurationPhase phase) &#123;
+    if (metadata &#x3D;&#x3D; null || !metadata.isAnnotated(Conditional.class.getName())) &#123;
+        return false;
+    &#125;
+
+    if (phase &#x3D;&#x3D; null) &#123;
+        if (metadata instanceof AnnotationMetadata &amp;&amp;
+                ConfigurationClassUtils.isConfigurationCandidate((AnnotationMetadata) metadata)) &#123;
+            return shouldSkip(metadata, ConfigurationPhase.PARSE_CONFIGURATION);
+        &#125;
+        return shouldSkip(metadata, ConfigurationPhase.REGISTER_BEAN);
+    &#125;
+
+    List&lt;Condition&gt; conditions &#x3D; new ArrayList&lt;&gt;();
+    for (String[] conditionClasses : getConditionClasses(metadata)) &#123;
+        for (String conditionClass : conditionClasses) &#123;
+            Condition condition &#x3D; getCondition(conditionClass, this.context.getClassLoader());
+            conditions.add(condition);
+        &#125;
+    &#125;
+
+    AnnotationAwareOrderComparator.sort(conditions);
+
+    for (Condition condition : conditions) &#123;
+        ConfigurationPhase requiredPhase &#x3D; null;
+        if (condition instanceof ConfigurationCondition) &#123;
+            requiredPhase &#x3D; ((ConfigurationCondition) condition).getConfigurationPhase();
+        &#125;
+        if ((requiredPhase &#x3D;&#x3D; null || requiredPhase &#x3D;&#x3D; phase) &amp;&amp; !condition.matches(this.context, metadata)) &#123;
+            return true;
+        &#125;
+    &#125;
+
+    return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="1-2-2-2-ComponentScan">1.2.2.2 @ComponentScan</h5>
+<p>@ComponentScan在Spring中处理时机为<code>invokeBeanFactoryPostProcessors</code>，由<code>ConfigurationClassPostProcessor</code>处理的，核心代码如下</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) &#123;
+    &#x2F;&#x2F; 注释写着解析所有@Configuration类，但这里把所有bean都解析出来了
+    ConfigurationClassParser parser &#x3D; new ConfigurationClassParser(
+            this.metadataReaderFactory, this.problemReporter, this.environment,
+            this.resourceLoader, this.componentScanBeanNameGenerator, registry);
+
+    Set&lt;BeanDefinitionHolder&gt; candidates &#x3D; new LinkedHashSet&lt;&gt;(configCandidates);
+    Set&lt;ConfigurationClass&gt; alreadyParsed &#x3D; new HashSet&lt;&gt;(configCandidates.size());
+    do &#123;
+        StartupStep processConfig &#x3D; this.applicationStartup.start(&quot;spring.context.config-classes.parse&quot;);
+        &#x2F;&#x2F; 解析所有bean
+        parser.parse(candidates);
+        parser.validate();
+    &#125;while (!candidates.isEmpty());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>在parser过程中，处理@ComponentScans有对Condition处理</p>
+<ul>
+<li>判断@ComponentScans上是否有Condition，如果不生效直接跳过该@ComponentScans</li>
+<li>如果该@ComponentScans有效，使用ComponentScanAnnotationParser对bean进行扫描</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final SourceClass doProcessConfigurationClass(
+        ConfigurationClass configClass, SourceClass sourceClass, Predicate&lt;String&gt; filter)
+        throws IOException &#123;
+    &#x2F;&#x2F; 处理@ComponentScans
+    Set&lt;AnnotationAttributes&gt; componentScans &#x3D; AnnotationConfigUtils.attributesForRepeatable(
+            sourceClass.getMetadata(), ComponentScans.class, ComponentScan.class);
+    &#x2F;&#x2F; 判断@ComponentScans上是否有Condition生效
+    if (!componentScans.isEmpty() &amp;&amp;
+            !this.conditionEvaluator.shouldSkip(sourceClass.getMetadata(), ConfigurationPhase.REGISTER_BEAN)) &#123;
+        for (AnnotationAttributes componentScan : componentScans) &#123;
+            &#x2F;&#x2F; 对@ComponentScans执行扫描，扫描类：ComponentScanAnnotationParser
+            Set&lt;BeanDefinitionHolder&gt; scannedBeanDefinitions &#x3D;
+                    this.componentScanParser.parse(componentScan, sourceClass.getMetadata().getClassName());
+            for (BeanDefinitionHolder holder : scannedBeanDefinitions) &#123;
+                BeanDefinition bdCand &#x3D; holder.getBeanDefinition().getOriginatingBeanDefinition();
+                if (bdCand &#x3D;&#x3D; null) &#123;
+                    bdCand &#x3D; holder.getBeanDefinition();
+                &#125;
+                if (ConfigurationClassUtils.checkConfigurationClassCandidate(bdCand, this.metadataReaderFactory)) &#123;
+                    parse(bdCand.getBeanClassName(), holder.getBeanName());
+                &#125;
+            &#125;
+        &#125;
+    &#125;
+
+    return null;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>进一步跟踪逻辑，<code>ComponentScanAnnotationParser.parser</code>核心还是采用的<a href="#1221-contextcomponent-scan">1.2.1 contextcomponent-scan</a>中同样的<code>ClassPathBeanDefinitionScanner</code>，这里就不赘述了</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public Set&lt;BeanDefinitionHolder&gt; parse(AnnotationAttributes componentScan, String declaringClass) &#123;
+    ClassPathBeanDefinitionScanner scanner &#x3D; new ClassPathBeanDefinitionScanner(this.registry,
+            componentScan.getBoolean(&quot;useDefaultFilters&quot;), this.environment, this.resourceLoader);
+    &#x2F;&#x2F; scanner配置初始化
+    return scanner.doScan(StringUtils.toStringArray(basePackages));
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="使用-Configuration和-Bean，并配置Conditon">使用@Configuration和@Bean，并配置Conditon</h4>
+<p>我们在使用Configuration时，一般时配合@Bean使用的，这样Conditon就会有两种使用常见</p>
+<ul>
+<li>和@Configuration一起配置在Class上</li>
+<li>和@Bean一起配置在Method上</li>
+</ul>
+<h5 id="配置在Class上">配置在Class上</h5>
+<p>当Condtion配置在Class上时，这个问题已经退化为了<a href="#122-%E4%BD%BF%E7%94%A8service%E5%B9%B6%E9%85%8D%E7%BD%AEconditon">bean上面配置Condition</a>，因为@Configuration的本质也是一个并，当不满足条件时，这个@Configuration都不会被Spring扫描出来</p>
+<h5 id="配置在Method上">配置在Method上</h5>
+<p>当条件配置到Method上时，这个问题类似于<a href="#1222-componentscan">@ComponentScan扫描bean</a>，只是处理的时机不同。</p>
+<ul>
+<li>@ComponentScan扫描bean时，在扫描过程中就会通过条件过滤bean</li>
+<li>当条件配置在Method上时，bean扫描过程不会有问题，过滤bean的过程是发生在加载bean的过程中</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) &#123;
+    &#x2F;&#x2F; 注释写着解析所有@Configuration类，但这里把所有bean都解析出来了
+    ConfigurationClassParser parser &#x3D; new ConfigurationClassParser(
+            this.metadataReaderFactory, this.problemReporter, this.environment,
+            this.resourceLoader, this.componentScanBeanNameGenerator, registry);
+
+    Set&lt;BeanDefinitionHolder&gt; candidates &#x3D; new LinkedHashSet&lt;&gt;(configCandidates);
+    Set&lt;ConfigurationClass&gt; alreadyParsed &#x3D; new HashSet&lt;&gt;(configCandidates.size());
+    do &#123;
+        StartupStep processConfig &#x3D; this.applicationStartup.start(&quot;spring.context.config-classes.parse&quot;);
+        &#x2F;&#x2F; 解析所有bean
+        parser.parse(candidates);
+        parser.validate();
+
+        Set&lt;ConfigurationClass&gt; configClasses &#x3D; new LinkedHashSet&lt;&gt;(parser.getConfigurationClasses());
+        configClasses.removeAll(alreadyParsed);
+
+        if (this.reader &#x3D;&#x3D; null) &#123;
+            this.reader &#x3D; new ConfigurationClassBeanDefinitionReader(
+                    registry, this.sourceExtractor, this.resourceLoader, this.environment,
+                    this.importBeanNameGenerator, parser.getImportRegistry());
+        &#125;
+        &#x2F;&#x2F; @Bean在加载bean的过程中过滤条件
+        this.reader.loadBeanDefinitions(configClasses);
+    &#125;
+    while (!candidates.isEmpty());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void loadBeanDefinitionsForConfigurationClass(
+        ConfigurationClass configClass, TrackedConditionEvaluator trackedConditionEvaluator) &#123;
+
+    if (trackedConditionEvaluator.shouldSkip(configClass)) &#123;
+        String beanName &#x3D; configClass.getBeanName();
+        if (StringUtils.hasLength(beanName) &amp;&amp; this.registry.containsBeanDefinition(beanName)) &#123;
+            this.registry.removeBeanDefinition(beanName);
+        &#125;
+        this.importRegistry.removeImportingClass(configClass.getMetadata().getClassName());
+        return;
+    &#125;
+
+    if (configClass.isImported()) &#123;
+        registerBeanDefinitionForImportedConfigurationClass(configClass);
+    &#125;
+    for (BeanMethod beanMethod : configClass.getBeanMethods()) &#123;
+        &#x2F;&#x2F; 处理@Bean
+        loadBeanDefinitionsForBeanMethod(beanMethod);
+    &#125;
+
+    loadBeanDefinitionsFromImportedResources(configClass.getImportedResources());
+    loadBeanDefinitionsFromRegistrars(configClass.getImportBeanDefinitionRegistrars());
+&#125;
+
+private void loadBeanDefinitionsForBeanMethod(BeanMethod beanMethod) &#123;
+    ConfigurationClass configClass &#x3D; beanMethod.getConfigurationClass();
+    MethodMetadata metadata &#x3D; beanMethod.getMetadata();
+    String methodName &#x3D; metadata.getMethodName();
+
+    &#x2F;&#x2F; 进来先判断是否满足条件，不满足直接跳过
+    if (this.conditionEvaluator.shouldSkip(metadata, ConfigurationPhase.REGISTER_BEAN)) &#123;
+        configClass.skippedBeanMethods.add(methodName);
+        return;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="使用示例">使用示例</h3>
+<p>通过核心类和原理的说明，我们很容易知道了怎么在Spring中使用Conditon。这里我们使用一个小示例来示范下如何使用Condition</p>
+<blockquote>
+<p>很多业务在windows和linux的使用方法是不一样的，如epoll和select</p>
+<p>其中：epoll在Linux下使用，select在windows下使用。</p>
+<p>在业务中，我们期望根据不同的系统选择加载不同的Service来为IO服务</p>
+</blockquote>
+<p>根据之前的叙述，我们可以写出两个Annotation，<code>ConditionalOnLinux</code>和<code>ConditionalOnWindows</code>分别打上在Linux下运行和Windowns下运行的标识。</p>
+<p>这两个Annotaion都继承了<code>@Conditional</code>并且声明了使用<code>OsCondition.class</code>作为判别类</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Documented
+@Target(&#123;ElementType.TYPE, ElementType.METHOD&#125;)
+@Retention(RetentionPolicy.RUNTIME)
+@Conditional(OsCondition.class)
+public @interface ConditionalOnLinux &#123;
+&#125;
+
+@Documented
+@Target(&#123;ElementType.TYPE, ElementType.METHOD&#125;)
+@Retention(RetentionPolicy.RUNTIME)
+@Conditional(OsCondition.class)
+public @interface ConditionalOnWindows &#123;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>同时我们可以实现<code>OsCondition</code>，配合<code>ConditionalOnWindows</code>和<code>ConditionalOnLinux</code>实现条件加载</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class OsCondition implements Condition &#123;
+
+    @Override
+    public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) &#123;
+        String os &#x3D; System.getProperty(&quot;os.name&quot;);
+        &#x2F;&#x2F; 是否在windowns中启动
+        boolean isWindow &#x3D; StringUtils.startsWithIgnoreCase(os, &quot;win&quot;);
+        &#x2F;&#x2F; 是否在Linux中启动
+        boolean isLinux &#x3D; StringUtils.equalsIgnoreCase(os, &quot;Linux&quot;);
+        &#x2F;&#x2F; windowns中启动，而且标明了ConditionalOnWindows，选中bean
+        if (isWindow &amp;&amp; metadata.getAnnotations().isPresent(ConditionalOnWindows.class)) &#123;
+            return true;
+        &#125;
+        &#x2F;&#x2F; Linux中启动，而且标明了ConditionalOnLinux，选中bean
+        if (isLinux &amp;&amp; metadata.getAnnotations().isPresent(ConditionalOnLinux.class)) &#123;
+            return true;
+        &#125;
+        return false;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>有了<code>OsCondition</code>、<code>ConditionalOnWindows</code>和<code>ConditionalOnLinux</code>这三样工具，就可以实现运行环节不同，加载不同bean</p>
+<blockquote>
+<p>通过原理分析，我们可以得出两种常见的Condition使用方式</p>
+</blockquote>
+<h4 id="直接在bean上添加注解">直接在bean上添加注解</h4>
+<p>使用条件加载十分简单，只需要在我们要使用的bean的类上加上对应的注解即可</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Service
+@ConditionalOnWindows
+public class WindowsService &#123;
+&#125;
+
+@Service
+@ConditionalOnLinux
+public class LinuxService &#123;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="在Confguation类上添加注解">在Confguation类上添加注解</h4>
+<p>如果使用的是<code>@Configuration</code>这种方法定义的bean，只需要在对应的<code>@Configuration</code>或<code>@Bean</code>上加上对应的注解即可</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class WindowsService &#123;
+&#125;
+
+public class LinuxService &#123;
+&#125;
+
+@Configuration
+public class OsConfiguration &#123;
+    @Bean
+    @ConditionalOnWindows
+    public WindowsService windowsService()&#123;
+        return new WindowsService();
+    &#125;
+
+    @Bean
+    @ConditionalOnLinux
+    public LinuxService linuxService()&#123;
+        return new LinuxService();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Spring-Boot">Spring Boot</h2>
+<p>Spring Boot的一个重要特性：<code>约定优于配置</code>。该特性是<code>spring-boot-autoconfigure</code>提供的，而spring-boot-autoconfigure被Spring Boot的基础包<code>spring-boot-starter</code>所依赖</p>
+<pre class="line-numbers language-text" data-language="text"><code class="language-text">+- org.springframework.boot:spring-boot-starter:jar:2.7.9:compile
+|  +- org.springframework.boot:spring-boot:jar:2.7.9:compile
+|  |  \- org.springframework:spring-context:jar:5.3.25:compile
+|  |     +- org.springframework:spring-aop:jar:5.3.25:compile
+|  |     +- org.springframework:spring-beans:jar:5.3.25:compile
+|  |     \- org.springframework:spring-expression:jar:5.3.25:compile
+|  +- org.springframework.boot:spring-boot-autoconfigure:jar:2.7.9:compile
+|  +- org.springframework.boot:spring-boot-starter-logging:jar:2.7.9:compile
+|  |  +- ch.qos.logback:logback-classic:jar:1.2.11:compile
+|  |  |  \- ch.qos.logback:logback-core:jar:1.2.11:compile
+|  |  +- org.apache.logging.log4j:log4j-to-slf4j:jar:2.17.2:compile
+|  |  |  \- org.apache.logging.log4j:log4j-api:jar:2.17.2:compile
+|  |  \- org.slf4j:jul-to-slf4j:jar:1.7.36:compile
+|  +- jakarta.annotation:jakarta.annotation-api:jar:1.3.5:compile
+|  +- org.springframework:spring-core:jar:5.3.25:compile
+|  |  \- org.springframework:spring-jcl:jar:5.3.25:compile
+|  \- org.yaml:snakeyaml:jar:1.30:compile<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>现在让我们详细拆解<code>spring-boot-autoconfigure</code></p>
+<h3 id="spring-boot-autoconfigure解读">spring-boot-autoconfigure解读</h3>
+<p>spring-boot-autoconfigure主要提供以下四部分内容</p>
+<ul>
+<li>条件加载使能与相关配置</li>
+<li>Condition增强</li>
+<li>IOC中自动bean加载</li>
+<li>常用三方依赖starter</li>
+</ul>
+<h4 id="条件加载使能与相关配置">条件加载使能与相关配置</h4>
+<p>我们直接找到<code>org.springframework.boot.autoconfigure</code>包，查看里面的类，发现了不少老朋友</p>
+<table>
+<thead>
+<tr>
+<th>注解</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@SpringBootApplication</td>
+<td>每个Spring Boot工程中可以看到</td>
+</tr>
+<tr>
+<td>@EnableAutoConfiguration</td>
+<td>被@SpringBootApplication继承，使能Spring Boot的自动配置功能，由AutoConfigurationImportSelector处理</td>
+</tr>
+<tr>
+<td>@AutoConfiguration</td>
+<td>Spring Boot提供的配置注解，功能同@Configuration，只是组合了@AutoConfigureBefore，@AutoConfigureAfter用于设置配置加载顺序</td>
+</tr>
+<tr>
+<td>@AutoConfiguration</td>
+<td>指定配置顺序</td>
+</tr>
+<tr>
+<td>@AutoConfigurationPackage</td>
+<td>配置@Configuration的扫描包，由AutoConfigrationPackages.Registrar处理</td>
+</tr>
+<tr>
+<td>@ImportAutoConfiguration</td>
+<td>基本同@Import，由ImportAutoConfigurationImportSelector处理，具体区别可见另文详细讲讲</td>
+</tr>
+</tbody>
+</table>
+<h4 id="Condition增强">Condition增强</h4>
+<p>Spring Framework中只提供了一个Condition接口和一个@Profile的实现。在spring-boot-autoconfigure提供了如下注解，可以方便我们的开发</p>
+<table>
+<thead>
+<tr>
+<th>注解</th>
+<th>处理类</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@ConditionalOnBean</td>
+<td>OnBeanCondition</td>
+<td>只有当指定的所有bean均已经包含在BeanFactory中时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnClass</td>
+<td>OnClassCondition</td>
+<td>只有当指定的所有class均已经包含在classpath中时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnCloudPlatform</td>
+<td>OnCloudPlatformCondition</td>
+<td>指定云平台active时才匹配，提供给Spring Cloud使用</td>
+</tr>
+<tr>
+<td>@ConditionalOnExpression</td>
+<td>OnExpressionCondition</td>
+<td>当指定的SpEL表达式为true时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnJava</td>
+<td>OnJavaCondition</td>
+<td>当JRE的版本在指定范围内时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnJndi</td>
+<td>OnJndiCondition</td>
+<td>当JNDI存在时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnMissingBean</td>
+<td>OnBeanCondition</td>
+<td>只有当指定的所有bean均没有包含在BeanFactory中时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnMissingClass</td>
+<td>OnClassCondition</td>
+<td>只有当指定的所有class均没有包含在classpath中时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnNotWebApplication</td>
+<td>OnWebApplicationCondition</td>
+<td>当启动容器不是WEB容器时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnWebApplication</td>
+<td>OnWebApplicationCondition</td>
+<td>当启动容器是WEB容器时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnProperty</td>
+<td>OnPropertyCondition</td>
+<td>当存在指定的property时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnResource</td>
+<td>OnResourceCondition</td>
+<td>当指定资源在classpath下存在才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnSingleCandidate</td>
+<td>OnBeanCondition</td>
+<td>当指定的bean在BeanFatory里面只有一个时才匹配</td>
+</tr>
+<tr>
+<td>@ConditionalOnWarDeployment</td>
+<td>OnWarDeploymentCondition</td>
+<td>当应用使用war部署时才匹配</td>
+</tr>
+</tbody>
+</table>
+<h4 id="IOC中bean条件加载">IOC中bean条件加载</h4>
+<p>通过对处理类的分析，我们得到依赖关系图,从依赖关系中，我们找到了以下抽象核心类，Spring Boot的Condition都是实现这两抽象类</p>
+<ul>
+<li>SpringBootCondition
+<ul>
+<li><img src="./SpringBootConditon.svg" alt="SpringBootCondition"></li>
+</ul>
+</li>
+<li>FilteringSpringBootConditon
+<ul>
+<li><img src="./FilterSpringBootConditon.svg" alt="FilteringSpringBootConditon"></li>
+</ul>
+</li>
+</ul>
+<h5 id="SpringBootCondition">SpringBootCondition</h5>
+<p>SpringBootCondition是对Condition的简单封装，逻辑上重写了Condition的match方法，这说明SpringBootCondition对bean加载的出来是和Srping Framework是一致的</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public final boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) &#123;
+    String classOrMethodName &#x3D; getClassOrMethodName(metadata);
+    try &#123;
+        &#x2F;&#x2F; 获取ConditionOutcome，getMatchOutcome时抽象方法，需要各个子类去实现
+        ConditionOutcome outcome &#x3D; getMatchOutcome(context, metadata);
+        &#x2F;&#x2F; 打印trace日志
+        logOutcome(classOrMethodName, outcome);
+        &#x2F;&#x2F; 记录匹配信息
+        recordEvaluation(context, classOrMethodName, outcome);
+        return outcome.isMatch();
+    &#125;
+    catch (NoClassDefFoundError ex) &#123;
+        throw new IllegalStateException(&quot;Could not evaluate condition on &quot; + classOrMethodName + &quot; due to &quot;
+                + ex.getMessage() + &quot; not found. Make sure your own configuration does not rely on &quot;
+                + &quot;that class. This can also happen if you are &quot;
+                + &quot;@ComponentScanning a springframework package (e.g. if you &quot;
+                + &quot;put a @ComponentScan in the default package by mistake)&quot;, ex);
+    &#125;
+    catch (RuntimeException ex) &#123;
+        throw new IllegalStateException(&quot;Error processing condition on &quot; + getName(metadata), ex);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>SpringBootCondition引入了一个新的类<code>ConditionOutcome</code>，由ConditionOutcome承接了match信息，SpringBootCondition剩下的逻辑基本是在打日志和记录匹配信息上<br>
+打开对应的<code>ConditionOutcome</code>，可以看到，ConditionOutcome里面并没有什么逻辑，只是对匹配信息的记录</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;&#x2F; 记录是否匹配和对应的message
+public class ConditionOutcome &#123;
+
+    private final boolean match;
+
+    private final ConditionMessage message;
+&#125;
+
+public final class ConditionMessage &#123;
+
+    private final String message;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>我们使用Spring Boot时，如果打开debug日志，我们就可以看到<code>recordEvaluation</code>记录的信息</p>
+<pre class="line-numbers language-log" data-language="log"><code class="language-log">&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
+CONDITIONS EVALUATION REPORT
+&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
+
+
+Positive matches:
+-----------------
+
+   AopAutoConfiguration matched:
+      - @ConditionalOnProperty (spring.aop.auto&#x3D;true) matched (OnPropertyCondition)
+
+   AopAutoConfiguration.ClassProxyingConfiguration matched:
+      - @ConditionalOnMissingClass did not find unwanted class &#39;org.aspectj.weaver.Advice&#39; (OnClassCondition)
+      - @ConditionalOnProperty (spring.aop.proxy-target-class&#x3D;true) matched (OnPropertyCondition)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>到此为止，我们知道了SpringBootCondtion没有引入额外的业务逻辑，它聚焦在记录匹配时的上下文，并打印对应的日志，在条件加载出问题时方便我们排查问题</p>
+<h5 id="FilteringSpringBootCondition">FilteringSpringBootCondition</h5>
+<p>FilteringSpringBootCondition也是一个Abstract类，并且FilteringSpringBootCondition中没有实现Condition接口match方法，这意味着FilteringSpringBootCondition的子类需要自己去实现match方法<br>
+注意观察FilteringSpringBootCondition的依赖</p>
+<ul>
+<li>继承SpringBootCondition，说明FilteringSpringBootCondition有记录match过程的能力</li>
+<li>继承BeanFactoryAware，BeanClassLoaderAware，说明FilteringSpringBootCondition有感知容器BeanFactory和ClassLoader的能力</li>
+<li>继承AutoConfigurationImportFilter，该接口是为了快速移除不满足条件的AutoConfiguration类，因为Spring Boot提供的AutoConfiguration实在是太多了（默认导入144个配置类）
+<blockquote>
+<p>Filter that can be registered in spring.factories to limit the auto-configuration classes considered. This interface is designed to allow fast removal of auto-configuration classes before their bytecode is even read.</p>
+</blockquote>
+</li>
+</ul>
+<p>观察AutoConfigurationImportFilter接口，该接口输入时已有的autoConfiguration类，输出是一个boolean数组，和输入的autoConfigurationClasses数组一一对应，当输出数组中某一位为false时，说明对应的autoConfiguration不会被导入</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AutoConfigurationImportFilter &#123;
+
+    boolean[] match(String[] autoConfigurationClasses, AutoConfigurationMetadata autoConfigurationMetadata);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>往上找，AutoConfigurationImportFilter在<code>ConfigurationClassFilter</code>中有明确的使用。逻辑很简单，将输入的自动配置类通过filter的match方法去过滤<br>
+filters为三个实现了FilteringSpringBootCondition的三个子类：OnClassCondition，OnWebApplicationCondition，OnBeanCondition</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">List&lt;String&gt; filter(List&lt;String&gt; configurations) &#123;
+    long startTime &#x3D; System.nanoTime();
+    String[] candidates &#x3D; StringUtils.toStringArray(configurations);
+    boolean skipped &#x3D; false;
+    &#x2F;&#x2F; filters为三个实现了FilteringSpringBootCondition的三个子类
+    &#x2F;&#x2F; OnClassCondition 
+    &#x2F;&#x2F; OnWebApplicationCondition 
+    &#x2F;&#x2F; OnBeanCondition
+    for (AutoConfigurationImportFilter filter : this.filters) &#123;
+        boolean[] match &#x3D; filter.match(candidates, this.autoConfigurationMetadata);
+        for (int i &#x3D; 0; i &lt; match.length; i++) &#123;
+            if (!match[i]) &#123;
+                &#x2F;&#x2F; 不match的configuration设置为空
+                candidates[i] &#x3D; null;
+                skipped &#x3D; true;
+            &#125;
+        &#125;
+    &#125;
+    if (!skipped) &#123;
+        return configurations;
+    &#125;
+    List&lt;String&gt; result &#x3D; new ArrayList&lt;&gt;(candidates.length);
+    for (String candidate : candidates) &#123;
+        if (candidate !&#x3D; null) &#123;
+            &#x2F;&#x2F; 返回满足的configuration
+            result.add(candidate);
+        &#125;
+    &#125;
+    return result;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>再往上找，ConfigurationClassFilter在两个地方有明确使用</p>
+<ol>
+<li>
+<p>ConfigurationClassPostProcessor中selectImports时，过滤AutoConfguration</p>
+ <pre class="line-numbers language-java" data-language="java"><code class="language-java">protected AutoConfigurationImportSelector.AutoConfigurationEntry getAutoConfigurationEntry(AnnotationMetadata annotationMetadata) &#123;
+    if (!isEnabled(annotationMetadata)) &#123;
+        return EMPTY_ENTRY;
+    &#125;
+    AnnotationAttributes attributes &#x3D; getAttributes(annotationMetadata);
+    &#x2F;&#x2F; 获取所有@AutoConfiguration，注意这里扫描不到@Configuration
+    List&lt;String&gt; configurations &#x3D; getCandidateConfigurations(annotationMetadata, attributes);
+    &#x2F;&#x2F; 去除重复的
+    configurations &#x3D; removeDuplicates(configurations);
+    &#x2F;&#x2F; 获取注解上需要排除的配置类
+    Set&lt;String&gt; exclusions &#x3D; getExclusions(annotationMetadata, attributes);
+    checkExcludedClasses(configurations, exclusions);
+    configurations.removeAll(exclusions);
+    &#x2F;&#x2F; 通过FilteringSpringBootCondition过滤不要需要的配置类
+    configurations &#x3D; getConfigurationClassFilter().filter(configurations);
+    fireAutoConfigurationImportEvents(configurations, exclusions);
+    return new AutoConfigurationImportSelector.AutoConfigurationEntry(configurations, exclusions);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li>
+<p>导入import后，对每个Configuration再次过滤</p>
+</li>
+</ol>
+<p>这里有个注意的点</p>
+<ul>
+<li>ConfigurationClassFilter只是对@AutoConfiguration做了快速过滤</li>
+<li>对@Configuration还是在SpringBootCondition中处理的，因为ConfigurationClassFilter并没有实现Condition的match方法</li>
+</ul>
+<h4 id="常用三方依赖starter">常用三方依赖starter</h4>
+<p>spring-boot-autoconfigure里面还提供了大量第三方依赖的start，这是Spring Boot约定优先配置的基础。如果对应的三方包没有被spring-boot-autoconfigure支持，需要手动引入对应的start，如：mybatis，引入以下坐标后，我们就可以使用mybatis了。</p>
+<pre class="line-numbers language-markup" data-language="markup"><code class="language-markup"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">></span></span>org.mybatis.spring.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">></span></span>mybatis-spring-boot-starter<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>version</span><span class="token punctuation">></span></span>3.0.1<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>version</span><span class="token punctuation">></span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>下面，我们就以MongoDB为例，看看怎么写一个starter</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;&#x2F; 使用@AutoConfiguration标明为配置类，使用@Configuration也可以
+@AutoConfiguration
+&#x2F;&#x2F; 在MongoClient存在时改配置有效，本项目中需要将Mongo作为Provide引入
+@ConditionalOnClass(MongoClient.class)
+&#x2F;&#x2F; 加载对应propertis，这样我们在配置文件中用spring.data.mongodb.xx就可以注入对应参数
+@EnableConfigurationProperties(MongoProperties.class)
+&#x2F;&#x2F; BeanFactory不存在MongoDatabaseFactory，这样如果我们对自动配置的不满意，可以使用手动配置去覆盖starter里面的自动配置
+@ConditionalOnMissingBean(type &#x3D; &quot;org.springframework.data.mongodb.MongoDatabaseFactory&quot;)
+public class MongoAutoConfiguration &#123;
+
+    @Bean
+    &#x2F;&#x2F; 在BeanFactory中不存在MongoClient时，初始化MongoClient
+    @ConditionalOnMissingBean(MongoClient.class)
+    public MongoClient mongo(ObjectProvider&lt;MongoClientSettingsBuilderCustomizer&gt; builderCustomizers,
+                             MongoClientSettings settings) &#123;
+        return new MongoClientFactory(builderCustomizers.orderedStream().collect(Collectors.toList()))
+                .createMongoClient(settings);
+    &#125;
+
+    @Configuration(proxyBeanMethods &#x3D; false)
+    &#x2F;&#x2F; 在BeanFactory中不存在MongoClientSettings时，初始化MongoClient
+    @ConditionalOnMissingBean(MongoClientSettings.class)
+    static class MongoClientSettingsConfiguration &#123;
+
+        @Bean
+        MongoClientSettings mongoClientSettings() &#123;
+            return MongoClientSettings.builder().build();
+        &#125;
+
+        @Bean
+        MongoPropertiesClientSettingsBuilderCustomizer mongoPropertiesCustomizer(MongoProperties properties,
+                                                                                 Environment environment) &#123;
+            return new MongoPropertiesClientSettingsBuilderCustomizer(properties, environment);
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring IOC</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>MockMvc对form/multipart支持的问题</title>
+    <url>/posts/ddf27974.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
+</blockquote>
+<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
+这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
+<blockquote>
+<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="场景">场景</h2>
+<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
+复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
+@Setter
+@ToString
+public class UploadEntity &#123;
+    private String code;
+    private MultipartFile file;
+&#125;
+@PostMapping(&quot;&#x2F;upload&quot;)
+public String upload(UploadEntity file)&#123;
+ return file.toString();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这段代码使用postman来提交是没有任何问题的。<br>
+<img src="./1.jpg" alt="示例"><br>
+但我们使用MockMvc来写test case呢？</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
+public void test() throws Exception &#123;
+    mockMvc.perform(
+            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
+                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+    ).andDo(MockMvcResultHandlers.print());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
+           Status &#x3D; 200
+    Error message &#x3D; null
+          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
+     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
+             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
+    Forwarded URL &#x3D; null
+   Redirected URL &#x3D; null
+          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="分析">分析</h2>
+<p>现在进入代码跟踪环节😄<br>
+从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
+    try &#123;
+        Collection&lt;Part&gt; parts &#x3D; request.getParts();
+        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
+        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
+        for (Part part : parts) &#123;
+            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
+            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
+            String filename &#x3D; disposition.getFilename();
+            if (filename !&#x3D; null) &#123;
+                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
+                    filename &#x3D; MimeDelegate.decode(filename);
+                &#125;
+                files.add(part.getName(), new StandardMultipartFile(part, filename));
+            &#125;
+            else &#123;
+                this.multipartParameterNames.add(part.getName());
+            &#125;
+        &#125;
+        setMultipartFiles(files);
+    &#125;
+    catch (Throwable ex) &#123;
+        handleParseFailure(ex);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Return a collection of all uploaded Parts.
+ *
+ * @return A collection of all uploaded Parts.
+ * @throws IOException
+ *             if an I&#x2F;O error occurs
+ * @throws IllegalStateException
+ *             if size limits are exceeded or no multipart configuration is
+ *             provided
+ * @throws ServletException
+ *             if the request is not multipart&#x2F;form-data
+ * @since Servlet 3.0
+ *&#x2F;
+public Collection&lt;Part&gt; getParts() throws IOException,
+        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
+<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
+<blockquote>
+<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
+the string value of the part will also be available via the getParameter /<br>
+getParameterValues methods on HttpServletRequest, using the name of the part.</p>
+</blockquote>
+<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Enumeration&lt;String&gt; getParameterNames() &#123;
+ if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
+  initializeMultipart();
+ &#125;
+ if (this.multipartParameterNames.isEmpty()) &#123;
+  return super.getParameterNames();
+ &#125;
+  
+ &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
+ &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
+ Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
+ Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
+ while (paramEnum.hasMoreElements()) &#123;
+  paramNames.add(paramEnum.nextElement());
+ &#125;
+ paramNames.addAll(this.multipartParameterNames);
+ return Collections.enumeration(paramNames);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="修复方法">修复方法</h2>
+<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
+    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
+    this.files.forEach(request::addFile);
+    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
+        request.addPart(part);
+        try &#123;
+            MultipartFile file &#x3D; this.asMultipartFile(part);
+            if (file !&#x3D; null) &#123;
+                request.addFile(file);
+            &#125; else &#123;
+                String value &#x3D; this.toParameterValue(part);
+                if (value !&#x3D; null) &#123;
+                    request.addParameter(part.getName(), this.toParameterValue(part));
+                &#125;
+            &#125;
+        &#125; catch (IOException var5) &#123;
+            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
+        &#125;
+    &#125;);
+    return request;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
+<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
+代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
+    ApplicationPart part &#x3D; new ApplicationPart(item, location);
+    parts.add(part);
+    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
+        String name &#x3D; part.getName();
+        String value &#x3D; null;
+        try &#123;
+            value &#x3D; part.getString(charset.name());
+        &#125; catch (UnsupportedEncodingException uee) &#123;
+            &#x2F;&#x2F; Not possible
+        &#125;
+        if (maxPostSize &gt;&#x3D; 0) &#123;
+            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
+            &#x2F;&#x2F; accurate but close enough.
+            postSize +&#x3D; name.getBytes(charset).length;
+            if (value !&#x3D; null) &#123;
+                &#x2F;&#x2F; Equals sign
+                postSize++;
+                &#x2F;&#x2F; Value length
+                postSize +&#x3D; part.getSize();
+            &#125;
+            &#x2F;&#x2F; Value separator
+            postSize++;
+            if (postSize &gt; maxPostSize) &#123;
+                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
+                throw new IllegalStateException(sm.getString(
+                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
+            &#125;
+        &#125;
+        parameters.addParameter(name, value);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring Test</tag>
+        <tag>Servlet3.0</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>intset整数集合</title>
+    <url>/posts/c03ff393.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
+</blockquote>
+<p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
+<span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct __attribute__ ((__packed__)) sdshdr64 &#123;
+    uint64_t len; &#x2F;* used *&#x2F;
+    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+
+typedef struct intset &#123;
+    uint32_t encoding;
+    uint32_t length;
+    int8_t contents[];
+&#125; intset;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
+</blockquote>
+<p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define INTSET_ENC_INT16 (sizeof(int16_t))
+#define INTSET_ENC_INT32 (sizeof(int32_t))
+#define INTSET_ENC_INT64 (sizeof(int64_t))
+
+&#x2F;* Return the required encoding for the provided value. *&#x2F;
+static uint8_t _intsetValueEncoding(int64_t v) &#123;
+    if (v &lt; INT32_MIN || v &gt; INT32_MAX)
+        return INTSET_ENC_INT64;
+    else if (v &lt; INT16_MIN || v &gt; INT16_MAX)
+        return INTSET_ENC_INT32;
+    else
+        return INTSET_ENC_INT16;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<table>
+<thead>
+<tr>
+<th>encoding枚举</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>INTSET_ENC_INT16</td>
+<td>2 sizeof(int16_t)</td>
+<td>intset值范围是 [-2<sup>16</sup>,2<sup>16</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT32</td>
+<td>4 sizeof(int32_t)</td>
+<td>intset值范围是 [-2<sup>32</sup>,-2<sup>16</sup>) $\bigcup$ (2<sup>16</sup>-1,2<sup>32</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT64</td>
+<td>8 sizeof(int64_t)</td>
+<td>intset值范围是 [-2<sup>64</sup>,-2<sup>32</sup>) $\bigcup$ (2<sup>32</sup>-1,2<sup>64</sup>-1]</td>
+</tr>
+</tbody>
+</table>
+<h2 id="操作">操作</h2>
+<p>整数集合没有什么复杂的操作</p>
+<h3 id="创建">创建</h3>
+<p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetNew(void) &#123;
+    intset *is &#x3D; zmalloc(sizeof(intset));
+    is-&gt;encoding &#x3D; intrev32ifbe(INTSET_ENC_INT16);
+    is-&gt;length &#x3D; 0;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
+在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#if (BYTE_ORDER &#x3D;&#x3D; LITTLE_ENDIAN)
+#define memrev16ifbe(p) ((void)(0))
+#define memrev32ifbe(p) ((void)(0))
+#define memrev64ifbe(p) ((void)(0))
+#define intrev16ifbe(v) (v)
+#define intrev32ifbe(v) (v)
+#define intrev64ifbe(v) (v)
+#else
+#define memrev16ifbe(p) memrev16(p)
+#define memrev32ifbe(p) memrev32(p)
+#define memrev64ifbe(p) memrev64(p)
+#define intrev16ifbe(v) intrev16(v)
+#define intrev32ifbe(v) intrev32(v)
+#define intrev64ifbe(v) intrev64(v)
+#endif<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="查找">查找</h3>
+<p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
+<ol>
+<li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
+<li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Search for the position of &quot;value&quot;. Return 1 when the value was found and
+ * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when
+ * the value is not present in the intset and sets &quot;pos&quot; to the position
+ * where &quot;value&quot; can be inserted. *&#x2F;
+static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) &#123;
+    int min &#x3D; 0, max &#x3D; intrev32ifbe(is-&gt;length)-1, mid &#x3D; -1;
+    int64_t cur &#x3D; -1;
+
+    &#x2F;* The value can never be found when the set is empty *&#x2F;
+    if (intrev32ifbe(is-&gt;length) &#x3D;&#x3D; 0) &#123;
+        if (pos) *pos &#x3D; 0;
+        return 0;
+    &#125; else &#123;
+        &#x2F;* Check for the case where we know we cannot find the value,
+         * but do know the insert position. *&#x2F;
+        if (value &gt; _intsetGet(is,max)) &#123;
+            if (pos) *pos &#x3D; intrev32ifbe(is-&gt;length);
+            return 0;
+        &#125; else if (value &lt; _intsetGet(is,0)) &#123;
+            if (pos) *pos &#x3D; 0;
+            return 0;
+        &#125;
+    &#125;
+
+    while(max &gt;&#x3D; min) &#123;
+        mid &#x3D; ((unsigned int)min + (unsigned int)max) &gt;&gt; 1;
+        cur &#x3D; _intsetGet(is,mid);
+        if (value &gt; cur) &#123;
+            min &#x3D; mid+1;
+        &#125; else if (value &lt; cur) &#123;
+            max &#x3D; mid-1;
+        &#125; else &#123;
+            break;
+        &#125;
+    &#125;
+
+    if (value &#x3D;&#x3D; cur) &#123;
+        if (pos) *pos &#x3D; mid;
+        return 1;
+    &#125; else &#123;
+        if (pos) *pos &#x3D; min;
+        return 0;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="新增">新增</h3>
+<h4 id="add">add</h4>
+<p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
+<ol>
+<li>判断插入的value是否超过当前集合能处理的范围（encoding），如果超过了，需要<code>升级</code>整数数组。</li>
+<li>根据value查找该元素是否在intset中，intsetSearch中传入了一个参数pos，pos表示了search之后可以插入元素的位置<br>
+2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
+2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetAdd(intset *is, int64_t value, uint8_t *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 1;
+
+    &#x2F;* Upgrade encoding if necessary. If we need to upgrade, we know that
+     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),
+     * because it lies outside the range of existing values. *&#x2F;
+    if (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;
+        &#x2F;* This always succeeds, so we don&#39;t need to curry *success. *&#x2F;
+        return intsetUpgradeAndAdd(is,value);
+    &#125; else &#123;
+        &#x2F;* Abort if the value is already present in the set.
+         * This call will populate &quot;pos&quot; with the right position to insert
+         * the value when it cannot be found. *&#x2F;
+        if (intsetSearch(is,value,&amp;pos)) &#123;
+            if (success) *success &#x3D; 0;
+            return is;
+        &#125;
+
+        is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+        if (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+1);
+    &#125;
+
+    _intsetSet(is,pos,value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="upgradeAndAdd">upgradeAndAdd</h4>
+<p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
+<blockquote>
+<p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
+代码中使用了<code>prepend</code>这个变量来处理</p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static intset *intsetUpgradeAndAdd(intset *is, int64_t value) &#123;
+    uint8_t curenc &#x3D; intrev32ifbe(is-&gt;encoding);
+    uint8_t newenc &#x3D; _intsetValueEncoding(value);
+    int length &#x3D; intrev32ifbe(is-&gt;length);
+    int prepend &#x3D; value &lt; 0 ? 1 : 0;
+
+    &#x2F;* First set new encoding and resize *&#x2F;
+    is-&gt;encoding &#x3D; intrev32ifbe(newenc);
+    is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+
+    &#x2F;* Upgrade back-to-front so we don&#39;t overwrite values.
+     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty
+     * space at either the beginning or the end of the intset. *&#x2F;
+    while(length--)
+        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));
+
+    &#x2F;* Set the value at the beginning or the end. *&#x2F;
+    if (prepend)
+        _intsetSet(is,0,value);
+    else
+        _intsetSet(is,intrev32ifbe(is-&gt;length),value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="删除">删除</h2>
+<p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetRemove(intset *is, int64_t value, int *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 0;
+
+    if (valenc &lt;&#x3D; intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;
+        uint32_t len &#x3D; intrev32ifbe(is-&gt;length);
+
+        &#x2F;* We know we can delete *&#x2F;
+        if (success) *success &#x3D; 1;
+
+        &#x2F;* Overwrite value with tail and update length *&#x2F;
+        if (pos &lt; (len-1)) intsetMoveTail(is,pos+1,pos);
+        is &#x3D; intsetResize(is,len-1);
+        is-&gt;length &#x3D; intrev32ifbe(len-1);
+    &#125;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="总结">总结</h2>
+<p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>dict字典</title>
+    <url>/posts/4fcbe513.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code>中</p>
+</blockquote>
+<p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典</p>
+<span id="more"></span>
+<h2 id="DICT数据结构">DICT数据结构</h2>
+<h3 id="Hash表节点">Hash表节点</h3>
+<p>dictEntry保存了字典中的节点，数据结构比较简单，记录了key，value和hash冲突后采用<code>链地址法</code>的链表header。</p>
+<ul>
+<li>需要注意的是，value采用了union，主要是字典在redis中被广泛使用了。如：hash指令，记录各个键的TTL等，在不同的场景下会使用不同的成员，如记录TTL时使用了<code>s64</code>。这样设计的原因也是为了节省内存。</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dictEntry &#123;
+    &#x2F;&#x2F; key
+    void *key;
+    &#x2F;&#x2F; value，c语言中的共用体
+    union &#123;
+        void *val;
+        uint64_t u64;
+        int64_t s64;
+        double d;
+    &#125; v;
+    &#x2F;&#x2F; hash冲突后使用单链表存储
+    struct dictEntry *next;
+&#125; dictEntry;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="Hash表">Hash表</h3>
+<p>Hash表主要记录了entry数组等信息。</p>
+<ul>
+<li>table：一维数组，hash后的数据就存在这里，相当于slot的概念</li>
+<li>size：table数组大小，最小4，必须是2^n</li>
+<li>sizemask：固定为size-1，这么做的目的是方便计算元素的索引。
+<ul>
+<li>因为size固定是<code>2^n</code>，如4，8……这样sizemask固定为：3，7……注意到3的二进制是<code>11</code>，7的二进制是<code>111</code>。这样计算<code>index=hash &amp; sizemask</code></li>
+</ul>
+</li>
+<li>used：记录Hash表中保存的数据个数</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* This is our hash table structure. Every dictionary has two of this as we
+ * implement incremental rehashing, for the old to the new table. *&#x2F;
+typedef struct dictht &#123;
+    &#x2F;&#x2F; 二维数组，指向kv对
+    dictEntry **table;   
+    &#x2F;&#x2F; table的大小
+    unsigned long size;  
+    &#x2F;&#x2F; 掩码，table的大小固定为2^n，sizemask为size-1，即2^n-1，这样sizemask的每一位都是1
+    unsigned long sizemask; 
+    &#x2F;&#x2F; 已保存kv对的个数
+    unsigned long used;
+&#125; dictht;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这个地方要注意下**table。菜鸡如我看到**table以为是个二维数组，可以通table[1][1]访问这种。其实不是，table应该理解成一维数组，使用二维指针只是方便<code>dictEntry-&gt;next</code>的访问。<br>
+<img src="./dictht.svg" alt="dict"></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictht *ht
+for (i &#x3D; 0; i &lt; ht-&gt;size; i++) &#123;
+ dictEntry *he &#x3D; ht-&gt;table[i];
+ while(he) &#123;
+  chainlen++;
+  he &#x3D; he-&gt;next;
+ &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="Dict字典">Dict字典</h3>
+<p>有了hash table，就可以很容易得到字典数据结构。</p>
+<ul>
+<li>dictType：指向了dictType结构体，该结构体定义了这个dict的一些基本操作函数，如：hash函数</li>
+<li>privdata：该字典的metadata，配合dictType里面的函数使用</li>
+<li>ht[2]：字典最主要的数据结构，hash table
+<ul>
+<li>这里的hash table定义的是大小为2的数组，这样主要是方便rehash。</li>
+<li>平时使用的是ht[0]，rehash时，为了不阻塞操作，会在新建ht[1]，并逐步把数据迁移到ht[1]，迁移完成后ht[1]就变成了ht[0]，等待下一次rehash。这里的思想类似于java gc时的复制算法</li>
+</ul>
+</li>
+<li>rehashidx：rehash时使用，标记rehash到hash table的哪个位置了。这里可以回忆下dictht的结构，里面的table是一个一维数组，这个rehashidx就是标示table的rehash到哪儿的index。如果没有rehash，rehashidx=-1</li>
+<li>iterators：记录迭代器的数量，迭代器参考下文</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dict &#123;
+    dictType *type;
+    void *privdata;
+    dictht ht[2];
+    long rehashidx; &#x2F;* rehashing not in progress if rehashidx &#x3D;&#x3D; -1 *&#x2F;
+    unsigned long iterators; &#x2F;* number of iterators currently running *&#x2F;
+&#125; dict;
+
+typedef struct dictType &#123;
+    &#x2F;&#x2F; hash函数
+    uint64_t (*hashFunction)(const void *key);
+    &#x2F;&#x2F; key对应的复制函数
+    void *(*keyDup)(void *privdata, const void *key);
+    &#x2F;&#x2F; val对应的复制函数
+    void *(*valDup)(void *privdata, const void *obj);
+    &#x2F;&#x2F; key的compare函数
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    &#x2F;&#x2F; key的析构函数
+    void (*keyDestructor)(void *privdata, void *key);
+    &#x2F;&#x2F; val的析构函数
+    void (*valDestructor)(void *privdata, void *obj);
+&#125; dictType;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="DICT基本操作">DICT基本操作</h2>
+<h3 id="创建Dict">创建Dict</h3>
+<p>dict的创建很简单。注意刚创建的dict大小为0，里面的ht.table也都是null，当第一次添加元素时，会在<code>_dictExpandIfNeeded</code>函数中对ht进行初始化</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new hash table *&#x2F;
+dict *dictCreate(dictType *type,
+        void *privDataPtr)
+&#123;
+    dict *d &#x3D; zmalloc(sizeof(*d));
+
+    _dictInit(d,type,privDataPtr);
+    return d;
+&#125;
+&#x2F;* Initialize the hash table *&#x2F;
+int _dictInit(dict *d, dictType *type,
+        void *privDataPtr)
+&#123;
+    _dictReset(&amp;d-&gt;ht[0]);
+    _dictReset(&amp;d-&gt;ht[1]);
+    d-&gt;type &#x3D; type;
+    d-&gt;privdata &#x3D; privDataPtr;
+    d-&gt;rehashidx &#x3D; -1;
+    d-&gt;iterators &#x3D; 0;
+    return DICT_OK;
+&#125;
+&#x2F;* Reset a hash table already initialized with ht_init().
+ * NOTE: This function should only be called by ht_destroy(). *&#x2F;
+static void _dictReset(dictht *ht)
+&#123;
+    ht-&gt;table &#x3D; NULL;
+    ht-&gt;size &#x3D; 0;
+    ht-&gt;sizemask &#x3D; 0;
+    ht-&gt;used &#x3D; 0;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="添加元素">添加元素</h3>
+<p>添加元素基本逻辑很简单</p>
+<ol>
+<li>使用<code>dictAddRaw</code>找到合适的dictEntry</li>
+<li>找到后使用宏<code>dictSetVal</code>吧value放到dictEntry中</li>
+</ol>
+<ul>
+<li>注意宏里面使用了，<code>do&#123;……&#125;while(0)</code>这个技巧。对c不熟悉的会摸不着头脑，其实就是保证宏在任何地方都能以期望的语义展开，可以参考这篇文章<a href="https://www.cnblogs.com/lanxuezaipiao/p/3535626.html">do {…} while (0) 在宏定义中的作用</a></li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Add an element to the target hash table *&#x2F;
+int dictAdd(dict *d, void *key, void *val)
+&#123;
+    dictEntry *entry &#x3D; dictAddRaw(d,key,NULL);
+
+    if (!entry) return DICT_ERR;
+    dictSetVal(d, entry, val);
+    return DICT_OK;
+&#125;
+
+#define dictSetVal(d, entry, _val_) do &#123; \
+    if ((d)-&gt;type-&gt;valDup) \
+        (entry)-&gt;v.val &#x3D; (d)-&gt;type-&gt;valDup((d)-&gt;privdata, _val_); \
+    else \
+        (entry)-&gt;v.val &#x3D; (_val_); \
+&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从上文中可以看出，<code>dictAddRaw</code>才是正文，我们继续看这个函数。</p>
+<ol>
+<li>先判断是不是在rehash过程中，判断dict.rehashidx是不是-1，如果不是-1。则执行一次rehash step，rehash过程在下文详细说明。</li>
+</ol>
+<blockquote>
+<p><strong>什么是rehash step</strong><br>
+redis执行命令都是单线程操作，很明显在字典rehash的过程中会阻塞操作，为了减少这种阻塞，redis的rehash采用了渐进式的rehash。<br>
+上文提到了，dict中定义了ht数组，平时使用ht[0]，rehash时新建ht[1]，并逐步将ht[0]的数据迁移到ht[1]。没做一次迁移，就是rehash step</p>
+</blockquote>
+<ol start="2">
+<li>根据key计算数据存储所在的index，如果key在dict中已经存在，则<strong>添加错误</strong>。</li>
+<li>是否处于rehash过程中，是的话选择ht[1]，否则选择ht[0]放置数据</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
+&#123;
+    long index;
+    dictEntry *entry;
+    dictht *ht;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+
+    &#x2F;* Get the index of the new element, or -1 if
+     * the element already exists. *&#x2F;
+    &#x2F;&#x2F; #define dictHashKey(d, key) (d)-&gt;type-&gt;hashFunction(key)
+    if ((index &#x3D; _dictKeyIndex(d, key, dictHashKey(d,key), existing)) &#x3D;&#x3D; -1)
+        return NULL;
+
+    &#x2F;* Allocate the memory and store the new entry.
+     * Insert the element in top, with the assumption that in a database
+     * system it is more likely that recently added entries are accessed
+     * more frequently. *&#x2F;
+    ht &#x3D; dictIsRehashing(d) ? &amp;d-&gt;ht[1] : &amp;d-&gt;ht[0];
+    entry &#x3D; zmalloc(sizeof(*entry));
+    &#x2F;&#x2F; 如果hash冲突，放到链表中
+    entry-&gt;next &#x3D; ht-&gt;table[index];
+    ht-&gt;table[index] &#x3D; entry;
+    ht-&gt;used++;
+
+    &#x2F;* Set the hash entry fields. *&#x2F;
+    dictSetKey(d, entry, key);
+    return entry;
+&#125;
+
+#define dictSetKey(d, entry, _key_) do &#123; \
+    if ((d)-&gt;type-&gt;keyDup) \
+        (entry)-&gt;key &#x3D; (d)-&gt;type-&gt;keyDup((d)-&gt;privdata, _key_); \
+    else \
+        (entry)-&gt;key &#x3D; (_key_); \
+&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看完这段代码，我们发现这个的核心优势这么找到key在table中的位置，这个方法就是<code>_dictKeyIndex</code>。</p>
+<ol>
+<li>添加时先判断选是否需要扩容，如果容量不够先扩容。</li>
+<li>根据hash值和sizemask计算出数据应该存放的index。</li>
+<li>根据index，在两个ht中查找key是否存在（包括单链表），如果key已经有了，返回错误。检查完成后返回index作为数据的存放索引</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **existing)
+&#123;
+    unsigned long idx, table;
+    dictEntry *he;
+    if (existing) *existing &#x3D; NULL;
+
+    &#x2F;* Expand the hash table if needed *&#x2F;
+    if (_dictExpandIfNeeded(d) &#x3D;&#x3D; DICT_ERR)
+        return -1;
+    for (table &#x3D; 0; table &lt;&#x3D; 1; table++) &#123;
+        idx &#x3D; hash &amp; d-&gt;ht[table].sizemask;
+        &#x2F;* Search if this slot does not already contain the given key *&#x2F;
+        he &#x3D; d-&gt;ht[table].table[idx];
+        while(he) &#123;
+            if (key&#x3D;&#x3D;he-&gt;key || dictCompareKeys(d, key, he-&gt;key)) &#123;
+                if (existing) *existing &#x3D; he;
+                return -1;
+            &#125;
+            he &#x3D; he-&gt;next;
+        &#125;
+        if (!dictIsRehashing(d)) break;
+    &#125;
+    return idx;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="rehash">rehash</h3>
+<h3 id="扩容">扩容</h3>
+<h3 id="遍历">遍历</h3>
+<h2 id="API列表">API列表</h2>
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dict <em>dictCreate(dictType</em>type, void *privDataPtr);</td>
+<td>创建字典</td>
+</tr>
+<tr>
+<td>int dictExpand(dict *d, unsigned long size);</td>
+<td>字典扩容</td>
+</tr>
+<tr>
+<td>int dictAdd(dict <em>d, void</em>key, void *val);</td>
+<td>添加增数据，不能重复添加</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictAddRaw(dict</em>d, void *key, dictEntry **existing);</td>
+<td>添加数据，如果重复添加，放入existing</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictAddOrFind(dict</em>d, void *key);</td>
+<td>添加或查找</td>
+</tr>
+<tr>
+<td>int dictReplace(dict <em>d, void</em>key, void *val);</td>
+<td>添加数据，如果存在就更新，不存在就添加</td>
+</tr>
+<tr>
+<td>int dictDelete(dict <em>d, const void</em>key);</td>
+<td>删除数据</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictUnlink(dict</em>ht, const void *key);</td>
+<td>删除数据（惰性删除）</td>
+</tr>
+<tr>
+<td>void dictFreeUnlinkedEntry(dict <em>d, dictEntry</em>he);</td>
+<td>释放惰性删除没有释放的内存</td>
+</tr>
+<tr>
+<td>void dictRelease(dict *d);</td>
+<td>删除字段并释放内存</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictFind(dict</em>d, const void *key);</td>
+<td>根据key查找entry</td>
+</tr>
+<tr>
+<td>void <em>dictFetchValue(dict</em>d, const void *key);</td>
+<td>根据key查找value</td>
+</tr>
+<tr>
+<td>int dictResize(dict *d);</td>
+<td>调整字典大小，调整后大小为当前数据量的最小值</td>
+</tr>
+<tr>
+<td>dictIterator <em>dictGetIterator(dict</em>d);</td>
+<td>初始化普通迭代器</td>
+</tr>
+<tr>
+<td>dictIterator <em>dictGetSafeIterator(dict</em>d);</td>
+<td>初始化安全迭代器</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictNext(dictIterator</em>iter);</td>
+<td>获取下一个迭代器，iter.next()</td>
+</tr>
+<tr>
+<td>void dictReleaseIterator(dictIterator *iter);</td>
+<td>释放迭代器</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictGetRandomKey(dict</em>d);</td>
+<td>随机获取一个key</td>
+</tr>
+<tr>
+<td>unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);</td>
+<td>随机获取count个可用</td>
+</tr>
+<tr>
+<td>void dictGetStats(char <em>buf, size_t bufsize, dict</em>d);</td>
+<td>获取字典的状态</td>
+</tr>
+<tr>
+<td>uint64_t dictGenHashFunction(const void *key, int len);</td>
+<td>获取hash函数（大小写敏感）</td>
+</tr>
+<tr>
+<td>uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);</td>
+<td>获取hash函数（大小写不敏感）</td>
+</tr>
+<tr>
+<td>void dictEmpty(dict <em>d, void(callback)(void</em>));</td>
+<td>清空字典</td>
+</tr>
+<tr>
+<td>void dictEnableResize(void);</td>
+<td>允许resize</td>
+</tr>
+<tr>
+<td>void dictDisableResize(void);</td>
+<td>不允许resize</td>
+</tr>
+<tr>
+<td>int dictRehash(dict *d, int n);</td>
+<td>渐进式rehash，n为step</td>
+</tr>
+<tr>
+<td>int dictRehashMilliseconds(dict *d, int ms);</td>
+<td>执行若干步rehash，但rehash不能超过固定时长</td>
+</tr>
+<tr>
+<td>void dictSetHashFunctionSeed(uint8_t *seed);</td>
+<td>设置随机种子</td>
+</tr>
+<tr>
+<td>uint8_t *dictGetHashFunctionSeed(void);</td>
+<td>获取随机种子</td>
+</tr>
+<tr>
+<td>unsigned long dictScan(dict <em>d, unsigned long v, dictScanFunction</em>fn, dictScanBucketFunction <em>bucketfn, void</em>privdata);</td>
+<td>扫描字典</td>
+</tr>
+<tr>
+<td>uint64_t dictGetHash(dict <em>d, const void</em>key);</td>
+<td>获取key的hash</td>
+</tr>
+<tr>
+<td>dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);</td>
+<td>通过已经被惰性删除的数据和hash查找entry</td>
+</tr>
+</tbody>
+</table>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>sds字符串</title>
+    <url>/posts/cffaa119.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
+</blockquote>
+<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。</p>
+<span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>在sds.h中定义了sds的数据结构。<code>typedef char *sds;</code>单从数据结构的定义上看，sds就是一个char数组。但和c的char数组不同。sds保存了额外的数据信息，保证<strong>高效字符串操作</strong>和<strong>二进制安全</strong>。</p>
+<ul>
+<li><strong>STRLEN</strong>可以获取字符串的长度，c中String获取字符串长度是O(N)的复杂度。实际应用中一个大几百K的字符串也不少见，采用O(N)的复杂度太得不偿失，这样就需要有个字段记录实际字符长度。</li>
+<li>字符串实际大小已经记录了，这样字符就不必要强制采用/0结尾，这也保证了二进制安全。</li>
+<li><strong>APPEND</strong>可以在现有字符串的基础上追加字符，c中String分配的空间刚刚好存放字符，所以在append时需要对新字符串重新分配空间，这样的操作是很不划算的。解决方法就是预先分配一块空间（如java中ArrayList），这就要求有个字段记录预分配空间的大小。</li>
+</ul>
+<p>按照这个思路，早期redis的数据结构中，除了char数组外，还额为定义了预分配数组的大小和剩余空间。我们可以通过len减去free得到字符串的实际长度。并且sds指向的是char buf[]，这样就可以使用*(sds-4)和*(sds-8)直接访问free和len的地址。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct sdshdr &#123;
+    int len;    &#x2F;&#x2F; buf 已占用长度
+    int free;   &#x2F;&#x2F; buf 剩余可用长度
+    char buf[];     &#x2F;&#x2F; 实际保存字符串数据的地方
+&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从这个sdshdr的定义中可以看出，int类型的len和free可以描述2G的空间，但实际应用过程中我们并不需要这么大的空间。所以在redis的后续发展中，定义了一系列sdshdrX，可以根据不同大小的字符串分配不同的结构题，已达到节省空间的目的。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Note: sdshdr5 is never used, we just access the flags byte directly.
+ * However is here to document the layout of type 5 SDS strings. *&#x2F;
+struct __attribute__ ((__packed__)) sdshdr5 &#123;
+    unsigned char flags; &#x2F;* 3 lsb of type, and 5 msb of string length *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr8 &#123;
+    uint8_t len; &#x2F;* used *&#x2F;
+    uint8_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr16 &#123;
+    uint16_t len; &#x2F;* used *&#x2F;
+    uint16_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr32 &#123;
+    uint32_t len; &#x2F;* used *&#x2F;
+    uint32_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr64 &#123;
+    uint64_t len; &#x2F;* used *&#x2F;
+    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从数据结构可以看出，redis一共定义了5中sdshdr结构（sdshdr5并没有使用），分别可以支持长度为2<sup>5</sup>，2<sup>8</sup>，2<sup>16</sup>，2<sup>32</sup>和2<sup>64</sup>的字符串（其实Redis中字符串长度不能超过512M）。redis可以通过字符串长度选择合适的sdshdr结构体。<br>
+现在有多种sdshdr结构体了，我们就必须在结构体中存储结构体的类型，这个字段就是unsigned char flags。它使用了3位来表示这5种类型</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_TYPE_5  0
+#define SDS_TYPE_8  1
+#define SDS_TYPE_16 2
+#define SDS_TYPE_32 3
+#define SDS_TYPE_64 4
+static inline char sdsReqType(size_t string_size) &#123;
+    if (string_size &lt; 1&lt;&lt;5)
+        return SDS_TYPE_5;
+    if (string_size &lt; 1&lt;&lt;8)
+        return SDS_TYPE_8;
+    if (string_size &lt; 1&lt;&lt;16)
+        return SDS_TYPE_16;
+#if (LONG_MAX &#x3D;&#x3D; LLONG_MAX)
+    if (string_size &lt; 1ll&lt;&lt;32)
+        return SDS_TYPE_32;
+    return SDS_TYPE_64;
+#else
+    return SDS_TYPE_32;
+#endif
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>redis中还定义了两个宏SDS_HDR_VAR和SDS_HDR，都是根据sds的地址计算结构体sdshdr的地址。我们需要记住的是sds的地址永远指向的是char[] buf。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_HDR_VAR(T,s) struct sdshdr##T *sh &#x3D; (void*)((s)-(sizeof(struct sdshdr##T)));
+#define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<h2 id="SDS使用">SDS使用</h2>
+<p>在搞清楚SDS基本数据结构后，现在来看看redis是怎么使用SDS的。</p>
+<h3 id="创建">创建</h3>
+<p>sds采用函数sdsnewlen进行创建。</p>
+<ol>
+<li>通过字符串长度获取sdshdr的实际类型。如果是sdshdr5则转换为sdshdr8</li>
+<li>分配初始化内存空间给sh，分配空间大小为sdshdr头大小+字符串大小+1，注意sds依然是\0结尾</li>
+<li>根据类型（type）使用宏SDS_HDR_VAR获取实际结构体，并把初始化header中len，alloc和type字段</li>
+<li>将传入的字符串拷贝到sds中的buf</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new sds string with the content specified by the &#39;init&#39; pointer
+ * and &#39;initlen&#39;.
+ * If NULL is used for &#39;init&#39; the string is initialized with zero bytes.
+ * If SDS_NOINIT is used, the buffer is left uninitialized;
+ *
+ * The string is always null-termined (all the sds strings are, always) so
+ * even if you create an sds string with:
+ *
+ * mystring &#x3D; sdsnewlen(&quot;abc&quot;,3);
+ *
+ * You can print the string with printf() as there is an implicit \0 at the
+ * end of the string. However the string is binary safe and can contain
+ * \0 characters in the middle, as the length is stored in the sds header. *&#x2F;
+sds sdsnewlen(const void *init, size_t initlen) &#123;
+    void *sh;
+    sds s;
+    char type &#x3D; sdsReqType(initlen);
+    &#x2F;* Empty strings are usually created in order to append. Use type 8
+     * since type 5 is not good at this. *&#x2F;
+    if (type &#x3D;&#x3D; SDS_TYPE_5 &amp;&amp; initlen &#x3D;&#x3D; 0) type &#x3D; SDS_TYPE_8;
+    int hdrlen &#x3D; sdsHdrSize(type);
+    unsigned char *fp; &#x2F;* flags pointer. *&#x2F;
+
+    assert(hdrlen+initlen+1 &gt; initlen); &#x2F;* Catch size_t overflow *&#x2F;
+    sh &#x3D; s_malloc(hdrlen+initlen+1);
+    if (init&#x3D;&#x3D;SDS_NOINIT)
+        init &#x3D; NULL;
+    else if (!init)
+        memset(sh, 0, hdrlen+initlen+1);
+    if (sh &#x3D;&#x3D; NULL) return NULL;
+    s &#x3D; (char*)sh+hdrlen;
+    fp &#x3D; ((unsigned char*)s)-1;
+    switch(type) &#123;
+        case SDS_TYPE_5: &#123;
+            *fp &#x3D; type | (initlen &lt;&lt; SDS_TYPE_BITS);
+            break;
+        &#125;
+        case SDS_TYPE_8: &#123;
+            SDS_HDR_VAR(8,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+        case SDS_TYPE_16: &#123;
+            SDS_HDR_VAR(16,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+        case SDS_TYPE_32: &#123;
+            SDS_HDR_VAR(32,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+        case SDS_TYPE_64: &#123;
+            SDS_HDR_VAR(64,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+    &#125;
+    if (initlen &amp;&amp; init)
+        memcpy(s, init, initlen);
+    s[initlen] &#x3D; &#39;\0&#39;;
+    return s;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="释放">释放</h3>
+<p>sds的释放比较简单</p>
+<ol>
+<li>记住sds指向的char buf[]，那么s[-1]指向的是flags，即sdshdr的类型</li>
+<li>sdsHdrSize计算出sds的header大小</li>
+<li>(char*)s-sdsHdrSize(s[-1])直接指向了结构体地址</li>
+<li>释放空间，这里没有对buf释放因为申请空间的时候buf作为结构体一起申请了。</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">void sdsfree(sds s) &#123;
+    if (s &#x3D;&#x3D; NULL) return;
+    s_free((char*)s-sdsHdrSize(s[-1]));
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="清空">清空</h3>
+<p>redis中更多的是使用清空操作（惰性删除），只是把字符串的长度设置为0，并不释放空间。下一次使用的时候就可以使用清空的sds，避免内存的分配操作</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">void sdsclear(sds s) &#123;
+    sdssetlen(s, 0);
+    s[0] &#x3D; &#39;\0&#39;;
+&#125;
+static inline void sdssetlen(sds s, size_t newlen) &#123;
+    unsigned char flags &#x3D; s[-1];
+    switch(flags&amp;SDS_TYPE_MASK) &#123;
+        case SDS_TYPE_5:
+            &#123;
+                unsigned char *fp &#x3D; ((unsigned char*)s)-1;
+                *fp &#x3D; SDS_TYPE_5 | (newlen &lt;&lt; SDS_TYPE_BITS);
+            &#125;
+            break;
+        case SDS_TYPE_8:
+            SDS_HDR(8,s)-&gt;len &#x3D; newlen;
+            break;
+        case SDS_TYPE_16:
+            SDS_HDR(16,s)-&gt;len &#x3D; newlen;
+            break;
+        case SDS_TYPE_32:
+            SDS_HDR(32,s)-&gt;len &#x3D; newlen;
+            break;
+        case SDS_TYPE_64:
+            SDS_HDR(64,s)-&gt;len &#x3D; newlen;
+            break;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="扩容">扩容</h3>
+<p>扩容的思想很简单</p>
+<ol>
+<li>计算出扩容后需要空间大小。需要注意的是扩容策略：如果新字符串大小（newlen）小于SDS_MAX_PREALLOC（1M）， 则扩容空间是newlen的两倍；否则扩容空间是newlen+SDS_MAX_PREALLOC</li>
+<li>根据新字符串大小（newlen）判断是否需要升级sdshdr，如果不需要升级，在原有sdshdr基础上重新分配空间即可；如果需要升级，新建sdshdr赋值，然后将老的sdshdr释放</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_MAX_PREALLOC (1024*1024)
+sds sdsMakeRoomFor(sds s, size_t addlen) &#123;
+    void *sh, *newsh;
+    size_t avail &#x3D; sdsavail(s);
+    size_t len, newlen;
+    char type, oldtype &#x3D; s[-1] &amp; SDS_TYPE_MASK;
+    int hdrlen;
+
+    &#x2F;* Return ASAP if there is enough space left. *&#x2F;
+    if (avail &gt;&#x3D; addlen) return s;
+
+    len &#x3D; sdslen(s);
+    sh &#x3D; (char*)s-sdsHdrSize(oldtype);
+    newlen &#x3D; (len+addlen);
+    assert(newlen &gt; len);   &#x2F;* Catch size_t overflow *&#x2F;
+    if (newlen &lt; SDS_MAX_PREALLOC)
+        newlen *&#x3D; 2;
+    else
+        newlen +&#x3D; SDS_MAX_PREALLOC;
+
+    type &#x3D; sdsReqType(newlen);
+
+    &#x2F;* Don&#39;t use type 5: the user is appending to the string and type 5 is
+     * not able to remember empty space, so sdsMakeRoomFor() must be called
+     * at every appending operation. *&#x2F;
+    if (type &#x3D;&#x3D; SDS_TYPE_5) type &#x3D; SDS_TYPE_8;
+
+    hdrlen &#x3D; sdsHdrSize(type);
+    assert(hdrlen+newlen+1 &gt; len);  &#x2F;* Catch size_t overflow *&#x2F;
+    if (oldtype&#x3D;&#x3D;type) &#123;
+        newsh &#x3D; s_realloc(sh, hdrlen+newlen+1);
+        if (newsh &#x3D;&#x3D; NULL) return NULL;
+        s &#x3D; (char*)newsh+hdrlen;
+    &#125; else &#123;
+        &#x2F;* Since the header size changes, need to move the string forward,
+         * and can&#39;t use realloc *&#x2F;
+        newsh &#x3D; s_malloc(hdrlen+newlen+1);
+        if (newsh &#x3D;&#x3D; NULL) return NULL;
+        memcpy((char*)newsh+hdrlen, s, len+1);
+        s_free(sh);
+        s &#x3D; (char*)newsh+hdrlen;
+        s[-1] &#x3D; type;
+        sdssetlen(s, len);
+    &#125;
+    sdssetalloc(s, newlen);
+    return s;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>skiplist跳表</title>
+    <url>/posts/7b62b471.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+跳表的定义在<code>server.h</code>中，实现在<code>t_zset.c</code></p>
+</blockquote>
+<p>跳表是个很神奇的数据结构，简单但效率高，没有<strong>红黑树</strong>复杂，却有O(logn)的查找效率。其实我觉得<code>只有右儿子的B+树</code>和跳表挺类似的，都是多级索引来达到O(logn)的效率。<br>
+redis中，只有有序集合zset使用了跳表</p>
+<span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>跳表的数据结构很简单，只有<code>zskiplistNode</code>和<code>zskiplist</code>两个</p>
+<ul>
+<li>zskiplist保存了指向node的头指针和尾指针，还有跳表的层级和长度</li>
+<li>zskiplistNode作为保存数据的node，redis做了特别的设计:
+<ul>
+<li>ele：保存的字符串</li>
+<li>score：数据的分数，跳表通过score排序，如果source相同，使用ele进一步排序</li>
+<li>backward：后退指针，正常情况下，跳表是对socore正向排序的，如果我们使用redis的<code>zrevrange</code>等命令返回逆向排序的数据时，就需要使用后退指针。</li>
+<li>level：多层列表，保存数据的多层索引，一个节点具体有几层是随机生成的。这个数据结构也会在下面重点分析
+<ul>
+<li>forward：前向指针</li>
+<li>span：表示本节点和forward的节点之间跳过的数据个数，使用span的目的是skipList提供不仅提供了按score排序查找的能力，也提供了随机访问的能力（zslGetElementByRank）。如果没有span，我们可以视<code>level0</code>的数据为单链表，随机访问的时间复杂度为<code>O(N)</code>，使用span后，随机访问的时间可以做到<code>O(logN)</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct zskiplistNode &#123;
+    sds ele;
+    double score;
+    struct zskiplistNode *backward;
+    struct zskiplistLevel &#123;
+        struct zskiplistNode *forward;
+        unsigned long span;
+    &#125; level[];
+&#125; zskiplistNode;
+
+typedef struct zskiplist &#123;
+    struct zskiplistNode *header, *tail;
+    unsigned long length;
+    int level;
+&#125; zskiplist;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>下图为跳表数据结构的图例<br>
+<img src="./skiplist.svg" alt="跳表数据结构"></p>
+<h2 id="skipList操作">skipList操作</h2>
+<h3 id="创建">创建</h3>
+<p>跳表的创建比较简单，只是分配的空间和初始化数据。需要注意的是，redis5跳表中的level现在已经默认为64层，而不是网上老版本的32层了。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;&#x2F; 创建跳表
+zskiplist *zslCreate(void) &#123;
+    int j;
+    zskiplist *zsl;
+
+    zsl &#x3D; zmalloc(sizeof(*zsl));
+    zsl-&gt;level &#x3D; 1;
+    zsl-&gt;length &#x3D; 0;
+    &#x2F;&#x2F; ZSKIPLIST_MAXLEVEL &#x3D;&#x3D; 64
+    zsl-&gt;header &#x3D; zslCreateNode(ZSKIPLIST_MAXLEVEL,0,NULL);
+    for (j &#x3D; 0; j &lt; ZSKIPLIST_MAXLEVEL; j++) &#123;
+        zsl-&gt;header-&gt;level[j].forward &#x3D; NULL;
+        zsl-&gt;header-&gt;level[j].span &#x3D; 0;
+    &#125;
+    zsl-&gt;header-&gt;backward &#x3D; NULL;
+    zsl-&gt;tail &#x3D; NULL;
+    return zsl;
+&#125;
+
+&#x2F;&#x2F; 创建node
+zskiplistNode *zslCreateNode(int level, double score, sds ele) &#123;
+    zskiplistNode *zn &#x3D;
+        zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
+    zn-&gt;score &#x3D; score;
+    zn-&gt;ele &#x3D; ele;
+    return zn;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="插入">插入</h3>
+<p>跳表的插入分为几个步骤</p>
+<ol>
+<li>找到插入元素的位置，并记录索引。</li>
+<li>计算插入节点的level，level的值是随机的，最大为64，每层被选中的概率是0.25。这部分在<code>zslRandomLevel</code></li>
+<li>插入节点，更新每层forward连接关系</li>
+<li>调整每层连接之间的span关系</li>
+<li>调整回退指针</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define ZSKIPLIST_MAXLEVEL 64 &#x2F;* Should be enough for 2^64 elements *&#x2F;
+#define ZSKIPLIST_P 0.25      &#x2F;* Skiplist P &#x3D; 1&#x2F;4 *&#x2F;
+&#x2F;&#x2F; 每层被选择的概率是0.25
+int zslRandomLevel(void) &#123;
+    int level &#x3D; 1;
+    while ((random()&amp;0xFFFF) &lt; (ZSKIPLIST_P * 0xFFFF))
+        level +&#x3D; 1;
+    return (level&lt;ZSKIPLIST_MAXLEVEL) ? level : ZSKIPLIST_MAXLEVEL;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) &#123;
+    &#x2F;&#x2F; ZSKIPLIST_MAXLEVEL &#x3D;&#x3D; 64
+    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
+    unsigned int rank[ZSKIPLIST_MAXLEVEL];
+    int i, level;
+
+    serverAssert(!isnan(score));
+    x &#x3D; zsl-&gt;header;
+    &#x2F;&#x2F; 计算rank，rank的目的是后面更新计算span
+    &#x2F;&#x2F; 计算update，update的目的是找到每个level中数据插入的位置
+    for (i &#x3D; zsl-&gt;level-1; i &gt;&#x3D; 0; i--) &#123;
+        rank[i] &#x3D; i &#x3D;&#x3D; (zsl-&gt;level-1) ? 0 : rank[i+1];
+        &#x2F;&#x2F; 这里可以看得跳表使用score排序，如果使用score相同，使用ele再次排序
+        while (x-&gt;level[i].forward &amp;&amp;
+                (x-&gt;level[i].forward-&gt;score &lt; score ||
+                    (x-&gt;level[i].forward-&gt;score &#x3D;&#x3D; score &amp;&amp;
+                    sdscmp(x-&gt;level[i].forward-&gt;ele,ele) &lt; 0)))
+        &#123;
+            rank[i] +&#x3D; x-&gt;level[i].span;
+            x &#x3D; x-&gt;level[i].forward;
+        &#125;
+        update[i] &#x3D; x;
+    &#125;
+    
+    &#x2F;&#x2F; 插入的数据随机选择个level
+    level &#x3D; zslRandomLevel();
+    &#x2F;&#x2F; 如果选择的level大于了当前跳表最大level，更新最大level并初始化数据
+    if (level &gt; zsl-&gt;level) &#123;
+        for (i &#x3D; zsl-&gt;level; i &lt; level; i++) &#123;
+            rank[i] &#x3D; 0;
+            update[i] &#x3D; zsl-&gt;header;
+            update[i]-&gt;level[i].span &#x3D; zsl-&gt;length;
+        &#125;
+        zsl-&gt;level &#x3D; level;
+    &#125;
+    &#x2F;&#x2F; 创建插入node
+    x &#x3D; zslCreateNode(level,score,ele);
+    for (i &#x3D; 0; i &lt; level; i++) &#123;
+        x-&gt;level[i].forward &#x3D; update[i]-&gt;level[i].forward;
+        update[i]-&gt;level[i].forward &#x3D; x;
+
+        &#x2F;* update span covered by update[i] as x is inserted here *&#x2F;
+        x-&gt;level[i].span &#x3D; update[i]-&gt;level[i].span - (rank[0] - rank[i]);
+        update[i]-&gt;level[i].span &#x3D; (rank[0] - rank[i]) + 1;
+    &#125;
+
+    &#x2F;* increment span for untouched levels *&#x2F;
+    for (i &#x3D; level; i &lt; zsl-&gt;level; i++) &#123;
+        update[i]-&gt;level[i].span++;
+    &#125;
+    &#x2F;&#x2F; 更新回退指针
+    x-&gt;backward &#x3D; (update[0] &#x3D;&#x3D; zsl-&gt;header) ? NULL : update[0];
+    if (x-&gt;level[0].forward)
+        x-&gt;level[0].forward-&gt;backward &#x3D; x;
+    else
+        zsl-&gt;tail &#x3D; x;
+    zsl-&gt;length++;
+    return x;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="根据score查找">根据score查找</h3>
+<p>跳表提供了通过range去匹配score的接口，<code>zslFirstInRange</code>和<code>zslLastInRange</code><br>
+这里注意下<code>zrangespec</code>，这个结构体打包了min和max，并且指定了比较时是否包含min和max。跳表涉及到score时都使用<code>zrangespec</code>表示匹配的范围</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct &#123;
+    double min, max;
+    int minex, maxex; &#x2F;* are min or max exclusive? *&#x2F;
+&#125; zrangespec;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>查找比较简单，在level层级中一层层比较就行了。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">zskiplistNode *zslFirstInRange(zskiplist *zsl, zrangespec *range) &#123;
+    zskiplistNode *x;
+    int i;
+
+    &#x2F;* If everything is out of range, return early. *&#x2F;
+    if (!zslIsInRange(zsl,range)) return NULL;
+
+    x &#x3D; zsl-&gt;header;
+    for (i &#x3D; zsl-&gt;level-1; i &gt;&#x3D; 0; i--) &#123;
+        &#x2F;* Go forward while *OUT* of range. *&#x2F;
+        while (x-&gt;level[i].forward &amp;&amp;
+            !zslValueGteMin(x-&gt;level[i].forward-&gt;score,range))
+                x &#x3D; x-&gt;level[i].forward;
+    &#125;
+
+    &#x2F;* This is an inner range, so the next node cannot be NULL. *&#x2F;
+    x &#x3D; x-&gt;level[0].forward;
+    serverAssert(x !&#x3D; NULL);
+
+    &#x2F;* Check if score &lt;&#x3D; max. *&#x2F;
+    if (!zslValueLteMax(x-&gt;score,range)) return NULL;
+    return x;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="随机访问">随机访问</h3>
+<p>跳表还提供了按下标随机访问，注意下标是从1开始的。<br>
+span的作用在这里就体现了，它记录了下一个节点的距离，没有这个距离我们只能使用level[0]去顺序访问，顺序访问的时间复杂度是<code>O(N)</code>。现在有了这个span，我们可以重level上层开始遍历，也就是说我们可以利用上跳表的多级索引，时间复杂度降低到<code>O(logN)</code></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">zskiplistNode* zslGetElementByRank(zskiplist *zsl, unsigned long rank) &#123;
+    zskiplistNode *x;
+    unsigned long traversed &#x3D; 0;
+    int i;
+
+    x &#x3D; zsl-&gt;header;
+    for (i &#x3D; zsl-&gt;level-1; i &gt;&#x3D; 0; i--) &#123;
+        while (x-&gt;level[i].forward &amp;&amp; (traversed + x-&gt;level[i].span) &lt;&#x3D; rank)
+        &#123;
+            traversed +&#x3D; x-&gt;level[i].span;
+            x &#x3D; x-&gt;level[i].forward;
+        &#125;
+        if (traversed &#x3D;&#x3D; rank) &#123;
+            return x;
+        &#125;
+    &#125;
+    return NULL;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>ziplist压缩列表</title>
+    <url>/posts/2bd24f59.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
+</blockquote>
+<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
+<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
+<ul>
+<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
+<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
+<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
+ * to be very memory efficient. It stores both strings and integer values,
+ * where integers are encoded as actual integers instead of a series of
+ * characters. It allows push and pop operations on either side of the list
+ * in O(1) time. However, because every operation requires a reallocation of
+ * the memory used by the ziplist, the actual complexity is related to the
+ * amount of memory used by the ziplist.
+ * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+ <span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>和其他数据类型不一样，我们在<code>ziplist.h</code>中没有找到任何结构体的定义<br>
+我们在来看下创建ziplist的代码，好家伙，ziplist就是个一维数组</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new empty ziplist. *&#x2F;
+unsigned char *ziplistNew(void) &#123;
+    unsigned int bytes &#x3D; ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
+    unsigned char *zl &#x3D; zmalloc(bytes);
+    ZIPLIST_BYTES(zl) &#x3D; intrev32ifbe(bytes);
+    ZIPLIST_TAIL_OFFSET(zl) &#x3D; intrev32ifbe(ZIPLIST_HEADER_SIZE);
+    ZIPLIST_LENGTH(zl) &#x3D; 0;
+    zl[bytes-1] &#x3D; ZIP_END;
+    return zl;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们要回到<code>ziplist.h</code>中，官方很详细的写了ziplist的设计思路</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* ZIPLIST OVERALL LAYOUT
+* &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
+*
+* The general layout of the ziplist is as follows:
+*
+* &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; &lt;entry&gt; ... &lt;entry&gt; &lt;zlend&gt;
+* ………………
+* &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>坑爹的@target</title>
+    <url>/posts/2ced797.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于Spring Boot 2.4.5</p>
+</blockquote>
+<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
+<ol>
+<li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
+<li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
+<li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
+<li>@target、@within对子类新增方法都不起作用。</li>
+</ol>
+<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
+<blockquote>
+<p><a href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
+<a href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
+</blockquote>
+<p>现在我们来翻译翻译什么是@target的惊喜。</p>
+<span id="more"></span>
+<h2 id="问题">问题</h2>
+<p>我们先来看一个实际的场景，我们使用策略模式时，一种写法如下，我们直接扫描bean上面的annotation。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
+public class StrategyFactory implements ApplicationContextAware &#123;
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException &#123;
+        Map&lt;String, Object&gt; beans &#x3D; applicationContext.getBeansWithAnnotation(StrategyMark.class);
+        for (Map.Entry&lt;String, Object&gt; entry : beans.entrySet()) &#123;
+            log.info(&quot;strategy:&#123;&#125;&quot;, entry.getValue().getClass().getAnnotation(StrategyMark.class));
+        &#125;
+    &#125;
+&#125;
+
+@Component
+@StrategyMark(value &#x3D; &quot;hello-word&quot;)
+public class HelloWordStrategy implements Strategy &#123;
+    @Override
+    public String execute() &#123;
+        return &quot;helloWord&quot;;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从日志可以看出，现在代码一切正常。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:@com.polaris.he.target.annotation.StrategyMark(value&#x3D;hello-word)<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>现在随着业务的发展，需要定义一个业务路由，比如读写分离。我们希望注解到class上，class上有这个注解的都走从库。在这个思路的指导下，很快就可以写成下面的代码。</p>
+<blockquote>
+<p><strong>路由的定义和上面的策略模式完全没有任何关系</strong></p>
+</blockquote>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Router
+public class StatServiceImpl &#123;
+&#125;
+
+@Aspect
+@Component
+public class RouteAspect &#123;
+    &#x2F;&#x2F; 为什么加within？不加within，spring都不能启动。惊喜吧
+    @Around(&quot;within(com.polaris.he.target..*) &amp;&amp; @target(com.polaris.he.target.annotation.Router)&quot;)
+    public Object route(ProceedingJoinPoint pjp) throws Throwable &#123;
+        return pjp.proceed();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>现在我们来执行下代码</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:null<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>看吧，这就是惊喜。加了个毫无关联的@target，就冒一个空指针出来了。</p>
+<h2 id="分析">分析</h2>
+<p>先不管三七二十一，打个断点再说。一看这下好家伙，这个类被代理了，代理类上面自然没有anntation。<br>
+<img src="./1.jpg" alt="代码"><br>
+现在问题来了，为什么会被代理呢？<br>
+如果你对Spring比较熟悉，可以定位到AOP发生代理的位置<br>
+<code>AbstractAutoProxyCreator.wrapIfNecessary(Object bean, String beanName, Object cacheKey)</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) &#123;
+ if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) &#123;
+  return bean;
+ &#125;
+ if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) &#123;
+  return bean;
+ &#125;
+ if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) &#123;
+  this.advisedBeans.put(cacheKey, Boolean.FALSE);
+  return bean;
+ &#125;
+
+ &#x2F;&#x2F; 根据beanClass和beanName判断是否是需要创建proxy
+ Object[] specificInterceptors &#x3D; getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+ if (specificInterceptors !&#x3D; DO_NOT_PROXY) &#123;
+  this.advisedBeans.put(cacheKey, Boolean.TRUE);
+  Object proxy &#x3D; createProxy(
+    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+  this.proxyTypes.put(cacheKey, proxy.getClass());
+  return proxy;
+ &#125;
+
+ this.advisedBeans.put(cacheKey, Boolean.FALSE);
+ return bean;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这样一路跟踪下去，我们能找到这个问题的核心方法<code>AopUtils.canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions)</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+ Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
+ if (!pc.getClassFilter().matches(targetClass)) &#123;
+  return false;
+ &#125;
+ &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
+ &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
+ MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
+ if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
+  &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
+  return true;
+ &#125;
+
+ IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
+ if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
+  introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
+ &#125;
+
+ Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
+ if (!Proxy.isProxyClass(targetClass)) &#123;
+  classes.add(ClassUtils.getUserClass(targetClass));
+ &#125;
+ classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+ for (Class&lt;?&gt; clazz : classes) &#123;
+  Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
+  &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
+  for (Method method : methods) &#123;
+   if (introductionAwareMethodMatcher !&#x3D; null ?
+     introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+     methodMatcher.matches(method, targetClass)) &#123;
+    return true;
+   &#125;
+  &#125;
+ &#125;
+ return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看到这里我们知道了<code>ntroductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)</code>这个判断了是不是满足切点，从上文可知，introductionAwareMethodMatcher的实现类就是<code>AspectJExpressionPointcut</code>，我们接着往下看。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+    Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
+    if (!pc.getClassFilter().matches(targetClass)) &#123;
+        return false;
+    &#125;
+    &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
+    &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
+    MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
+    if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
+        &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
+        return true;
+    &#125;
+
+    IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
+    if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
+        introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
+    &#125;
+
+    Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
+    if (!Proxy.isProxyClass(targetClass)) &#123;
+        classes.add(ClassUtils.getUserClass(targetClass));
+    &#125;
+    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+    for (Class&lt;?&gt; clazz : classes) &#123;
+        Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
+        &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
+        for (Method method : methods) &#123;
+            if (introductionAwareMethodMatcher !&#x3D; null ?
+                    introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+                    methodMatcher.matches(method, targetClass)) &#123;
+                return true;
+            &#125;
+        &#125;
+    &#125;
+    return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>上面提到introductionAwareMethodMatcher来自于<code>AspectJExpressionPointcut</code>，我们进去接着看下</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public boolean matches(Method method, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+ obtainPointcutExpression();
+ ShadowMatch shadowMatch &#x3D; getTargetShadowMatch(method, targetClass);
+
+ &#x2F;&#x2F; Special handling for this, target, @this, @target, @annotation
+ &#x2F;&#x2F; in Spring - we can optimize since we know we have exactly this class,
+ &#x2F;&#x2F; and there will never be matching subclass at runtime.
+ if (shadowMatch.alwaysMatches()) &#123;
+  return true;
+ &#125;
+ else if (shadowMatch.neverMatches()) &#123;
+  return false;
+ &#125;
+ else &#123;
+  &#x2F;&#x2F; the maybe case
+  if (hasIntroductions) &#123;
+   return true;
+  &#125;
+  &#x2F;&#x2F; A match test returned maybe - if there are any subtype sensitive variables
+  &#x2F;&#x2F; involved in the test (this, target, at_this, at_target, at_annotation) then
+  &#x2F;&#x2F; we say this is not a match as in Spring there will never be a different
+  &#x2F;&#x2F; runtime subtype.
+  RuntimeTestWalker walker &#x3D; getRuntimeTestWalker(shadowMatch);
+  return (!walker.testsSubtypeSensitiveVars() || walker.testTargetInstanceOfResidue(targetClass));
+ &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>不用看逻辑了，Spring的注释已经写的很明白了。意思是有部分表达式不会涉及到<code>subclass at runtime</code>，Spring启动的时候就可以决定是否需要代理，但有部分表达式涉及<code>运行时子类</code>，这样Spring没有办法了，直接把所有bean都代理了，这样在运行时判断是否满足切点。<br>
+很不幸，使用了@target，你的所有bean都会被代理，这样也就回答了开始时网友们提到的问题。</p>
+<h2 id="深入分析">深入分析</h2>
+<blockquote>
+<p>造成这个问题的主要是Aspectj的语义，Aspectj使用织入，而Spring AOP采用的动态代理实现AOP。</p>
+<p>Aspectj和Spring AOP是AOP实现的两种方式，只是<code>@Aspectj</code>让Spring能使用Aspectj的语法</p>
+<p>既然使用Aspectj语法，<a href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
+</blockquote>
+<p>但我认为这块是有问题的</p>
+<ol>
+<li>注释中和Aspectj语法提到<code>this</code>,<code>target</code>,<code>args</code>,<code>@this</code>,<code>@target</code>,<code>@annotaiton</code>,<code>@args</code>都会使用在运行期判断，但实际测试只有<code>@target</code>，<code>@args</code>被特殊处理了。</li>
+<li><code>@target</code>的解析类是<code>ThisOrTargetAnnotationPointcut</code>，从类的名上看处理了<code>@this</code>和<code>@target</code>，但<code>@this</code>并不被Spring支持，应该是要处理<code>@this</code>的一些语义，但没实现完。从<code>@this</code>语义上看，和运行上下文是强相关的。</li>
+<li>从<a href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
+</a>和<a href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
+</ol>
+<p>最后，官方回复上看，似乎认定了是一个bug</p>
+<p><a href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
+<p><a href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring AOP</tag>
+        <tag>Aspect</tag>
+      </tags>
+  </entry>
+</search>
