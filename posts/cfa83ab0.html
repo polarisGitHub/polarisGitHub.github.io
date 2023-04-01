@@ -27,28 +27,28 @@
 <meta property="og:site_name" content="polaris_he">
 <meta property="og:description" content="RedisDesktopManager是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的源代码，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。 在此感谢RedisDesktopManager的作者Igor Malinovskiy">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/2.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/1.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/3.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/4.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/5.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/6.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/7.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/8.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/9.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/10.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/12.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/11.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/13.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/15.png">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/14.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/2.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/1.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/3.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/4.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/5.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/6.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/7.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/8.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/9.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/10.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/12.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/11.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/13.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/15.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/cfa83ab0/14.png">
 <meta property="article:published_time" content="2021-12-25T04:53:44.000Z">
 <meta property="article:modified_time" content="2023-03-28T14:20:24.458Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="redis">
 <meta property="article:tag" content="RDM">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://polarisgithub.github.io/posts/2.png">
+<meta name="twitter:image" content="https://polarisgithub.github.io/posts/cfa83ab0/2.png">
 
 
 <link rel="canonical" href="https://polarisgithub.github.io/posts/cfa83ab0.html">
@@ -332,25 +332,25 @@
 </ol>
 <blockquote>
 <p>完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
-<img src="./2.png" alt="项目概述"></p>
+<img src="/posts/cfa83ab0/2.png" alt="项目概述"></p>
 </blockquote>
 <h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
 <p><a target="_blank" rel="noopener" href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
-<img src="./1.png" alt="选择使用C++在线安装"></p>
+<img src="/posts/cfa83ab0/1.png" alt="选择使用C++在线安装"></p>
 <h3 id="下载QT5-15">下载QT5.15</h3>
 <p>Qt5.15只能在线安装，下载<a target="_blank" rel="noopener" href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
 <blockquote>
 <p>Qt下载时间很长，网不好容易断，请保持耐心</p>
 </blockquote>
-<p><img src="./3.png" alt="Qt安装"></p>
+<p><img src="/posts/cfa83ab0/3.png" alt="Qt安装"></p>
 <h3 id="Python-3-9-9">Python 3.9.9</h3>
 <p>下载<a target="_blank" rel="noopener" href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
 <ul>
 <li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
 </ul>
-<p><img src="./4.png" alt="Python安装"><br>
-<img src="./5.png" alt="Python安装"><br>
-<img src="./6.png" alt="Python安装"></p>
+<p><img src="/posts/cfa83ab0/4.png" alt="Python安装"><br>
+<img src="/posts/cfa83ab0/5.png" alt="Python安装"><br>
+<img src="/posts/cfa83ab0/6.png" alt="Python安装"></p>
 <h3 id="Cmake">Cmake</h3>
 <p>下载<a target="_blank" rel="noopener" href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
 <h3 id="nuget">nuget</h3>
@@ -404,11 +404,11 @@ make</p>
 </blockquote>
 <ol>
 <li>Cmake生成编译文件<br>
-<img src="./7.png" alt="cmake"></li>
+<img src="/posts/cfa83ab0/7.png" alt="cmake"></li>
 <li>用VS2022打开<code>LZ4.sln</code><br>
-<img src="./8.png" alt="cmake"></li>
+<img src="/posts/cfa83ab0/8.png" alt="cmake"></li>
 <li>编译<br>
-<img src="./9.png" alt="cmake"></li>
+<img src="/posts/cfa83ab0/9.png" alt="cmake"></li>
 </ol>
 <h3 id="zstd编译">zstd编译</h3>
 <p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
@@ -444,13 +444,13 @@ make</p>
 <h3 id="编译">编译</h3>
 <ol>
 <li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
-<img src="./10.png" alt="qt工程"></li>
+<img src="/posts/cfa83ab0/10.png" alt="qt工程"></li>
 <li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
-<img src="./12.png" alt="发布更新"></li>
+<img src="/posts/cfa83ab0/12.png" alt="发布更新"></li>
 <li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
-<img src="./11.png" alt="发布更新"></li>
+<img src="/posts/cfa83ab0/11.png" alt="发布更新"></li>
 <li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
-<img src="./13.png" alt="发布更新"></li>
+<img src="/posts/cfa83ab0/13.png" alt="发布更新"></li>
 </ol>
 <h3 id="打包">打包</h3>
 <p>现在在<code>bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
@@ -474,8 +474,8 @@ make</p>
 <p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
 <ol>
 <li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
-<img src="./15.png" alt="nsi"><br>
-<img src="./14.png" alt="nsi"></li>
+<img src="/posts/cfa83ab0/15.png" alt="nsi"><br>
+<img src="/posts/cfa83ab0/14.png" alt="nsi"></li>
 </ol>
 </li>
 <li>

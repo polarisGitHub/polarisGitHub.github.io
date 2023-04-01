@@ -27,14 +27,14 @@
 <meta property="og:site_name" content="polaris_he">
 <meta property="og:description" content="本文源码redis5.0.12 跳表的定义在server.h中，实现在t_zset.c  跳表是个很神奇的数据结构，简单但效率高，没有红黑树复杂，却有O(logn)的查找效率。其实我觉得只有右儿子的B+树和跳表挺类似的，都是多级索引来达到O(logn)的效率。 redis中，只有有序集合zset使用了跳表">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/skiplist.svg">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/7b62b471/skiplist.svg">
 <meta property="article:published_time" content="2021-05-02T01:43:22.000Z">
 <meta property="article:modified_time" content="2023-03-28T14:20:24.463Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="redis源码">
 <meta property="article:tag" content="redis数据结构">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://polarisgithub.github.io/posts/skiplist.svg">
+<meta name="twitter:image" content="https://polarisgithub.github.io/posts/7b62b471/skiplist.svg">
 
 
 <link rel="canonical" href="https://polarisgithub.github.io/posts/7b62b471.html">
@@ -326,7 +326,7 @@ typedef struct zskiplist &#123;
     int level;
 &#125; zskiplist;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <p>下图为跳表数据结构的图例<br>
-<img src="./skiplist.svg" alt="跳表数据结构"></p>
+<img src="/posts/7b62b471/skiplist.svg" alt="跳表数据结构"></p>
 <h2 id="skipList操作">skipList操作</h2>
 <h3 id="创建">创建</h3>
 <p>跳表的创建比较简单，只是分配的空间和初始化数据。需要注意的是，redis5跳表中的level现在已经默认为64层，而不是网上老版本的32层了。</p>

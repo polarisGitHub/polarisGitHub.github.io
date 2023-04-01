@@ -27,14 +27,14 @@
 <meta property="og:site_name" content="polaris_he">
 <meta property="og:description" content="本文基于Spring Boot 2.4.5  AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对AspectJ的语法也讲解很多了。但对@target和@within都讲解的很模糊，能找到的说明一般都是：  我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。 对于被@target注解的子类，若">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="https://polarisgithub.github.io/posts/1.jpg">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/2ced797/1.jpg">
 <meta property="article:published_time" content="2021-04-15T15:50:30.000Z">
 <meta property="article:modified_time" content="2023-03-28T14:20:24.465Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="Spring AOP">
 <meta property="article:tag" content="Aspect">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://polarisgithub.github.io/posts/1.jpg">
+<meta name="twitter:image" content="https://polarisgithub.github.io/posts/2ced797/1.jpg">
 
 
 <link rel="canonical" href="https://polarisgithub.github.io/posts/2ced797.html">
@@ -347,7 +347,7 @@ public class RouteAspect &#123;
 <p>看吧，这就是惊喜。加了个毫无关联的@target，就冒一个空指针出来了。</p>
 <h2 id="分析">分析</h2>
 <p>先不管三七二十一，打个断点再说。一看这下好家伙，这个类被代理了，代理类上面自然没有anntation。<br>
-<img src="./1.jpg" alt="代码"><br>
+<img src="/posts/2ced797/1.jpg" alt="代码"><br>
 现在问题来了，为什么会被代理呢？<br>
 如果你对Spring比较熟悉，可以定位到AOP发生代理的位置<br>
 <code>AbstractAutoProxyCreator.wrapIfNecessary(Object bean, String beanName, Object cacheKey)</code></p>
