@@ -30,7 +30,7 @@
 <meta property="og:image" content="https://polarisgithub.github.io/posts/BeanFactory.svg">
 <meta property="og:image" content="https://polarisgithub.github.io/posts/DefaultListableBeanFactory.svg">
 <meta property="article:published_time" content="2023-03-26T04:16:25.000Z">
-<meta property="article:modified_time" content="2023-03-28T14:20:24.457Z">
+<meta property="article:modified_time" content="2023-04-01T05:57:22.363Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="Spring IOC">
 <meta name="twitter:card" content="summary">
@@ -93,7 +93,7 @@
 
 
 <nav class="site-nav">
-  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li><li class="menu-item menu-item-sitemap"><a href="/sitemap.xml" rel="section"><i class="fa fa-sitemap fa-fw"></i>站点地图 | sitemap</a></li>
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
       <li class="menu-item menu-item-search">
         <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索 | search
         </a>
@@ -144,7 +144,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#BeanFactory"><span class="nav-number">1.1.</span> <span class="nav-text">BeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ListableBeanFactory"><span class="nav-number">1.2.</span> <span class="nav-text">ListableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HierarchicalBeanFactory"><span class="nav-number">1.3.</span> <span class="nav-text">HierarchicalBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableBeanFactory"><span class="nav-number">1.4.</span> <span class="nav-text">ConfigurableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AutowireCapableBeanFactory"><span class="nav-number">1.5.</span> <span class="nav-text">AutowireCapableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableListableBeanFactory"><span class="nav-number">1.6.</span> <span class="nav-text">ConfigurableListableBeanFactory</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#StaticListableBeanFactory"><span class="nav-number">2.</span> <span class="nav-text">StaticListableBeanFactory</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DefaultListableBeanFactory"><span class="nav-number">3.</span> <span class="nav-text">DefaultListableBeanFactory</span></a></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E8%A8%80"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#BeanFactory"><span class="nav-number">1.1.</span> <span class="nav-text">BeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ListableBeanFactory"><span class="nav-number">1.2.</span> <span class="nav-text">ListableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HierarchicalBeanFactory"><span class="nav-number">1.3.</span> <span class="nav-text">HierarchicalBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AutowireCapableBeanFactory"><span class="nav-number">1.4.</span> <span class="nav-text">AutowireCapableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableBeanFactory"><span class="nav-number">1.5.</span> <span class="nav-text">ConfigurableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableListableBeanFactory"><span class="nav-number">1.6.</span> <span class="nav-text">ConfigurableListableBeanFactory</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#StaticListableBeanFactory"><span class="nav-number">2.</span> <span class="nav-text">StaticListableBeanFactory</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DefaultListableBeanFactory"><span class="nav-number">3.</span> <span class="nav-text">DefaultListableBeanFactory</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -241,7 +241,7 @@
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2023-03-28 22:20:24" itemprop="dateModified" datetime="2023-03-28T22:20:24+08:00">2023-03-28</time>
+      <time title="修改时间：2023-04-01 13:57:22" itemprop="dateModified" datetime="2023-04-01T13:57:22+08:00">2023-04-01</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -267,14 +267,14 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>1.2k</span>
+      <span>2k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
         <i class="far fa-clock"></i>
       </span>
       <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>4 分钟</span>
+      <span>7 分钟</span>
     </span>
 </div>
 
@@ -317,14 +317,14 @@
 <p>BeanFactory顾名思义，作为Bean的工厂，是IOC中绝对核心，也是Bean工厂中最单纯的</p>
 <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanFactory &#123;
 
-    &#x2F;**
+  &#x2F;**
     * 工厂bean的特有前缀
     * 所有FactoryBean的名称都以&amp;开头
     * 所有以&amp;开头的bean都被认为是FactoryBean
     *&#x2F;
     String FACTORY_BEAN_PREFIX &#x3D; &quot;&amp;&quot;;
 
-    &#x2F;**
+   &#x2F;**
     * 从BeanFactory中获取一个Bean，
     * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
     * 注意，BeanFactory的方法只能获取到一个bean
@@ -338,25 +338,25 @@
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType);
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType);
 
-    &#x2F;**
+   &#x2F;**
     * 判断是否包含特定name的bean
     * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
     *&#x2F;
     boolean containsBean(String name);
 
-    &#x2F;**
+  &#x2F;**
     * 判断给定bean是Singleton还是Prototype
     *&#x2F;
     boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
     boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
 
-    &#x2F;**
+   &#x2F;**
     * 判断给定bean是否和特定的type匹配
     *&#x2F;
     boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
     boolean isTypeMatch(String name, Class&lt;?&gt; typeToMatch) throws NoSuchBeanDefinitionException;
     
-    &#x2F;**
+   &#x2F;**
     * 获取给定bean的type是什么
     *&#x2F;
     @Nullable
@@ -401,7 +401,7 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType, boolean allowEagerInit);
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType, boolean allowEagerInit);
 
-    &#x2F;**
+   &#x2F;**
     * 提供了更丰富的获取bean的手段，但对手动注册的bean不能获取
     * 可以一次获取满足条件的一系列bean
     * 可以控制bean获取是否要延迟加载
@@ -429,23 +429,232 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
 </ul>
 <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface HierarchicalBeanFactory extends BeanFactory &#123;
 
-     &#x2F;**
-      * 获取父BeanFactory
-      *&#x2F;
+   &#x2F;**
+    * 获取父BeanFactory
+    *&#x2F;
     @Nullable
     BeanFactory getParentBeanFactory();
 
-    &#x2F;**
-      * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
-      *&#x2F;
+   &#x2F;**
+    * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
+    *&#x2F;
     boolean containsLocalBean(String name);
 &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
 <h3 id="AutowireCapableBeanFactory">AutowireCapableBeanFactory</h3>
+<p>AutowireCapableBeanFactory类如其名，可以提供依赖注入能力<br>
+这里有个很好的扩展设计</p>
+<blockquote>
+<p>通常Spring会管理所有bean创建、依赖注入过程<br>
+对于和三方框架集成时，有些对象可能不受Spring管理，这个时候就可以使用AutowireCapableBeanFactory来单独处理这些对象，来享受Spring体系提供的能力<br>
+<code>ApplicationContext</code>返回的就是AutowireCapableBeanFactory</p>
+</blockquote>
+  <pre class="line-numbers language-java" data-language="java"><code class="language-java">AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException;<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AutowireCapableBeanFactory extends BeanFactory &#123;
+
+   &#x2F;**
+    * 自动注入相关枚举
+    *&#x2F;
+   int AUTOWIRE_NO &#x3D; 0;
+   int AUTOWIRE_BY_NAME &#x3D; 1;
+   int AUTOWIRE_BY_TYPE &#x3D; 2;
+   int AUTOWIRE_CONSTRUCTOR &#x3D; 3;
+   @Deprecated
+   int AUTOWIRE_AUTODETECT &#x3D; 4;
+
+   &#x2F;**
+    * 约定俗成
+    * 以.ORIGINAL结尾的beanName，获取bean时会返回最原始的bean，而不会返回代理对象等
+    *&#x2F;
+   String ORIGINAL_INSTANCE_SUFFIX &#x3D; &quot;.ORIGINAL&quot;;
+
+   &#x2F;**
+    * 创建bean
+    *&#x2F;
+   &lt;T&gt; T createBean(Class&lt;T&gt; beanClass) throws BeansException;
+   Object createBean(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
+
+   &#x2F;**
+    * 装配，注入
+    *&#x2F;
+   void autowireBean(Object existingBean) throws BeansException;
+   Object autowire(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
+   void autowireBeanProperties(Object existingBean, int autowireMode, boolean dependencyCheck)
+           throws BeansException;
+
+   Object configureBean(Object existingBean, String beanName) throws BeansException;
+   void applyBeanPropertyValues(Object existingBean, String beanName) throws BeansException;
+
+   &#x2F;**
+    * 初始化bean
+    *&#x2F;
+   Object initializeBean(Object existingBean, String beanName) throws BeansException;
+   Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName)
+           throws BeansException;
+   Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName)
+           throws BeansException;
+
+   &#x2F;**
+    * 销毁bean
+    *&#x2F;
+   void destroyBean(Object existingBean);
+
+
+   &#x2F;**
+    * 解析注入点
+    *&#x2F;
+   &lt;T&gt; NamedBeanHolder&lt;T&gt; resolveNamedBean(Class&lt;T&gt; requiredType) throws BeansException;
+   Object resolveBeanByName(String name, DependencyDescriptor descriptor) throws BeansException;
+   @Nullable
+   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName) throws BeansException;
+   @Nullable
+   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+                               @Nullable Set&lt;String&gt; autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException;
+
+   &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<p>相比上面的BeanFactory，ConfigurableBeanFactory提供了对BeanFactory的能力，该接口一共提供了40多个方法，对BeanFactory提供全方位配置能力</p>
+<p>ConfigurableBeanFactory中定义了两个常见的常量，<code>singleton</code>，<code>prototype</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, SingletonBeanRegistry &#123;
+    &#x2F;&#x2F; 单例
+    String SCOPE_SINGLETON &#x3D; &quot;singleton&quot;;
+    &#x2F;&#x2F; 多实例
+    String SCOPE_PROTOTYPE &#x3D; &quot;prototype&quot;;
+
+    &#x2F;**
+     * 设置父BeanFacotry，提供分层能力
+     *&#x2F;
+    void setParentBeanFactory(BeanFactory parentBeanFactory) throws IllegalStateException;
+
+    &#x2F;**
+     * ClassLoader相关
+     *&#x2F;
+    void setBeanClassLoader(@Nullable ClassLoader beanClassLoader);
+    @Nullable
+    ClassLoader getBeanClassLoader();
+
+    &#x2F;**
+     * 临时ClassLoader，和LoadTimeWaving有关
+     *&#x2F;
+    void setTempClassLoader(@Nullable ClassLoader tempClassLoader);
+    @Nullable
+    ClassLoader getTempClassLoader();
+
+    &#x2F;**
+     * 是否缓存BeanDefinition，如果需要热加载bean，需要将缓存关闭
+     *&#x2F;
+    void setCacheBeanMetadata(boolean cacheBeanMetadata);
+    boolean isCacheBeanMetadata();
+
+    &#x2F;**
+     * EL表达式解析器相关，默认为SpEL
+     *&#x2F;
+    void setBeanExpressionResolver(@Nullable BeanExpressionResolver resolver);
+    @Nullable
+    BeanExpressionResolver getBeanExpressionResolver();
+
+    &#x2F;**
+     * Spring类型转换相关
+     * XML时代主力PropertyEditor，TypeConverter配合PropertyEditor一起使用
+     * ConversionService是后续继任者
+     *
+     *&#x2F;
+    void setConversionService(@Nullable ConversionService conversionService);
+    @Nullable
+    ConversionService getConversionService();
+    void addPropertyEditorRegistrar(PropertyEditorRegistrar registrar);
+    void registerCustomEditor(Class&lt;?&gt; requiredType, Class&lt;? extends PropertyEditor&gt; propertyEditorClass);
+    void copyRegisteredEditorsTo(PropertyEditorRegistry registry);
+    void setTypeConverter(TypeConverter typeConverter);
+    TypeConverter getTypeConverter();
+
+    &#x2F;**
+     * 属性解析器，用于解析$&#123;&#125;、#&#123;&#125;属性
+     *&#x2F;
+    void addEmbeddedValueResolver(StringValueResolver valueResolver);
+    boolean hasEmbeddedValueResolver();
+    @Nullable
+    String resolveEmbeddedValue(String value);
+
+    &#x2F;**
+     * 大名鼎鼎bean后置处理器
+     *&#x2F;
+    void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
+    int getBeanPostProcessorCount();
+
+    &#x2F;**
+     * 注册scope
+     * 除了常见的singleton和prototype
+     * spring还提供了request，session等
+     *&#x2F;
+    void registerScope(String scopeName, Scope scope);
+    String[] getRegisteredScopeNames();
+    @Nullable
+    Scope getRegisteredScope(String scopeName);
+
+    &#x2F;**
+     * 提供ApplicationStartup
+     *&#x2F;
+    void setApplicationStartup(ApplicationStartup applicationStartup);
+    ApplicationStartup getApplicationStartup();
+
+    &#x2F;**
+     * 获取java安全许可
+     *&#x2F;
+    AccessControlContext getAccessControlContext();
+
+    &#x2F;**
+     * Copy ConfigurableBeanFactory
+     *&#x2F;
+    void copyConfigurationFrom(ConfigurableBeanFactory otherFactory);
+
+    &#x2F;**
+     * 别名相关
+     *&#x2F;
+    void registerAlias(String beanName, String alias) throws BeanDefinitionStoreException;
+    void resolveAliases(StringValueResolver valueResolver);
+
+    &#x2F;**
+     * 合并并创建RootBeanDefinition
+     *&#x2F;
+    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 判断是否工厂bean
+     *&#x2F;
+    boolean isFactoryBean(String name) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * bean是否在创建中
+     *&#x2F;
+    void setCurrentlyInCreation(String beanName, boolean inCreation);
+    boolean isCurrentlyInCreation(String beanName);
+
+    &#x2F;**
+     * bean依赖相关
+     *&#x2F;
+    void registerDependentBean(String beanName, String dependentBeanName);
+    String[] getDependentBeans(String beanName);
+    String[] getDependenciesForBean(String beanName);
+
+    &#x2F;**
+     * bean销毁相关
+     *&#x2F;
+    void destroyBean(String beanName, Object beanInstance);
+    void destroyScopedBean(String beanName);
+    void destroySingletons();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从接口定义看，ConfigurableBeanFactory一共提供了<code>40</code>个方法，这些方法涉及多个领域，丰富了BeanFactory的能力</p>
 <h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
 <h2 id="StaticListableBeanFactory">StaticListableBeanFactory</h2>
 <h2 id="DefaultListableBeanFactory">DefaultListableBeanFactory</h2>
-<p><img src="./DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
+<p>DefaultListableBeanFactory是Spring唯一正牌BeanFactory，所有Spring组件都是用的DefaultListableBeanFactory，后续会有一系列文章逐步拆解DefaultListableBeanFactory的各种功能<br>
+从依赖图上可以看出，DefaultListableBeanFactory在实现了上文提到的所有接口的同时，还实现了<code>BeanDefinitionRegistry</code>用于bean的注册<br>
+同时在依赖图上还可以看到两个重点虚拟类，这为后面拆解DefaultListableBeanFactory提供了路径</p>
+<ol>
+<li>AbstractBeanFactory</li>
+<li>AbstractAutowireCapableBeanFactory</li>
+</ol>
+<p><img src="DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
 
     </div>
 
@@ -498,13 +707,13 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
     <span class="post-meta-item-icon">
       <i class="fa fa-chart-line"></i>
     </span>
-    <span title="站点总字数">17k</span>
+    <span title="站点总字数">18k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">57 分钟</span>
+    <span title="站点阅读时长">1:01</span>
   </span>
 </div>
 <div class="busuanzi-count">

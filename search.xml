@@ -35,14 +35,14 @@
 <p>BeanFactory顾名思义，作为Bean的工厂，是IOC中绝对核心，也是Bean工厂中最单纯的</p>
 <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanFactory &#123;
 
-    &#x2F;**
+  &#x2F;**
     * 工厂bean的特有前缀
     * 所有FactoryBean的名称都以&amp;开头
     * 所有以&amp;开头的bean都被认为是FactoryBean
     *&#x2F;
     String FACTORY_BEAN_PREFIX &#x3D; &quot;&amp;&quot;;
 
-    &#x2F;**
+   &#x2F;**
     * 从BeanFactory中获取一个Bean，
     * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
     * 注意，BeanFactory的方法只能获取到一个bean
@@ -56,25 +56,25 @@
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType);
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType);
 
-    &#x2F;**
+   &#x2F;**
     * 判断是否包含特定name的bean
     * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
     *&#x2F;
     boolean containsBean(String name);
 
-    &#x2F;**
+  &#x2F;**
     * 判断给定bean是Singleton还是Prototype
     *&#x2F;
     boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
     boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
 
-    &#x2F;**
+   &#x2F;**
     * 判断给定bean是否和特定的type匹配
     *&#x2F;
     boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
     boolean isTypeMatch(String name, Class&lt;?&gt; typeToMatch) throws NoSuchBeanDefinitionException;
     
-    &#x2F;**
+   &#x2F;**
     * 获取给定bean的type是什么
     *&#x2F;
     @Nullable
@@ -119,7 +119,7 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType, boolean allowEagerInit);
     &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType, boolean allowEagerInit);
 
-    &#x2F;**
+   &#x2F;**
     * 提供了更丰富的获取bean的手段，但对手动注册的bean不能获取
     * 可以一次获取满足条件的一系列bean
     * 可以控制bean获取是否要延迟加载
@@ -147,29 +147,423 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
 </ul>
 <pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface HierarchicalBeanFactory extends BeanFactory &#123;
 
-     &#x2F;**
-      * 获取父BeanFactory
-      *&#x2F;
+   &#x2F;**
+    * 获取父BeanFactory
+    *&#x2F;
     @Nullable
     BeanFactory getParentBeanFactory();
 
-    &#x2F;**
-      * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
-      *&#x2F;
+   &#x2F;**
+    * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
+    *&#x2F;
     boolean containsLocalBean(String name);
 &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
 <h3 id="AutowireCapableBeanFactory">AutowireCapableBeanFactory</h3>
+<p>AutowireCapableBeanFactory类如其名，可以提供依赖注入能力<br>
+这里有个很好的扩展设计</p>
+<blockquote>
+<p>通常Spring会管理所有bean创建、依赖注入过程<br>
+对于和三方框架集成时，有些对象可能不受Spring管理，这个时候就可以使用AutowireCapableBeanFactory来单独处理这些对象，来享受Spring体系提供的能力<br>
+<code>ApplicationContext</code>返回的就是AutowireCapableBeanFactory</p>
+</blockquote>
+  <pre class="line-numbers language-java" data-language="java"><code class="language-java">AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException;<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AutowireCapableBeanFactory extends BeanFactory &#123;
+
+   &#x2F;**
+    * 自动注入相关枚举
+    *&#x2F;
+   int AUTOWIRE_NO &#x3D; 0;
+   int AUTOWIRE_BY_NAME &#x3D; 1;
+   int AUTOWIRE_BY_TYPE &#x3D; 2;
+   int AUTOWIRE_CONSTRUCTOR &#x3D; 3;
+   @Deprecated
+   int AUTOWIRE_AUTODETECT &#x3D; 4;
+
+   &#x2F;**
+    * 约定俗成
+    * 以.ORIGINAL结尾的beanName，获取bean时会返回最原始的bean，而不会返回代理对象等
+    *&#x2F;
+   String ORIGINAL_INSTANCE_SUFFIX &#x3D; &quot;.ORIGINAL&quot;;
+
+   &#x2F;**
+    * 创建bean
+    *&#x2F;
+   &lt;T&gt; T createBean(Class&lt;T&gt; beanClass) throws BeansException;
+   Object createBean(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
+
+   &#x2F;**
+    * 装配，注入
+    *&#x2F;
+   void autowireBean(Object existingBean) throws BeansException;
+   Object autowire(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
+   void autowireBeanProperties(Object existingBean, int autowireMode, boolean dependencyCheck)
+           throws BeansException;
+
+   Object configureBean(Object existingBean, String beanName) throws BeansException;
+   void applyBeanPropertyValues(Object existingBean, String beanName) throws BeansException;
+
+   &#x2F;**
+    * 初始化bean
+    *&#x2F;
+   Object initializeBean(Object existingBean, String beanName) throws BeansException;
+   Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName)
+           throws BeansException;
+   Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName)
+           throws BeansException;
+
+   &#x2F;**
+    * 销毁bean
+    *&#x2F;
+   void destroyBean(Object existingBean);
+
+
+   &#x2F;**
+    * 解析注入点
+    *&#x2F;
+   &lt;T&gt; NamedBeanHolder&lt;T&gt; resolveNamedBean(Class&lt;T&gt; requiredType) throws BeansException;
+   Object resolveBeanByName(String name, DependencyDescriptor descriptor) throws BeansException;
+   @Nullable
+   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName) throws BeansException;
+   @Nullable
+   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+                               @Nullable Set&lt;String&gt; autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException;
+
+   &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<p>相比上面的BeanFactory，ConfigurableBeanFactory提供了对BeanFactory的能力，该接口一共提供了40多个方法，对BeanFactory提供全方位配置能力</p>
+<p>ConfigurableBeanFactory中定义了两个常见的常量，<code>singleton</code>，<code>prototype</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, SingletonBeanRegistry &#123;
+    &#x2F;&#x2F; 单例
+    String SCOPE_SINGLETON &#x3D; &quot;singleton&quot;;
+    &#x2F;&#x2F; 多实例
+    String SCOPE_PROTOTYPE &#x3D; &quot;prototype&quot;;
+
+    &#x2F;**
+     * 设置父BeanFacotry，提供分层能力
+     *&#x2F;
+    void setParentBeanFactory(BeanFactory parentBeanFactory) throws IllegalStateException;
+
+    &#x2F;**
+     * ClassLoader相关
+     *&#x2F;
+    void setBeanClassLoader(@Nullable ClassLoader beanClassLoader);
+    @Nullable
+    ClassLoader getBeanClassLoader();
+
+    &#x2F;**
+     * 临时ClassLoader，和LoadTimeWaving有关
+     *&#x2F;
+    void setTempClassLoader(@Nullable ClassLoader tempClassLoader);
+    @Nullable
+    ClassLoader getTempClassLoader();
+
+    &#x2F;**
+     * 是否缓存BeanDefinition，如果需要热加载bean，需要将缓存关闭
+     *&#x2F;
+    void setCacheBeanMetadata(boolean cacheBeanMetadata);
+    boolean isCacheBeanMetadata();
+
+    &#x2F;**
+     * EL表达式解析器相关，默认为SpEL
+     *&#x2F;
+    void setBeanExpressionResolver(@Nullable BeanExpressionResolver resolver);
+    @Nullable
+    BeanExpressionResolver getBeanExpressionResolver();
+
+    &#x2F;**
+     * Spring类型转换相关
+     * XML时代主力PropertyEditor，TypeConverter配合PropertyEditor一起使用
+     * ConversionService是后续继任者
+     *
+     *&#x2F;
+    void setConversionService(@Nullable ConversionService conversionService);
+    @Nullable
+    ConversionService getConversionService();
+    void addPropertyEditorRegistrar(PropertyEditorRegistrar registrar);
+    void registerCustomEditor(Class&lt;?&gt; requiredType, Class&lt;? extends PropertyEditor&gt; propertyEditorClass);
+    void copyRegisteredEditorsTo(PropertyEditorRegistry registry);
+    void setTypeConverter(TypeConverter typeConverter);
+    TypeConverter getTypeConverter();
+
+    &#x2F;**
+     * 属性解析器，用于解析$&#123;&#125;、#&#123;&#125;属性
+     *&#x2F;
+    void addEmbeddedValueResolver(StringValueResolver valueResolver);
+    boolean hasEmbeddedValueResolver();
+    @Nullable
+    String resolveEmbeddedValue(String value);
+
+    &#x2F;**
+     * 大名鼎鼎bean后置处理器
+     *&#x2F;
+    void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
+    int getBeanPostProcessorCount();
+
+    &#x2F;**
+     * 注册scope
+     * 除了常见的singleton和prototype
+     * spring还提供了request，session等
+     *&#x2F;
+    void registerScope(String scopeName, Scope scope);
+    String[] getRegisteredScopeNames();
+    @Nullable
+    Scope getRegisteredScope(String scopeName);
+
+    &#x2F;**
+     * 提供ApplicationStartup
+     *&#x2F;
+    void setApplicationStartup(ApplicationStartup applicationStartup);
+    ApplicationStartup getApplicationStartup();
+
+    &#x2F;**
+     * 获取java安全许可
+     *&#x2F;
+    AccessControlContext getAccessControlContext();
+
+    &#x2F;**
+     * Copy ConfigurableBeanFactory
+     *&#x2F;
+    void copyConfigurationFrom(ConfigurableBeanFactory otherFactory);
+
+    &#x2F;**
+     * 别名相关
+     *&#x2F;
+    void registerAlias(String beanName, String alias) throws BeanDefinitionStoreException;
+    void resolveAliases(StringValueResolver valueResolver);
+
+    &#x2F;**
+     * 合并并创建RootBeanDefinition
+     *&#x2F;
+    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 判断是否工厂bean
+     *&#x2F;
+    boolean isFactoryBean(String name) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * bean是否在创建中
+     *&#x2F;
+    void setCurrentlyInCreation(String beanName, boolean inCreation);
+    boolean isCurrentlyInCreation(String beanName);
+
+    &#x2F;**
+     * bean依赖相关
+     *&#x2F;
+    void registerDependentBean(String beanName, String dependentBeanName);
+    String[] getDependentBeans(String beanName);
+    String[] getDependenciesForBean(String beanName);
+
+    &#x2F;**
+     * bean销毁相关
+     *&#x2F;
+    void destroyBean(String beanName, Object beanInstance);
+    void destroyScopedBean(String beanName);
+    void destroySingletons();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从接口定义看，ConfigurableBeanFactory一共提供了<code>40</code>个方法，这些方法涉及多个领域，丰富了BeanFactory的能力</p>
 <h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
 <h2 id="StaticListableBeanFactory">StaticListableBeanFactory</h2>
 <h2 id="DefaultListableBeanFactory">DefaultListableBeanFactory</h2>
-<p><img src="./DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
+<p>DefaultListableBeanFactory是Spring唯一正牌BeanFactory，所有Spring组件都是用的DefaultListableBeanFactory，后续会有一系列文章逐步拆解DefaultListableBeanFactory的各种功能<br>
+从依赖图上可以看出，DefaultListableBeanFactory在实现了上文提到的所有接口的同时，还实现了<code>BeanDefinitionRegistry</code>用于bean的注册<br>
+同时在依赖图上还可以看到两个重点虚拟类，这为后面拆解DefaultListableBeanFactory提供了路径</p>
+<ol>
+<li>AbstractBeanFactory</li>
+<li>AbstractAutowireCapableBeanFactory</li>
+</ol>
+<p><img src="DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
 ]]></content>
       <categories>
         <category>Spring</category>
       </categories>
       <tags>
         <tag>Spring IOC</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>MockMvc对form/multipart支持的问题</title>
+    <url>/posts/ddf27974.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
+</blockquote>
+<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
+这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
+<blockquote>
+<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="场景">场景</h2>
+<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
+复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
+@Setter
+@ToString
+public class UploadEntity &#123;
+    private String code;
+    private MultipartFile file;
+&#125;
+@PostMapping(&quot;&#x2F;upload&quot;)
+public String upload(UploadEntity file)&#123;
+ return file.toString();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这段代码使用postman来提交是没有任何问题的。<br>
+<img src="./1.jpg" alt="示例"><br>
+但我们使用MockMvc来写test case呢？</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
+public void test() throws Exception &#123;
+    mockMvc.perform(
+            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
+                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+    ).andDo(MockMvcResultHandlers.print());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
+           Status &#x3D; 200
+    Error message &#x3D; null
+          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
+     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
+             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
+    Forwarded URL &#x3D; null
+   Redirected URL &#x3D; null
+          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="分析">分析</h2>
+<p>现在进入代码跟踪环节😄<br>
+从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
+    try &#123;
+        Collection&lt;Part&gt; parts &#x3D; request.getParts();
+        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
+        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
+        for (Part part : parts) &#123;
+            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
+            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
+            String filename &#x3D; disposition.getFilename();
+            if (filename !&#x3D; null) &#123;
+                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
+                    filename &#x3D; MimeDelegate.decode(filename);
+                &#125;
+                files.add(part.getName(), new StandardMultipartFile(part, filename));
+            &#125;
+            else &#123;
+                this.multipartParameterNames.add(part.getName());
+            &#125;
+        &#125;
+        setMultipartFiles(files);
+    &#125;
+    catch (Throwable ex) &#123;
+        handleParseFailure(ex);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Return a collection of all uploaded Parts.
+ *
+ * @return A collection of all uploaded Parts.
+ * @throws IOException
+ *             if an I&#x2F;O error occurs
+ * @throws IllegalStateException
+ *             if size limits are exceeded or no multipart configuration is
+ *             provided
+ * @throws ServletException
+ *             if the request is not multipart&#x2F;form-data
+ * @since Servlet 3.0
+ *&#x2F;
+public Collection&lt;Part&gt; getParts() throws IOException,
+        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
+<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
+<blockquote>
+<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
+the string value of the part will also be available via the getParameter /<br>
+getParameterValues methods on HttpServletRequest, using the name of the part.</p>
+</blockquote>
+<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Enumeration&lt;String&gt; getParameterNames() &#123;
+ if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
+  initializeMultipart();
+ &#125;
+ if (this.multipartParameterNames.isEmpty()) &#123;
+  return super.getParameterNames();
+ &#125;
+  
+ &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
+ &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
+ Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
+ Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
+ while (paramEnum.hasMoreElements()) &#123;
+  paramNames.add(paramEnum.nextElement());
+ &#125;
+ paramNames.addAll(this.multipartParameterNames);
+ return Collections.enumeration(paramNames);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="修复方法">修复方法</h2>
+<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
+    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
+    this.files.forEach(request::addFile);
+    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
+        request.addPart(part);
+        try &#123;
+            MultipartFile file &#x3D; this.asMultipartFile(part);
+            if (file !&#x3D; null) &#123;
+                request.addFile(file);
+            &#125; else &#123;
+                String value &#x3D; this.toParameterValue(part);
+                if (value !&#x3D; null) &#123;
+                    request.addParameter(part.getName(), this.toParameterValue(part));
+                &#125;
+            &#125;
+        &#125; catch (IOException var5) &#123;
+            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
+        &#125;
+    &#125;);
+    return request;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
+<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
+代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
+    ApplicationPart part &#x3D; new ApplicationPart(item, location);
+    parts.add(part);
+    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
+        String name &#x3D; part.getName();
+        String value &#x3D; null;
+        try &#123;
+            value &#x3D; part.getString(charset.name());
+        &#125; catch (UnsupportedEncodingException uee) &#123;
+            &#x2F;&#x2F; Not possible
+        &#125;
+        if (maxPostSize &gt;&#x3D; 0) &#123;
+            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
+            &#x2F;&#x2F; accurate but close enough.
+            postSize +&#x3D; name.getBytes(charset).length;
+            if (value !&#x3D; null) &#123;
+                &#x2F;&#x2F; Equals sign
+                postSize++;
+                &#x2F;&#x2F; Value length
+                postSize +&#x3D; part.getSize();
+            &#125;
+            &#x2F;&#x2F; Value separator
+            postSize++;
+            if (postSize &gt; maxPostSize) &#123;
+                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
+                throw new IllegalStateException(sm.getString(
+                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
+            &#125;
+        &#125;
+        parameters.addParameter(name, value);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring Test</tag>
+        <tag>Servlet3.0</tag>
       </tags>
   </entry>
   <entry>
@@ -1190,434 +1584,6 @@ public class MongoAutoConfiguration &#123;
       </tags>
   </entry>
   <entry>
-    <title>MockMvc对form/multipart支持的问题</title>
-    <url>/posts/ddf27974.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
-</blockquote>
-<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
-这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
-<blockquote>
-<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
-</blockquote>
-<span id="more"></span>
-<h2 id="场景">场景</h2>
-<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
-复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
-@Setter
-@ToString
-public class UploadEntity &#123;
-    private String code;
-    private MultipartFile file;
-&#125;
-@PostMapping(&quot;&#x2F;upload&quot;)
-public String upload(UploadEntity file)&#123;
- return file.toString();
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这段代码使用postman来提交是没有任何问题的。<br>
-<img src="./1.jpg" alt="示例"><br>
-但我们使用MockMvc来写test case呢？</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
-public void test() throws Exception &#123;
-    mockMvc.perform(
-            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
-                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-    ).andDo(MockMvcResultHandlers.print());
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
-           Status &#x3D; 200
-    Error message &#x3D; null
-          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
-     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
-             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
-    Forwarded URL &#x3D; null
-   Redirected URL &#x3D; null
-          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="分析">分析</h2>
-<p>现在进入代码跟踪环节😄<br>
-从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
-    try &#123;
-        Collection&lt;Part&gt; parts &#x3D; request.getParts();
-        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
-        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
-        for (Part part : parts) &#123;
-            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
-            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
-            String filename &#x3D; disposition.getFilename();
-            if (filename !&#x3D; null) &#123;
-                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
-                    filename &#x3D; MimeDelegate.decode(filename);
-                &#125;
-                files.add(part.getName(), new StandardMultipartFile(part, filename));
-            &#125;
-            else &#123;
-                this.multipartParameterNames.add(part.getName());
-            &#125;
-        &#125;
-        setMultipartFiles(files);
-    &#125;
-    catch (Throwable ex) &#123;
-        handleParseFailure(ex);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
- * Return a collection of all uploaded Parts.
- *
- * @return A collection of all uploaded Parts.
- * @throws IOException
- *             if an I&#x2F;O error occurs
- * @throws IllegalStateException
- *             if size limits are exceeded or no multipart configuration is
- *             provided
- * @throws ServletException
- *             if the request is not multipart&#x2F;form-data
- * @since Servlet 3.0
- *&#x2F;
-public Collection&lt;Part&gt; getParts() throws IOException,
-        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
-<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
-<blockquote>
-<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
-the string value of the part will also be available via the getParameter /<br>
-getParameterValues methods on HttpServletRequest, using the name of the part.</p>
-</blockquote>
-<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public Enumeration&lt;String&gt; getParameterNames() &#123;
- if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
-  initializeMultipart();
- &#125;
- if (this.multipartParameterNames.isEmpty()) &#123;
-  return super.getParameterNames();
- &#125;
-  
- &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
- &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
- Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
- Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
- while (paramEnum.hasMoreElements()) &#123;
-  paramNames.add(paramEnum.nextElement());
- &#125;
- paramNames.addAll(this.multipartParameterNames);
- return Collections.enumeration(paramNames);
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="修复方法">修复方法</h2>
-<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
-    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
-    this.files.forEach(request::addFile);
-    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
-        request.addPart(part);
-        try &#123;
-            MultipartFile file &#x3D; this.asMultipartFile(part);
-            if (file !&#x3D; null) &#123;
-                request.addFile(file);
-            &#125; else &#123;
-                String value &#x3D; this.toParameterValue(part);
-                if (value !&#x3D; null) &#123;
-                    request.addParameter(part.getName(), this.toParameterValue(part));
-                &#125;
-            &#125;
-        &#125; catch (IOException var5) &#123;
-            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
-        &#125;
-    &#125;);
-    return request;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
-<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
-代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
-    ApplicationPart part &#x3D; new ApplicationPart(item, location);
-    parts.add(part);
-    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
-        String name &#x3D; part.getName();
-        String value &#x3D; null;
-        try &#123;
-            value &#x3D; part.getString(charset.name());
-        &#125; catch (UnsupportedEncodingException uee) &#123;
-            &#x2F;&#x2F; Not possible
-        &#125;
-        if (maxPostSize &gt;&#x3D; 0) &#123;
-            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
-            &#x2F;&#x2F; accurate but close enough.
-            postSize +&#x3D; name.getBytes(charset).length;
-            if (value !&#x3D; null) &#123;
-                &#x2F;&#x2F; Equals sign
-                postSize++;
-                &#x2F;&#x2F; Value length
-                postSize +&#x3D; part.getSize();
-            &#125;
-            &#x2F;&#x2F; Value separator
-            postSize++;
-            if (postSize &gt; maxPostSize) &#123;
-                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
-                throw new IllegalStateException(sm.getString(
-                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
-            &#125;
-        &#125;
-        parameters.addParameter(name, value);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring Test</tag>
-        <tag>Servlet3.0</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>intset整数集合</title>
-    <url>/posts/c03ff393.html</url>
-    <content><![CDATA[<blockquote>
-<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
-</blockquote>
-<p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
-<span id="more"></span>
-<h2 id="数据结构">数据结构</h2>
-<p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct __attribute__ ((__packed__)) sdshdr64 &#123;
-    uint64_t len; &#x2F;* used *&#x2F;
-    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
-    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
-    char buf[];
-&#125;;
-
-typedef struct intset &#123;
-    uint32_t encoding;
-    uint32_t length;
-    int8_t contents[];
-&#125; intset;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<blockquote>
-<p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
-</blockquote>
-<p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define INTSET_ENC_INT16 (sizeof(int16_t))
-#define INTSET_ENC_INT32 (sizeof(int32_t))
-#define INTSET_ENC_INT64 (sizeof(int64_t))
-
-&#x2F;* Return the required encoding for the provided value. *&#x2F;
-static uint8_t _intsetValueEncoding(int64_t v) &#123;
-    if (v &lt; INT32_MIN || v &gt; INT32_MAX)
-        return INTSET_ENC_INT64;
-    else if (v &lt; INT16_MIN || v &gt; INT16_MAX)
-        return INTSET_ENC_INT32;
-    else
-        return INTSET_ENC_INT16;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<table>
-<thead>
-<tr>
-<th>encoding枚举</th>
-<th>值</th>
-<th>含义</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>INTSET_ENC_INT16</td>
-<td>2 sizeof(int16_t)</td>
-<td>intset值范围是 [-2<sup>16</sup>,2<sup>16</sup>-1]</td>
-</tr>
-<tr>
-<td>INTSET_ENC_INT32</td>
-<td>4 sizeof(int32_t)</td>
-<td>intset值范围是 [-2<sup>32</sup>,-2<sup>16</sup>) $\bigcup$ (2<sup>16</sup>-1,2<sup>32</sup>-1]</td>
-</tr>
-<tr>
-<td>INTSET_ENC_INT64</td>
-<td>8 sizeof(int64_t)</td>
-<td>intset值范围是 [-2<sup>64</sup>,-2<sup>32</sup>) $\bigcup$ (2<sup>32</sup>-1,2<sup>64</sup>-1]</td>
-</tr>
-</tbody>
-</table>
-<h2 id="操作">操作</h2>
-<p>整数集合没有什么复杂的操作</p>
-<h3 id="创建">创建</h3>
-<p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetNew(void) &#123;
-    intset *is &#x3D; zmalloc(sizeof(intset));
-    is-&gt;encoding &#x3D; intrev32ifbe(INTSET_ENC_INT16);
-    is-&gt;length &#x3D; 0;
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<blockquote>
-<p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
-在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
-</blockquote>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#if (BYTE_ORDER &#x3D;&#x3D; LITTLE_ENDIAN)
-#define memrev16ifbe(p) ((void)(0))
-#define memrev32ifbe(p) ((void)(0))
-#define memrev64ifbe(p) ((void)(0))
-#define intrev16ifbe(v) (v)
-#define intrev32ifbe(v) (v)
-#define intrev64ifbe(v) (v)
-#else
-#define memrev16ifbe(p) memrev16(p)
-#define memrev32ifbe(p) memrev32(p)
-#define memrev64ifbe(p) memrev64(p)
-#define intrev16ifbe(v) intrev16(v)
-#define intrev32ifbe(v) intrev32(v)
-#define intrev64ifbe(v) intrev64(v)
-#endif<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="查找">查找</h3>
-<p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
-<ol>
-<li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
-<li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Search for the position of &quot;value&quot;. Return 1 when the value was found and
- * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when
- * the value is not present in the intset and sets &quot;pos&quot; to the position
- * where &quot;value&quot; can be inserted. *&#x2F;
-static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) &#123;
-    int min &#x3D; 0, max &#x3D; intrev32ifbe(is-&gt;length)-1, mid &#x3D; -1;
-    int64_t cur &#x3D; -1;
-
-    &#x2F;* The value can never be found when the set is empty *&#x2F;
-    if (intrev32ifbe(is-&gt;length) &#x3D;&#x3D; 0) &#123;
-        if (pos) *pos &#x3D; 0;
-        return 0;
-    &#125; else &#123;
-        &#x2F;* Check for the case where we know we cannot find the value,
-         * but do know the insert position. *&#x2F;
-        if (value &gt; _intsetGet(is,max)) &#123;
-            if (pos) *pos &#x3D; intrev32ifbe(is-&gt;length);
-            return 0;
-        &#125; else if (value &lt; _intsetGet(is,0)) &#123;
-            if (pos) *pos &#x3D; 0;
-            return 0;
-        &#125;
-    &#125;
-
-    while(max &gt;&#x3D; min) &#123;
-        mid &#x3D; ((unsigned int)min + (unsigned int)max) &gt;&gt; 1;
-        cur &#x3D; _intsetGet(is,mid);
-        if (value &gt; cur) &#123;
-            min &#x3D; mid+1;
-        &#125; else if (value &lt; cur) &#123;
-            max &#x3D; mid-1;
-        &#125; else &#123;
-            break;
-        &#125;
-    &#125;
-
-    if (value &#x3D;&#x3D; cur) &#123;
-        if (pos) *pos &#x3D; mid;
-        return 1;
-    &#125; else &#123;
-        if (pos) *pos &#x3D; min;
-        return 0;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="新增">新增</h3>
-<h4 id="add">add</h4>
-<p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
-<ol>
-<li>判断插入的value是否超过当前集合能处理的范围（encoding），如果超过了，需要<code>升级</code>整数数组。</li>
-<li>根据value查找该元素是否在intset中，intsetSearch中传入了一个参数pos，pos表示了search之后可以插入元素的位置<br>
-2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
-2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetAdd(intset *is, int64_t value, uint8_t *success) &#123;
-    uint8_t valenc &#x3D; _intsetValueEncoding(value);
-    uint32_t pos;
-    if (success) *success &#x3D; 1;
-
-    &#x2F;* Upgrade encoding if necessary. If we need to upgrade, we know that
-     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),
-     * because it lies outside the range of existing values. *&#x2F;
-    if (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;
-        &#x2F;* This always succeeds, so we don&#39;t need to curry *success. *&#x2F;
-        return intsetUpgradeAndAdd(is,value);
-    &#125; else &#123;
-        &#x2F;* Abort if the value is already present in the set.
-         * This call will populate &quot;pos&quot; with the right position to insert
-         * the value when it cannot be found. *&#x2F;
-        if (intsetSearch(is,value,&amp;pos)) &#123;
-            if (success) *success &#x3D; 0;
-            return is;
-        &#125;
-
-        is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
-        if (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+1);
-    &#125;
-
-    _intsetSet(is,pos,value);
-    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h4 id="upgradeAndAdd">upgradeAndAdd</h4>
-<p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
-<blockquote>
-<p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
-代码中使用了<code>prepend</code>这个变量来处理</p>
-</blockquote>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">static intset *intsetUpgradeAndAdd(intset *is, int64_t value) &#123;
-    uint8_t curenc &#x3D; intrev32ifbe(is-&gt;encoding);
-    uint8_t newenc &#x3D; _intsetValueEncoding(value);
-    int length &#x3D; intrev32ifbe(is-&gt;length);
-    int prepend &#x3D; value &lt; 0 ? 1 : 0;
-
-    &#x2F;* First set new encoding and resize *&#x2F;
-    is-&gt;encoding &#x3D; intrev32ifbe(newenc);
-    is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
-
-    &#x2F;* Upgrade back-to-front so we don&#39;t overwrite values.
-     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty
-     * space at either the beginning or the end of the intset. *&#x2F;
-    while(length--)
-        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));
-
-    &#x2F;* Set the value at the beginning or the end. *&#x2F;
-    if (prepend)
-        _intsetSet(is,0,value);
-    else
-        _intsetSet(is,intrev32ifbe(is-&gt;length),value);
-    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="删除">删除</h2>
-<p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetRemove(intset *is, int64_t value, int *success) &#123;
-    uint8_t valenc &#x3D; _intsetValueEncoding(value);
-    uint32_t pos;
-    if (success) *success &#x3D; 0;
-
-    if (valenc &lt;&#x3D; intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;
-        uint32_t len &#x3D; intrev32ifbe(is-&gt;length);
-
-        &#x2F;* We know we can delete *&#x2F;
-        if (success) *success &#x3D; 1;
-
-        &#x2F;* Overwrite value with tail and update length *&#x2F;
-        if (pos &lt; (len-1)) intsetMoveTail(is,pos+1,pos);
-        is &#x3D; intsetResize(is,len-1);
-        is-&gt;length &#x3D; intrev32ifbe(len-1);
-    &#125;
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="总结">总结</h2>
-<p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
-]]></content>
-      <categories>
-        <category>redis</category>
-      </categories>
-      <tags>
-        <tag>redis源码</tag>
-        <tag>redis数据结构</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>dict字典</title>
     <url>/posts/4fcbe513.html</url>
     <content><![CDATA[<blockquote>
@@ -1994,6 +1960,249 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
 </tr>
 </tbody>
 </table>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>intset整数集合</title>
+    <url>/posts/c03ff393.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
+</blockquote>
+<p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
+<span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct __attribute__ ((__packed__)) sdshdr64 &#123;
+    uint64_t len; &#x2F;* used *&#x2F;
+    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+
+typedef struct intset &#123;
+    uint32_t encoding;
+    uint32_t length;
+    int8_t contents[];
+&#125; intset;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
+</blockquote>
+<p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define INTSET_ENC_INT16 (sizeof(int16_t))
+#define INTSET_ENC_INT32 (sizeof(int32_t))
+#define INTSET_ENC_INT64 (sizeof(int64_t))
+
+&#x2F;* Return the required encoding for the provided value. *&#x2F;
+static uint8_t _intsetValueEncoding(int64_t v) &#123;
+    if (v &lt; INT32_MIN || v &gt; INT32_MAX)
+        return INTSET_ENC_INT64;
+    else if (v &lt; INT16_MIN || v &gt; INT16_MAX)
+        return INTSET_ENC_INT32;
+    else
+        return INTSET_ENC_INT16;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<table>
+<thead>
+<tr>
+<th>encoding枚举</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>INTSET_ENC_INT16</td>
+<td>2 sizeof(int16_t)</td>
+<td>intset值范围是 [-2<sup>16</sup>,2<sup>16</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT32</td>
+<td>4 sizeof(int32_t)</td>
+<td>intset值范围是 [-2<sup>32</sup>,-2<sup>16</sup>) $\bigcup$ (2<sup>16</sup>-1,2<sup>32</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT64</td>
+<td>8 sizeof(int64_t)</td>
+<td>intset值范围是 [-2<sup>64</sup>,-2<sup>32</sup>) $\bigcup$ (2<sup>32</sup>-1,2<sup>64</sup>-1]</td>
+</tr>
+</tbody>
+</table>
+<h2 id="操作">操作</h2>
+<p>整数集合没有什么复杂的操作</p>
+<h3 id="创建">创建</h3>
+<p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetNew(void) &#123;
+    intset *is &#x3D; zmalloc(sizeof(intset));
+    is-&gt;encoding &#x3D; intrev32ifbe(INTSET_ENC_INT16);
+    is-&gt;length &#x3D; 0;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
+在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#if (BYTE_ORDER &#x3D;&#x3D; LITTLE_ENDIAN)
+#define memrev16ifbe(p) ((void)(0))
+#define memrev32ifbe(p) ((void)(0))
+#define memrev64ifbe(p) ((void)(0))
+#define intrev16ifbe(v) (v)
+#define intrev32ifbe(v) (v)
+#define intrev64ifbe(v) (v)
+#else
+#define memrev16ifbe(p) memrev16(p)
+#define memrev32ifbe(p) memrev32(p)
+#define memrev64ifbe(p) memrev64(p)
+#define intrev16ifbe(v) intrev16(v)
+#define intrev32ifbe(v) intrev32(v)
+#define intrev64ifbe(v) intrev64(v)
+#endif<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="查找">查找</h3>
+<p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
+<ol>
+<li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
+<li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Search for the position of &quot;value&quot;. Return 1 when the value was found and
+ * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when
+ * the value is not present in the intset and sets &quot;pos&quot; to the position
+ * where &quot;value&quot; can be inserted. *&#x2F;
+static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) &#123;
+    int min &#x3D; 0, max &#x3D; intrev32ifbe(is-&gt;length)-1, mid &#x3D; -1;
+    int64_t cur &#x3D; -1;
+
+    &#x2F;* The value can never be found when the set is empty *&#x2F;
+    if (intrev32ifbe(is-&gt;length) &#x3D;&#x3D; 0) &#123;
+        if (pos) *pos &#x3D; 0;
+        return 0;
+    &#125; else &#123;
+        &#x2F;* Check for the case where we know we cannot find the value,
+         * but do know the insert position. *&#x2F;
+        if (value &gt; _intsetGet(is,max)) &#123;
+            if (pos) *pos &#x3D; intrev32ifbe(is-&gt;length);
+            return 0;
+        &#125; else if (value &lt; _intsetGet(is,0)) &#123;
+            if (pos) *pos &#x3D; 0;
+            return 0;
+        &#125;
+    &#125;
+
+    while(max &gt;&#x3D; min) &#123;
+        mid &#x3D; ((unsigned int)min + (unsigned int)max) &gt;&gt; 1;
+        cur &#x3D; _intsetGet(is,mid);
+        if (value &gt; cur) &#123;
+            min &#x3D; mid+1;
+        &#125; else if (value &lt; cur) &#123;
+            max &#x3D; mid-1;
+        &#125; else &#123;
+            break;
+        &#125;
+    &#125;
+
+    if (value &#x3D;&#x3D; cur) &#123;
+        if (pos) *pos &#x3D; mid;
+        return 1;
+    &#125; else &#123;
+        if (pos) *pos &#x3D; min;
+        return 0;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="新增">新增</h3>
+<h4 id="add">add</h4>
+<p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
+<ol>
+<li>判断插入的value是否超过当前集合能处理的范围（encoding），如果超过了，需要<code>升级</code>整数数组。</li>
+<li>根据value查找该元素是否在intset中，intsetSearch中传入了一个参数pos，pos表示了search之后可以插入元素的位置<br>
+2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
+2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetAdd(intset *is, int64_t value, uint8_t *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 1;
+
+    &#x2F;* Upgrade encoding if necessary. If we need to upgrade, we know that
+     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),
+     * because it lies outside the range of existing values. *&#x2F;
+    if (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;
+        &#x2F;* This always succeeds, so we don&#39;t need to curry *success. *&#x2F;
+        return intsetUpgradeAndAdd(is,value);
+    &#125; else &#123;
+        &#x2F;* Abort if the value is already present in the set.
+         * This call will populate &quot;pos&quot; with the right position to insert
+         * the value when it cannot be found. *&#x2F;
+        if (intsetSearch(is,value,&amp;pos)) &#123;
+            if (success) *success &#x3D; 0;
+            return is;
+        &#125;
+
+        is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+        if (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+1);
+    &#125;
+
+    _intsetSet(is,pos,value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="upgradeAndAdd">upgradeAndAdd</h4>
+<p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
+<blockquote>
+<p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
+代码中使用了<code>prepend</code>这个变量来处理</p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static intset *intsetUpgradeAndAdd(intset *is, int64_t value) &#123;
+    uint8_t curenc &#x3D; intrev32ifbe(is-&gt;encoding);
+    uint8_t newenc &#x3D; _intsetValueEncoding(value);
+    int length &#x3D; intrev32ifbe(is-&gt;length);
+    int prepend &#x3D; value &lt; 0 ? 1 : 0;
+
+    &#x2F;* First set new encoding and resize *&#x2F;
+    is-&gt;encoding &#x3D; intrev32ifbe(newenc);
+    is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+
+    &#x2F;* Upgrade back-to-front so we don&#39;t overwrite values.
+     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty
+     * space at either the beginning or the end of the intset. *&#x2F;
+    while(length--)
+        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));
+
+    &#x2F;* Set the value at the beginning or the end. *&#x2F;
+    if (prepend)
+        _intsetSet(is,0,value);
+    else
+        _intsetSet(is,intrev32ifbe(is-&gt;length),value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="删除">删除</h2>
+<p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetRemove(intset *is, int64_t value, int *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 0;
+
+    if (valenc &lt;&#x3D; intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;
+        uint32_t len &#x3D; intrev32ifbe(is-&gt;length);
+
+        &#x2F;* We know we can delete *&#x2F;
+        if (success) *success &#x3D; 1;
+
+        &#x2F;* Overwrite value with tail and update length *&#x2F;
+        if (pos &lt; (len-1)) intsetMoveTail(is,pos+1,pos);
+        is &#x3D; intsetResize(is,len-1);
+        is-&gt;length &#x3D; intrev32ifbe(len-1);
+    &#125;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="总结">总结</h2>
+<p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
 ]]></content>
       <categories>
         <category>redis</category>
