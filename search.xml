@@ -1,387 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>BeanFactory</title>
-    <url>/posts/f5f30183.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
-</blockquote>
-<p>BeanFactory，Spring IOC核心接口，承担了Bean管理的职责。本文来看看BeanFactory在Spring体系中是怎么发挥作用的</p>
-<span id="more"></span>
-<h2 id="前言">前言</h2>
-<p>从依赖图中可以看出，BeanFactory接口依赖相对简单</p>
-<p><img src="/posts/f5f30183/BeanFactory.svg" alt="BeanFactory"></p>
-<ul>
-<li><code>BeanFactory</code>是最底层的类，提供了简单的bean获取和bean信息获取的能力</li>
-<li>ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory继承BeanFactory，提供了更为高级的抽象
-<ul>
-<li><code>ListableBeanFactory</code>：可以一次获取多个bean</li>
-<li><code>HierarchicalBeanFactory</code>：提供获取父级BeanFactory能力</li>
-<li><code>AutowireCapableBeanFactory</code>：提供自动装配的能力</li>
-</ul>
-</li>
-<li><code>ConfigurableBeanFactory</code>继承了HierarchicalBeanFactory，为BeanFactory提供了BeanPostProcessor，依赖关系处理，手动注册bean等能力</li>
-<li><code>ConfigurableListableBeanFactory</code>：继承了ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory，提供高级管理能力，如：bean预初始化，BeanFactory冻结等</li>
-<li>Spring提供了四种BeanFactory的实现：XmlBeanFactory，SimpleJndiBeanFactory，StaticListableBeanFactory和DefaultListableBeanFactory
-<ul>
-<li><code>XmlBeanFactory</code>：继承于DefaultListableBeanFactory，官方已经不推荐使用，推荐使用DefaultListableBeanFactory</li>
-<li><code>SimpleJndiBeanFactory</code>：基于JNDI去加载bean，直接继承了BeanFactory，由于JNDI已经慢慢淡出的java体系，本文就不再分析该BeanFactory了</li>
-<li><code>StaticListableBeanFactory</code>：简单的BeanFactory实现，底层通过Map&lt;String,Object&gt;保存bean，只能手动添加bean</li>
-<li><code>DefaultListableBeanFactory</code>：spring种最核心的BeanFactory，Spring所有功能都是围绕该BeanFactory完成的，提供了完整的bean管理能力</li>
-</ul>
-</li>
-</ul>
-<h3 id="BeanFactory">BeanFactory</h3>
-<p>BeanFactory顾名思义，作为Bean的工厂，是IOC中绝对核心，也是Bean工厂中最单纯的</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanFactory &#123;
-
-  &#x2F;**
-    * 工厂bean的特有前缀
-    * 所有FactoryBean的名称都以&amp;开头
-    * 所有以&amp;开头的bean都被认为是FactoryBean
-    *&#x2F;
-    String FACTORY_BEAN_PREFIX &#x3D; &quot;&amp;&quot;;
-
-   &#x2F;**
-    * 从BeanFactory中获取一个Bean，
-    * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
-    * 注意，BeanFactory的方法只能获取到一个bean
-    * 如果有bean设置了Primary属性，优先获取，如果都没有，获取最后一个
-    *&#x2F;
-    Object getBean(String name) throws BeansException;
-    &lt;T&gt; T getBean(String name, Class&lt;T&gt; requiredType) throws BeansException;
-    Object getBean(String name, Object... args) throws BeansException;
-    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType) throws BeansException;
-    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType, Object... args) throws BeansException;
-    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType);
-    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType);
-
-   &#x2F;**
-    * 判断是否包含特定name的bean
-    * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
-    *&#x2F;
-    boolean containsBean(String name);
-
-  &#x2F;**
-    * 判断给定bean是Singleton还是Prototype
-    *&#x2F;
-    boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
-    boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
-
-   &#x2F;**
-    * 判断给定bean是否和特定的type匹配
-    *&#x2F;
-    boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
-    boolean isTypeMatch(String name, Class&lt;?&gt; typeToMatch) throws NoSuchBeanDefinitionException;
-    
-   &#x2F;**
-    * 获取给定bean的type是什么
-    *&#x2F;
-    @Nullable
-    Class&lt;?&gt; getType(String name) throws NoSuchBeanDefinitionException;
-    @Nullable
-    Class&lt;?&gt; getType(String name, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
-
-    &#x2F;**
-    * 获取bean的别名
-    *&#x2F;
-    String[] getAliases(String name);
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从接口定义中可以看出，BeanFactory提供以下能力</p>
-<ul>
-<li>定义了工厂bean的潜规则</li>
-<li>根据name或type获取bean</li>
-<li>获取bean作用域</li>
-<li>bean和特定type是否匹配</li>
-<li>获取bean别名</li>
-</ul>
-<p>从BeanFactory能力上看，只能一个一个获取对应信息<br>
-如果对应的BeanFactory有继承关系，所有对bean的查找都会查看父BeanFactory</p>
-<h3 id="ListableBeanFactory">ListableBeanFactory</h3>
-<p>ListableBeanFactory是Spring官方推荐使用的BeanFactory，毕竟Spring中唯一大量使用的BeanFactory叫做<code>DefaultListableBeanFactory</code><br>
-ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取多个bean的方法，但是还是有些细微的差别</p>
-<ul>
-<li>对可继承的BeanFactory，BeanFactory会去检测父BeanFactory，而ListableBeanFactory不会</li>
-<li>对通过<code>registerSingleton</code>手动加入的bean，BeanFactory的getBean方法可以获取到，而ListableBeanFactory中获取bean的方法均获取不到，</li>
-</ul>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ListableBeanFactory extends BeanFactory &#123;
-
-   &#x2F;**
-    * 检查当前容器的BeanDefinition
-    *&#x2F;
-    boolean containsBeanDefinition(String beanName);
-    int getBeanDefinitionCount();
-    String[] getBeanDefinitionNames();
-
-   &#x2F;**
-    * 获取bean，这里引入了延迟加载的概念
-    *&#x2F;
-    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType, boolean allowEagerInit);
-    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType, boolean allowEagerInit);
-
-   &#x2F;**
-    * 提供了更丰富的获取bean的手段，但对手动注册的bean不能获取
-    * 可以一次获取满足条件的一系列bean
-    * 可以控制bean获取是否要延迟加载
-    * 可以控制获取bean是否为singletons
-    *&#x2F;
-    String[] getBeanNamesForType(ResolvableType type);
-    String[] getBeanNamesForType(ResolvableType type, boolean includeNonSingletons, boolean allowEagerInit);
-    String[] getBeanNamesForType(@Nullable Class&lt;?&gt; type);
-    String[] getBeanNamesForType(@Nullable Class&lt;?&gt; type, boolean includeNonSingletons, boolean allowEagerInit);
-    &lt;T&gt; Map&lt;String, T&gt; getBeansOfType(@Nullable Class&lt;T&gt; type) throws BeansException;
-    &lt;T&gt; Map&lt;String, T&gt; getBeansOfType(@Nullable Class&lt;T&gt; type, boolean includeNonSingletons, boolean allowEagerInit) throws BeansException;
-    String[] getBeanNamesForAnnotation(Class&lt;? extends Annotation&gt; annotationType);
-    Map&lt;String, Object&gt; getBeansWithAnnotation(Class&lt;? extends Annotation&gt; annotationType) throws BeansException;
-    @Nullable
-    &lt;A extends Annotation&gt; A findAnnotationOnBean(String beanName, Class&lt;A&gt; annotationType) throws NoSuchBeanDefinitionException;
-    @Nullable
-    &lt;A extends Annotation&gt; A findAnnotationOnBean(String beanName, Class&lt;A&gt; annotationType, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="HierarchicalBeanFactory">HierarchicalBeanFactory</h3>
-<p>HierarchicalBeanFactory通过<code>getParentBeanFactory</code>引入了BeanFactory分层的思想，可以定义父子两个BeanFactory，两者相互不影响<br>
-这种分层思想在Spring MVC中发挥的淋漓尽致</p>
-<ul>
-<li>使用父容器控制数据访问等逻辑</li>
-<li>使用子容器控制视图层逻辑</li>
-</ul>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface HierarchicalBeanFactory extends BeanFactory &#123;
-
-   &#x2F;**
-    * 获取父BeanFactory
-    *&#x2F;
-    @Nullable
-    BeanFactory getParentBeanFactory();
-
-   &#x2F;**
-    * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
-    *&#x2F;
-    boolean containsLocalBean(String name);
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="AutowireCapableBeanFactory">AutowireCapableBeanFactory</h3>
-<p>AutowireCapableBeanFactory类如其名，可以提供依赖注入能力<br>
-这里有个很好的扩展设计</p>
-<blockquote>
-<p>通常Spring会管理所有bean创建、依赖注入过程<br>
-对于和三方框架集成时，有些对象可能不受Spring管理，这个时候就可以使用AutowireCapableBeanFactory来单独处理这些对象，来享受Spring体系提供的能力<br>
-<code>ApplicationContext</code>返回的就是AutowireCapableBeanFactory</p>
-</blockquote>
-  <pre class="line-numbers language-java" data-language="java"><code class="language-java">AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException;<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AutowireCapableBeanFactory extends BeanFactory &#123;
-
-   &#x2F;**
-    * 自动注入相关枚举
-    *&#x2F;
-   int AUTOWIRE_NO &#x3D; 0;
-   int AUTOWIRE_BY_NAME &#x3D; 1;
-   int AUTOWIRE_BY_TYPE &#x3D; 2;
-   int AUTOWIRE_CONSTRUCTOR &#x3D; 3;
-   @Deprecated
-   int AUTOWIRE_AUTODETECT &#x3D; 4;
-
-   &#x2F;**
-    * 约定俗成
-    * 以.ORIGINAL结尾的beanName，获取bean时会返回最原始的bean，而不会返回代理对象等
-    *&#x2F;
-   String ORIGINAL_INSTANCE_SUFFIX &#x3D; &quot;.ORIGINAL&quot;;
-
-   &#x2F;**
-    * 创建bean
-    *&#x2F;
-   &lt;T&gt; T createBean(Class&lt;T&gt; beanClass) throws BeansException;
-   Object createBean(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
-
-   &#x2F;**
-    * 装配，注入
-    *&#x2F;
-   void autowireBean(Object existingBean) throws BeansException;
-   Object autowire(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
-   void autowireBeanProperties(Object existingBean, int autowireMode, boolean dependencyCheck)
-           throws BeansException;
-
-   Object configureBean(Object existingBean, String beanName) throws BeansException;
-   void applyBeanPropertyValues(Object existingBean, String beanName) throws BeansException;
-
-   &#x2F;**
-    * 初始化bean
-    *&#x2F;
-   Object initializeBean(Object existingBean, String beanName) throws BeansException;
-   Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName)
-           throws BeansException;
-   Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName)
-           throws BeansException;
-
-   &#x2F;**
-    * 销毁bean
-    *&#x2F;
-   void destroyBean(Object existingBean);
-
-
-   &#x2F;**
-    * 解析注入点
-    *&#x2F;
-   &lt;T&gt; NamedBeanHolder&lt;T&gt; resolveNamedBean(Class&lt;T&gt; requiredType) throws BeansException;
-   Object resolveBeanByName(String name, DependencyDescriptor descriptor) throws BeansException;
-   @Nullable
-   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName) throws BeansException;
-   @Nullable
-   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
-                               @Nullable Set&lt;String&gt; autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException;
-
-   &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
-<p>相比上面的BeanFactory，ConfigurableBeanFactory提供了对BeanFactory的能力，该接口一共提供了40多个方法，对BeanFactory提供全方位配置能力</p>
-<p>ConfigurableBeanFactory中定义了两个常见的常量，<code>singleton</code>，<code>prototype</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, SingletonBeanRegistry &#123;
-    &#x2F;&#x2F; 单例
-    String SCOPE_SINGLETON &#x3D; &quot;singleton&quot;;
-    &#x2F;&#x2F; 多实例
-    String SCOPE_PROTOTYPE &#x3D; &quot;prototype&quot;;
-
-    &#x2F;**
-     * 设置父BeanFacotry，提供分层能力
-     *&#x2F;
-    void setParentBeanFactory(BeanFactory parentBeanFactory) throws IllegalStateException;
-
-    &#x2F;**
-     * ClassLoader相关
-     *&#x2F;
-    void setBeanClassLoader(@Nullable ClassLoader beanClassLoader);
-    @Nullable
-    ClassLoader getBeanClassLoader();
-
-    &#x2F;**
-     * 临时ClassLoader，和LoadTimeWaving有关
-     *&#x2F;
-    void setTempClassLoader(@Nullable ClassLoader tempClassLoader);
-    @Nullable
-    ClassLoader getTempClassLoader();
-
-    &#x2F;**
-     * 是否缓存BeanDefinition，如果需要热加载bean，需要将缓存关闭
-     *&#x2F;
-    void setCacheBeanMetadata(boolean cacheBeanMetadata);
-    boolean isCacheBeanMetadata();
-
-    &#x2F;**
-     * EL表达式解析器相关，默认为SpEL
-     *&#x2F;
-    void setBeanExpressionResolver(@Nullable BeanExpressionResolver resolver);
-    @Nullable
-    BeanExpressionResolver getBeanExpressionResolver();
-
-    &#x2F;**
-     * Spring类型转换相关
-     * XML时代主力PropertyEditor，TypeConverter配合PropertyEditor一起使用
-     * ConversionService是后续继任者
-     *
-     *&#x2F;
-    void setConversionService(@Nullable ConversionService conversionService);
-    @Nullable
-    ConversionService getConversionService();
-    void addPropertyEditorRegistrar(PropertyEditorRegistrar registrar);
-    void registerCustomEditor(Class&lt;?&gt; requiredType, Class&lt;? extends PropertyEditor&gt; propertyEditorClass);
-    void copyRegisteredEditorsTo(PropertyEditorRegistry registry);
-    void setTypeConverter(TypeConverter typeConverter);
-    TypeConverter getTypeConverter();
-
-    &#x2F;**
-     * 属性解析器，用于解析$&#123;&#125;、#&#123;&#125;属性
-     *&#x2F;
-    void addEmbeddedValueResolver(StringValueResolver valueResolver);
-    boolean hasEmbeddedValueResolver();
-    @Nullable
-    String resolveEmbeddedValue(String value);
-
-    &#x2F;**
-     * 大名鼎鼎bean后置处理器
-     *&#x2F;
-    void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
-    int getBeanPostProcessorCount();
-
-    &#x2F;**
-     * 注册scope
-     * 除了常见的singleton和prototype
-     * spring还提供了request，session等
-     *&#x2F;
-    void registerScope(String scopeName, Scope scope);
-    String[] getRegisteredScopeNames();
-    @Nullable
-    Scope getRegisteredScope(String scopeName);
-
-    &#x2F;**
-     * 提供ApplicationStartup
-     *&#x2F;
-    void setApplicationStartup(ApplicationStartup applicationStartup);
-    ApplicationStartup getApplicationStartup();
-
-    &#x2F;**
-     * 获取java安全许可
-     *&#x2F;
-    AccessControlContext getAccessControlContext();
-
-    &#x2F;**
-     * Copy ConfigurableBeanFactory
-     *&#x2F;
-    void copyConfigurationFrom(ConfigurableBeanFactory otherFactory);
-
-    &#x2F;**
-     * 别名相关
-     *&#x2F;
-    void registerAlias(String beanName, String alias) throws BeanDefinitionStoreException;
-    void resolveAliases(StringValueResolver valueResolver);
-
-    &#x2F;**
-     * 合并并创建RootBeanDefinition
-     *&#x2F;
-    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
-
-    &#x2F;**
-     * 判断是否工厂bean
-     *&#x2F;
-    boolean isFactoryBean(String name) throws NoSuchBeanDefinitionException;
-
-    &#x2F;**
-     * bean是否在创建中
-     *&#x2F;
-    void setCurrentlyInCreation(String beanName, boolean inCreation);
-    boolean isCurrentlyInCreation(String beanName);
-
-    &#x2F;**
-     * bean依赖相关
-     *&#x2F;
-    void registerDependentBean(String beanName, String dependentBeanName);
-    String[] getDependentBeans(String beanName);
-    String[] getDependenciesForBean(String beanName);
-
-    &#x2F;**
-     * bean销毁相关
-     *&#x2F;
-    void destroyBean(String beanName, Object beanInstance);
-    void destroyScopedBean(String beanName);
-    void destroySingletons();
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从接口定义看，ConfigurableBeanFactory一共提供了<code>40</code>个方法，这些方法涉及多个领域，丰富了BeanFactory的能力</p>
-<h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
-<h2 id="StaticListableBeanFactory">StaticListableBeanFactory</h2>
-<h2 id="DefaultListableBeanFactory">DefaultListableBeanFactory</h2>
-<p>DefaultListableBeanFactory是Spring唯一正牌BeanFactory，所有Spring组件都是用的DefaultListableBeanFactory，后续会有一系列文章逐步拆解DefaultListableBeanFactory的各种功能<br>
-从依赖图上可以看出，DefaultListableBeanFactory在实现了上文提到的所有接口的同时，还实现了<code>BeanDefinitionRegistry</code>用于bean的注册<br>
-同时在依赖图上还可以看到两个重点虚拟类，这为后面拆解DefaultListableBeanFactory提供了路径</p>
-<ol>
-<li>AbstractBeanFactory</li>
-<li>AbstractAutowireCapableBeanFactory</li>
-</ol>
-<p><img src="/posts/f5f30183/DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring IOC</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>MockMvc对form/multipart支持的问题</title>
     <url>/posts/ddf27974.html</url>
     <content><![CDATA[<blockquote>
@@ -564,203 +183,6 @@ public Enumeration&lt;String&gt; getParameterNames() &#123;
       <tags>
         <tag>Spring Test</tag>
         <tag>Servlet3.0</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RedisDesktopManager编译</title>
-    <url>/posts/cfa83ab0.html</url>
-    <content><![CDATA[<blockquote>
-<p><a href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
-在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
-</blockquote>
-<span id="more"></span>
-<h2 id="前言">前言</h2>
-<p><a href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
-<blockquote>
-<p>本次编译过程基于RedisDesktopManager（2021.10）</p>
-</blockquote>
-<h2 id="环境准备">环境准备</h2>
-<h3 id="系统">系统</h3>
-<blockquote>
-<p>Windows 10 21H2</p>
-</blockquote>
-<h3 id="git-clone">git clone</h3>
-<ol>
-<li>使用以下命令clone RedisDesktopManager的项目仓库
-<blockquote>
-<p>git clone --recursive <a href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
-</blockquote>
-</li>
-<li>需要注意submodule处理
-<ul>
-<li>RedisDesktopManager包含submodule，在3rdparty下</li>
-<li>submodule里面也包含submodule，如3rdparty/qredisclient/hiredis等</li>
-<li>需要使用--recursive递归clone</li>
-<li>如果没有使用--recursive来clone，需要人为保证submodule都down下来了</li>
-</ul>
-</li>
-</ol>
-<blockquote>
-<p>完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
-<img src="/posts/cfa83ab0/2.png" alt="项目概述"></p>
-</blockquote>
-<h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
-<p><a href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
-<img src="/posts/cfa83ab0/1.png" alt="选择使用C++在线安装"></p>
-<h3 id="下载QT5-15">下载QT5.15</h3>
-<p>Qt5.15只能在线安装，下载<a href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
-<blockquote>
-<p>Qt下载时间很长，网不好容易断，请保持耐心</p>
-</blockquote>
-<p><img src="/posts/cfa83ab0/3.png" alt="Qt安装"></p>
-<h3 id="Python-3-9-9">Python 3.9.9</h3>
-<p>下载<a href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
-<ul>
-<li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
-</ul>
-<p><img src="/posts/cfa83ab0/4.png" alt="Python安装"><br>
-<img src="/posts/cfa83ab0/5.png" alt="Python安装"><br>
-<img src="/posts/cfa83ab0/6.png" alt="Python安装"></p>
-<h3 id="Cmake">Cmake</h3>
-<p>下载<a href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
-<h3 id="nuget">nuget</h3>
-<p>下载<a href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
-<h2 id="Python依赖安装">Python依赖安装</h2>
-<p>使用以下命令安装Python依赖</p>
-<blockquote>
-<p>pip3 install -r src/py/requirements.txt</p>
-</blockquote>
-<p>如果出现git仓库SSL握手失败，可以将requirements中git的https协议换成git协议。</p>
-<ul>
-<li>原始requirements内容
-<blockquote>
-<p>bitstring<br>
-cbor<br>
-msgpack<br>
-git+<a href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
-git+<a href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
-python-lzf</p>
-</blockquote>
-</li>
-<li>替换后requirements内容
-<blockquote>
-<p>bitstring<br>
-cbor<br>
-msgpack<br>
-git+git://github.com/mrnom/phpserialize.git#egg=phpserialize<br>
-git+git://github.com/uglide/redis-rdb-tools#egg=rdbtools<br>
-python-lzf</p>
-</blockquote>
-</li>
-</ul>
-<h2 id="三方依赖编译">三方依赖编译</h2>
-<h3 id="准备工作">准备工作</h3>
-<h4 id="安装zlib">安装zlib</h4>
-<p>在<code>3rdparty</code>目录下，使用<code>nuget</code>安装zlib</p>
-<blockquote>
-<p>nuget install zlib-msvc14-x64 -Version 1.2.11.7795</p>
-</blockquote>
-<h4 id="hiredis在Windowns下编译修正">hiredis在Windowns下编译修正</h4>
-<p>在<code>3rdparty/qredisclient/3rdparty/hiredis</code>目录下，为<code>hirdis</code>打<code>patch</code></p>
-<blockquote>
-<p>git apply …/hiredis-win.patch</p>
-</blockquote>
-<h3 id="lz4编译">lz4编译</h3>
-<p>官方文档中已经给出了lz4的编译方法，只是Windows没有make命令，需要使用<code>VS</code>来替代make编译项目</p>
-<blockquote>
-<p>cd 3rdparty/lz4/build/cmake<br>
-cmake -DLZ4_BUNDLED_MODE=ON  .<br>
-make</p>
-</blockquote>
-<ol>
-<li>Cmake生成编译文件<br>
-<img src="/posts/cfa83ab0/7.png" alt="cmake"></li>
-<li>用VS2022打开<code>LZ4.sln</code><br>
-<img src="/posts/cfa83ab0/8.png" alt="cmake"></li>
-<li>编译<br>
-<img src="/posts/cfa83ab0/9.png" alt="cmake"></li>
-</ol>
-<h3 id="zstd编译">zstd编译</h3>
-<p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
-<ol>
-<li>执行cmake，执行目录为<code>3rdparty\zstd\build\cmake</code>
-<blockquote>
-<p>cmake ./</p>
-</blockquote>
-</li>
-<li>使用<code>4.2</code>同样的方法找到<code>zstd.sln</code>编译</li>
-</ol>
-<h3 id="snappy编译">snappy编译</h3>
-<p>官方Windows编译文档中同样没有提及\snappy。编译方式如下</p>
-<ol>
-<li>执行cmake，执行目录为<code>3rdparty\snappy\cmake</code>
-<blockquote>
-<p>cmake ./</p>
-</blockquote>
-</li>
-<li>使用<code>4.2</code>同样的方法找到<code>Snappy.sln</code>编译</li>
-<li>将目录<code>3rdparty\snappy\cmake\Release</code>拷贝到<code>3rdparty\snappy</code>下</li>
-</ol>
-<h3 id="brotli编译">brotli编译</h3>
-<ol>
-<li>执行cmake执行目录为<code>3rdparty\brotli</code>
-<blockquote>
-<p>cmake -DBUILD_SHARED_LIBS=OFF</p>
-</blockquote>
-</li>
-<li>使用<code>4.2</code>同样的方法找到<code>brotli.sln</code>编译</li>
-</ol>
-<h2 id="RedisDesktopManager编译">RedisDesktopManager编译</h2>
-<h3 id="编译">编译</h3>
-<ol>
-<li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
-<img src="/posts/cfa83ab0/10.png" alt="qt工程"></li>
-<li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
-<img src="/posts/cfa83ab0/12.png" alt="发布更新"></li>
-<li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
-<img src="/posts/cfa83ab0/11.png" alt="发布更新"></li>
-<li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
-<img src="/posts/cfa83ab0/13.png" alt="发布更新"></li>
-</ol>
-<h3 id="打包">打包</h3>
-<p>现在在<code>bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
-<ol>
-<li>
-<p>将<code>bin\windows\release\rdm.exe</code>拷贝到<code>build\windows\installer\resources</code>下</p>
-</li>
-<li>
-<p>为了提供Python运行环境，下载<a href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
-</li>
-<li>
-<p>执行以下命令</p>
-<blockquote>
-<p>C:\Qt\5.15.2\msvc2019_64\bin\windeployqt --release --qmldir C:\RedisDesktopManager\src\qml rdm.exe</p>
-</blockquote>
-</li>
-<li>
-<p>下载<a href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
-</li>
-<li>
-<p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
-<ol>
-<li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
-<img src="/posts/cfa83ab0/15.png" alt="nsi"><br>
-<img src="/posts/cfa83ab0/14.png" alt="nsi"></li>
-</ol>
-</li>
-<li>
-<p>等待nsis执行完毕后，当前目录就得到了安装包<code>rdm-2021.11.0.exe</code></p>
-</li>
-</ol>
-<h2 id="完结散花">完结散花</h2>
-<p><a href="./rdm-2021.10.0.exe">RedisDesktopManager2021.10 Windows 64bit 安装包</a></p>
-]]></content>
-      <categories>
-        <category>redis</category>
-      </categories>
-      <tags>
-        <tag>redis</tag>
-        <tag>RDM</tag>
       </tags>
   </entry>
   <entry>
@@ -1147,6 +569,203 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
       <tags>
         <tag>redis源码</tag>
         <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>RedisDesktopManager编译</title>
+    <url>/posts/cfa83ab0.html</url>
+    <content><![CDATA[<blockquote>
+<p><a href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
+在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p><a href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
+<blockquote>
+<p>本次编译过程基于RedisDesktopManager（2021.10）</p>
+</blockquote>
+<h2 id="环境准备">环境准备</h2>
+<h3 id="系统">系统</h3>
+<blockquote>
+<p>Windows 10 21H2</p>
+</blockquote>
+<h3 id="git-clone">git clone</h3>
+<ol>
+<li>使用以下命令clone RedisDesktopManager的项目仓库
+<blockquote>
+<p>git clone --recursive <a href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
+</blockquote>
+</li>
+<li>需要注意submodule处理
+<ul>
+<li>RedisDesktopManager包含submodule，在3rdparty下</li>
+<li>submodule里面也包含submodule，如3rdparty/qredisclient/hiredis等</li>
+<li>需要使用--recursive递归clone</li>
+<li>如果没有使用--recursive来clone，需要人为保证submodule都down下来了</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
+<img src="/posts/cfa83ab0/2.png" alt="项目概述"></p>
+</blockquote>
+<h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
+<p><a href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
+<img src="/posts/cfa83ab0/1.png" alt="选择使用C++在线安装"></p>
+<h3 id="下载QT5-15">下载QT5.15</h3>
+<p>Qt5.15只能在线安装，下载<a href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
+<blockquote>
+<p>Qt下载时间很长，网不好容易断，请保持耐心</p>
+</blockquote>
+<p><img src="/posts/cfa83ab0/3.png" alt="Qt安装"></p>
+<h3 id="Python-3-9-9">Python 3.9.9</h3>
+<p>下载<a href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
+<ul>
+<li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
+</ul>
+<p><img src="/posts/cfa83ab0/4.png" alt="Python安装"><br>
+<img src="/posts/cfa83ab0/5.png" alt="Python安装"><br>
+<img src="/posts/cfa83ab0/6.png" alt="Python安装"></p>
+<h3 id="Cmake">Cmake</h3>
+<p>下载<a href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
+<h3 id="nuget">nuget</h3>
+<p>下载<a href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
+<h2 id="Python依赖安装">Python依赖安装</h2>
+<p>使用以下命令安装Python依赖</p>
+<blockquote>
+<p>pip3 install -r src/py/requirements.txt</p>
+</blockquote>
+<p>如果出现git仓库SSL握手失败，可以将requirements中git的https协议换成git协议。</p>
+<ul>
+<li>原始requirements内容
+<blockquote>
+<p>bitstring<br>
+cbor<br>
+msgpack<br>
+git+<a href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
+git+<a href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
+python-lzf</p>
+</blockquote>
+</li>
+<li>替换后requirements内容
+<blockquote>
+<p>bitstring<br>
+cbor<br>
+msgpack<br>
+git+git://github.com/mrnom/phpserialize.git#egg=phpserialize<br>
+git+git://github.com/uglide/redis-rdb-tools#egg=rdbtools<br>
+python-lzf</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="三方依赖编译">三方依赖编译</h2>
+<h3 id="准备工作">准备工作</h3>
+<h4 id="安装zlib">安装zlib</h4>
+<p>在<code>3rdparty</code>目录下，使用<code>nuget</code>安装zlib</p>
+<blockquote>
+<p>nuget install zlib-msvc14-x64 -Version 1.2.11.7795</p>
+</blockquote>
+<h4 id="hiredis在Windowns下编译修正">hiredis在Windowns下编译修正</h4>
+<p>在<code>3rdparty/qredisclient/3rdparty/hiredis</code>目录下，为<code>hirdis</code>打<code>patch</code></p>
+<blockquote>
+<p>git apply …/hiredis-win.patch</p>
+</blockquote>
+<h3 id="lz4编译">lz4编译</h3>
+<p>官方文档中已经给出了lz4的编译方法，只是Windows没有make命令，需要使用<code>VS</code>来替代make编译项目</p>
+<blockquote>
+<p>cd 3rdparty/lz4/build/cmake<br>
+cmake -DLZ4_BUNDLED_MODE=ON  .<br>
+make</p>
+</blockquote>
+<ol>
+<li>Cmake生成编译文件<br>
+<img src="/posts/cfa83ab0/7.png" alt="cmake"></li>
+<li>用VS2022打开<code>LZ4.sln</code><br>
+<img src="/posts/cfa83ab0/8.png" alt="cmake"></li>
+<li>编译<br>
+<img src="/posts/cfa83ab0/9.png" alt="cmake"></li>
+</ol>
+<h3 id="zstd编译">zstd编译</h3>
+<p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\zstd\build\cmake</code>
+<blockquote>
+<p>cmake ./</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>zstd.sln</code>编译</li>
+</ol>
+<h3 id="snappy编译">snappy编译</h3>
+<p>官方Windows编译文档中同样没有提及\snappy。编译方式如下</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\snappy\cmake</code>
+<blockquote>
+<p>cmake ./</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>Snappy.sln</code>编译</li>
+<li>将目录<code>3rdparty\snappy\cmake\Release</code>拷贝到<code>3rdparty\snappy</code>下</li>
+</ol>
+<h3 id="brotli编译">brotli编译</h3>
+<ol>
+<li>执行cmake执行目录为<code>3rdparty\brotli</code>
+<blockquote>
+<p>cmake -DBUILD_SHARED_LIBS=OFF</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>brotli.sln</code>编译</li>
+</ol>
+<h2 id="RedisDesktopManager编译">RedisDesktopManager编译</h2>
+<h3 id="编译">编译</h3>
+<ol>
+<li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
+<img src="/posts/cfa83ab0/10.png" alt="qt工程"></li>
+<li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
+<img src="/posts/cfa83ab0/12.png" alt="发布更新"></li>
+<li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
+<img src="/posts/cfa83ab0/11.png" alt="发布更新"></li>
+<li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
+<img src="/posts/cfa83ab0/13.png" alt="发布更新"></li>
+</ol>
+<h3 id="打包">打包</h3>
+<p>现在在<code>bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
+<ol>
+<li>
+<p>将<code>bin\windows\release\rdm.exe</code>拷贝到<code>build\windows\installer\resources</code>下</p>
+</li>
+<li>
+<p>为了提供Python运行环境，下载<a href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
+</li>
+<li>
+<p>执行以下命令</p>
+<blockquote>
+<p>C:\Qt\5.15.2\msvc2019_64\bin\windeployqt --release --qmldir C:\RedisDesktopManager\src\qml rdm.exe</p>
+</blockquote>
+</li>
+<li>
+<p>下载<a href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
+</li>
+<li>
+<p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
+<ol>
+<li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
+<img src="/posts/cfa83ab0/15.png" alt="nsi"><br>
+<img src="/posts/cfa83ab0/14.png" alt="nsi"></li>
+</ol>
+</li>
+<li>
+<p>等待nsis执行完毕后，当前目录就得到了安装包<code>rdm-2021.11.0.exe</code></p>
+</li>
+</ol>
+<h2 id="完结散花">完结散花</h2>
+<p><a href="./rdm-2021.10.0.exe">RedisDesktopManager2021.10 Windows 64bit 安装包</a></p>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis</tag>
+        <tag>RDM</tag>
       </tags>
   </entry>
   <entry>
@@ -2475,6 +2094,60 @@ public class MongoAutoConfiguration &#123;
       </tags>
   </entry>
   <entry>
+    <title>ziplist压缩列表</title>
+    <url>/posts/2bd24f59.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
+</blockquote>
+<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
+<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
+<ul>
+<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
+<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
+<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
+ * to be very memory efficient. It stores both strings and integer values,
+ * where integers are encoded as actual integers instead of a series of
+ * characters. It allows push and pop operations on either side of the list
+ * in O(1) time. However, because every operation requires a reallocation of
+ * the memory used by the ziplist, the actual complexity is related to the
+ * amount of memory used by the ziplist.
+ * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+ <span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>和其他数据类型不一样，我们在<code>ziplist.h</code>中没有找到任何结构体的定义<br>
+我们在来看下创建ziplist的代码，好家伙，ziplist就是个一维数组</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new empty ziplist. *&#x2F;
+unsigned char *ziplistNew(void) &#123;
+    unsigned int bytes &#x3D; ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
+    unsigned char *zl &#x3D; zmalloc(bytes);
+    ZIPLIST_BYTES(zl) &#x3D; intrev32ifbe(bytes);
+    ZIPLIST_TAIL_OFFSET(zl) &#x3D; intrev32ifbe(ZIPLIST_HEADER_SIZE);
+    ZIPLIST_LENGTH(zl) &#x3D; 0;
+    zl[bytes-1] &#x3D; ZIP_END;
+    return zl;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们要回到<code>ziplist.h</code>中，官方很详细的写了ziplist的设计思路</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* ZIPLIST OVERALL LAYOUT
+* &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
+*
+* The general layout of the ziplist is as follows:
+*
+* &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; &lt;entry&gt; ... &lt;entry&gt; &lt;zlend&gt;
+* ………………
+* &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>skiplist跳表</title>
     <url>/posts/7b62b471.html</url>
     <content><![CDATA[<blockquote>
@@ -2688,57 +2361,485 @@ span的作用在这里就体现了，它记录了下一个节点的距离，没�
       </tags>
   </entry>
   <entry>
-    <title>ziplist压缩列表</title>
-    <url>/posts/2bd24f59.html</url>
+    <title>初见BeanFactory</title>
+    <url>/posts/f5f30183.html</url>
     <content><![CDATA[<blockquote>
-<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
+<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
 </blockquote>
-<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
-<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
+<p>BeanFactory，Spring IOC核心接口，承担了Bean管理的职责。本文来看看BeanFactory在Spring体系中是怎么发挥作用的</p>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p>从依赖图中可以看出，BeanFactory接口依赖相对简单</p>
+<p><img src="/posts/f5f30183/BeanFactory.svg" alt="BeanFactory"></p>
 <ul>
-<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
-<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
-<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
+<li><code>BeanFactory</code>是最底层的类，提供了简单的bean获取和bean信息获取的能力</li>
+<li>ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory继承BeanFactory，提供了更为高级的抽象
+<ul>
+<li><code>ListableBeanFactory</code>：可以一次获取多个bean</li>
+<li><code>HierarchicalBeanFactory</code>：提供获取父级BeanFactory能力</li>
+<li><code>AutowireCapableBeanFactory</code>：提供自动装配的能力</li>
 </ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
- * to be very memory efficient. It stores both strings and integer values,
- * where integers are encoded as actual integers instead of a series of
- * characters. It allows push and pop operations on either side of the list
- * in O(1) time. However, because every operation requires a reallocation of
- * the memory used by the ziplist, the actual complexity is related to the
- * amount of memory used by the ziplist.
- * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
- <span id="more"></span>
-<h2 id="数据结构">数据结构</h2>
-<p>和其他数据类型不一样，我们在<code>ziplist.h</code>中没有找到任何结构体的定义<br>
-我们在来看下创建ziplist的代码，好家伙，ziplist就是个一维数组</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new empty ziplist. *&#x2F;
-unsigned char *ziplistNew(void) &#123;
-    unsigned int bytes &#x3D; ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
-    unsigned char *zl &#x3D; zmalloc(bytes);
-    ZIPLIST_BYTES(zl) &#x3D; intrev32ifbe(bytes);
-    ZIPLIST_TAIL_OFFSET(zl) &#x3D; intrev32ifbe(ZIPLIST_HEADER_SIZE);
-    ZIPLIST_LENGTH(zl) &#x3D; 0;
-    zl[bytes-1] &#x3D; ZIP_END;
-    return zl;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里我们要回到<code>ziplist.h</code>中，官方很详细的写了ziplist的设计思路</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* ZIPLIST OVERALL LAYOUT
-* &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
-*
-* The general layout of the ziplist is as follows:
-*
-* &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; &lt;entry&gt; ... &lt;entry&gt; &lt;zlend&gt;
-* ………………
-* &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li><code>ConfigurableBeanFactory</code>继承了HierarchicalBeanFactory，为BeanFactory提供了BeanPostProcessor，依赖关系处理，手动注册bean等能力</li>
+<li><code>ConfigurableListableBeanFactory</code>：继承了ListableBeanFactory，HierarchicalBeanFactory，AutowireCapableBeanFactory，提供高级管理能力，如：bean预初始化，BeanFactory冻结等</li>
+<li>Spring提供了四种BeanFactory的实现：XmlBeanFactory，SimpleJndiBeanFactory，StaticListableBeanFactory和DefaultListableBeanFactory
+<ul>
+<li><code>XmlBeanFactory</code>：继承于DefaultListableBeanFactory，官方已经不推荐使用，推荐使用DefaultListableBeanFactory</li>
+<li><code>SimpleJndiBeanFactory</code>：基于JNDI去加载bean，直接继承了BeanFactory，由于JNDI已经慢慢淡出的java体系，本文就不再分析该BeanFactory了</li>
+<li><code>StaticListableBeanFactory</code>：简单的BeanFactory实现，底层通过Map&lt;String,Object&gt;保存bean，只能手动添加bean</li>
+<li><code>DefaultListableBeanFactory</code>：spring种最核心的BeanFactory，Spring所有功能都是围绕该BeanFactory完成的，提供了完整的bean管理能力</li>
+</ul>
+</li>
+</ul>
+<h3 id="BeanFactory">BeanFactory</h3>
+<p>BeanFactory顾名思义，作为Bean的工厂，是IOC中绝对核心，也是Bean工厂中最单纯的</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanFactory &#123;
+
+  &#x2F;**
+    * 工厂bean的特有前缀
+    * 所有FactoryBean的名称都以&amp;开头
+    * 所有以&amp;开头的bean都被认为是FactoryBean
+    *&#x2F;
+    String FACTORY_BEAN_PREFIX &#x3D; &quot;&amp;&quot;;
+
+   &#x2F;**
+    * 从BeanFactory中获取一个Bean，
+    * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
+    * 注意，BeanFactory的方法只能获取到一个bean
+    * 如果有bean设置了Primary属性，优先获取，如果都没有，获取最后一个
+    *&#x2F;
+    Object getBean(String name) throws BeansException;
+    &lt;T&gt; T getBean(String name, Class&lt;T&gt; requiredType) throws BeansException;
+    Object getBean(String name, Object... args) throws BeansException;
+    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType) throws BeansException;
+    &lt;T&gt; T getBean(Class&lt;T&gt; requiredType, Object... args) throws BeansException;
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType);
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType);
+
+   &#x2F;**
+    * 判断是否包含特定name的bean
+    * 如果该BeanFactory包含父BeanFactory，会去父BeanFactory查找
+    *&#x2F;
+    boolean containsBean(String name);
+
+  &#x2F;**
+    * 判断给定bean是Singleton还是Prototype
+    *&#x2F;
+    boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
+    boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
+
+   &#x2F;**
+    * 判断给定bean是否和特定的type匹配
+    *&#x2F;
+    boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
+    boolean isTypeMatch(String name, Class&lt;?&gt; typeToMatch) throws NoSuchBeanDefinitionException;
+    
+   &#x2F;**
+    * 获取给定bean的type是什么
+    *&#x2F;
+    @Nullable
+    Class&lt;?&gt; getType(String name) throws NoSuchBeanDefinitionException;
+    @Nullable
+    Class&lt;?&gt; getType(String name, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+    * 获取bean的别名
+    *&#x2F;
+    String[] getAliases(String name);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从接口定义中可以看出，BeanFactory提供以下能力</p>
+<ul>
+<li>定义了工厂bean的潜规则</li>
+<li>根据name或type获取bean</li>
+<li>获取bean作用域</li>
+<li>bean和特定type是否匹配</li>
+<li>获取bean别名</li>
+</ul>
+<p>从BeanFactory能力上看，只能一个一个获取对应信息<br>
+如果对应的BeanFactory有继承关系，所有对bean的查找都会查看父BeanFactory</p>
+<h3 id="ListableBeanFactory">ListableBeanFactory</h3>
+<p>ListableBeanFactory是Spring官方推荐使用的BeanFactory，毕竟Spring中唯一大量使用的BeanFactory叫做<code>DefaultListableBeanFactory</code><br>
+ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取多个bean的方法，但是还是有些细微的差别</p>
+<ul>
+<li>对可继承的BeanFactory，BeanFactory会去检测父BeanFactory，而ListableBeanFactory不会</li>
+<li>对通过<code>registerSingleton</code>手动加入的bean，BeanFactory的getBean方法可以获取到，而ListableBeanFactory中获取bean的方法均获取不到，</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ListableBeanFactory extends BeanFactory &#123;
+
+   &#x2F;**
+    * 检查当前容器的BeanDefinition
+    *&#x2F;
+    boolean containsBeanDefinition(String beanName);
+    int getBeanDefinitionCount();
+    String[] getBeanDefinitionNames();
+
+   &#x2F;**
+    * 获取bean，这里引入了延迟加载的概念
+    *&#x2F;
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(Class&lt;T&gt; requiredType, boolean allowEagerInit);
+    &lt;T&gt; ObjectProvider&lt;T&gt; getBeanProvider(ResolvableType requiredType, boolean allowEagerInit);
+
+   &#x2F;**
+    * 提供了更丰富的获取bean的手段，但对手动注册的bean不能获取
+    * 可以一次获取满足条件的一系列bean
+    * 可以控制bean获取是否要延迟加载
+    * 可以控制获取bean是否为singletons
+    *&#x2F;
+    String[] getBeanNamesForType(ResolvableType type);
+    String[] getBeanNamesForType(ResolvableType type, boolean includeNonSingletons, boolean allowEagerInit);
+    String[] getBeanNamesForType(@Nullable Class&lt;?&gt; type);
+    String[] getBeanNamesForType(@Nullable Class&lt;?&gt; type, boolean includeNonSingletons, boolean allowEagerInit);
+    &lt;T&gt; Map&lt;String, T&gt; getBeansOfType(@Nullable Class&lt;T&gt; type) throws BeansException;
+    &lt;T&gt; Map&lt;String, T&gt; getBeansOfType(@Nullable Class&lt;T&gt; type, boolean includeNonSingletons, boolean allowEagerInit) throws BeansException;
+    String[] getBeanNamesForAnnotation(Class&lt;? extends Annotation&gt; annotationType);
+    Map&lt;String, Object&gt; getBeansWithAnnotation(Class&lt;? extends Annotation&gt; annotationType) throws BeansException;
+    @Nullable
+    &lt;A extends Annotation&gt; A findAnnotationOnBean(String beanName, Class&lt;A&gt; annotationType) throws NoSuchBeanDefinitionException;
+    @Nullable
+    &lt;A extends Annotation&gt; A findAnnotationOnBean(String beanName, Class&lt;A&gt; annotationType, boolean allowFactoryBeanInit) throws NoSuchBeanDefinitionException;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="HierarchicalBeanFactory">HierarchicalBeanFactory</h3>
+<p>HierarchicalBeanFactory通过<code>getParentBeanFactory</code>引入了BeanFactory分层的思想，可以定义父子两个BeanFactory，两者相互不影响<br>
+这种分层思想在Spring MVC中发挥的淋漓尽致</p>
+<ul>
+<li>使用父容器控制数据访问等逻辑</li>
+<li>使用子容器控制视图层逻辑</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface HierarchicalBeanFactory extends BeanFactory &#123;
+
+   &#x2F;**
+    * 获取父BeanFactory
+    *&#x2F;
+    @Nullable
+    BeanFactory getParentBeanFactory();
+
+   &#x2F;**
+    * 当前BeanFactory是包含特定名字的bean，不会去查找父BeanFactory
+    *&#x2F;
+    boolean containsLocalBean(String name);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="AutowireCapableBeanFactory">AutowireCapableBeanFactory</h3>
+<p>AutowireCapableBeanFactory类如其名，可以提供依赖注入能力<br>
+这里有个很好的扩展设计</p>
+<blockquote>
+<p>通常Spring会管理所有bean创建、依赖注入过程<br>
+对于和三方框架集成时，有些对象可能不受Spring管理，这个时候就可以使用AutowireCapableBeanFactory来单独处理这些对象，来享受Spring体系提供的能力<br>
+<code>ApplicationContext</code>返回的就是AutowireCapableBeanFactory</p>
+</blockquote>
+  <pre class="line-numbers language-java" data-language="java"><code class="language-java">AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException;<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AutowireCapableBeanFactory extends BeanFactory &#123;
+
+   &#x2F;**
+    * 自动注入相关枚举
+    *&#x2F;
+   int AUTOWIRE_NO &#x3D; 0;
+   int AUTOWIRE_BY_NAME &#x3D; 1;
+   int AUTOWIRE_BY_TYPE &#x3D; 2;
+   int AUTOWIRE_CONSTRUCTOR &#x3D; 3;
+   @Deprecated
+   int AUTOWIRE_AUTODETECT &#x3D; 4;
+
+   &#x2F;**
+    * 约定俗成
+    * 以.ORIGINAL结尾的beanName，获取bean时会返回最原始的bean，而不会返回代理对象等
+    *&#x2F;
+   String ORIGINAL_INSTANCE_SUFFIX &#x3D; &quot;.ORIGINAL&quot;;
+
+   &#x2F;**
+    * 创建bean
+    *&#x2F;
+   &lt;T&gt; T createBean(Class&lt;T&gt; beanClass) throws BeansException;
+   Object createBean(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
+
+   &#x2F;**
+    * 装配，注入
+    *&#x2F;
+   void autowireBean(Object existingBean) throws BeansException;
+   Object autowire(Class&lt;?&gt; beanClass, int autowireMode, boolean dependencyCheck) throws BeansException;
+   void autowireBeanProperties(Object existingBean, int autowireMode, boolean dependencyCheck)
+           throws BeansException;
+
+   Object configureBean(Object existingBean, String beanName) throws BeansException;
+   void applyBeanPropertyValues(Object existingBean, String beanName) throws BeansException;
+
+   &#x2F;**
+    * 初始化bean
+    *&#x2F;
+   Object initializeBean(Object existingBean, String beanName) throws BeansException;
+   Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName)
+           throws BeansException;
+   Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName)
+           throws BeansException;
+
+   &#x2F;**
+    * 销毁bean
+    *&#x2F;
+   void destroyBean(Object existingBean);
+
+
+   &#x2F;**
+    * 解析注入点
+    *&#x2F;
+   &lt;T&gt; NamedBeanHolder&lt;T&gt; resolveNamedBean(Class&lt;T&gt; requiredType) throws BeansException;
+   Object resolveBeanByName(String name, DependencyDescriptor descriptor) throws BeansException;
+   @Nullable
+   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName) throws BeansException;
+   @Nullable
+   Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+                               @Nullable Set&lt;String&gt; autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException;
+
+   &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<p>相比上面的BeanFactory，ConfigurableBeanFactory提供了对BeanFactory的能力，该接口一共提供了40多个方法，对BeanFactory提供全方位配置能力</p>
+<p>ConfigurableBeanFactory中定义了两个常见的常量，<code>singleton</code>，<code>prototype</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, SingletonBeanRegistry &#123;
+    &#x2F;&#x2F; 单例
+    String SCOPE_SINGLETON &#x3D; &quot;singleton&quot;;
+    &#x2F;&#x2F; 多实例
+    String SCOPE_PROTOTYPE &#x3D; &quot;prototype&quot;;
+
+    &#x2F;**
+     * 设置父BeanFacotry，提供分层能力
+     *&#x2F;
+    void setParentBeanFactory(BeanFactory parentBeanFactory) throws IllegalStateException;
+
+    &#x2F;**
+     * ClassLoader相关
+     *&#x2F;
+    void setBeanClassLoader(@Nullable ClassLoader beanClassLoader);
+    @Nullable
+    ClassLoader getBeanClassLoader();
+
+    &#x2F;**
+     * 临时ClassLoader，和LoadTimeWaving有关
+     *&#x2F;
+    void setTempClassLoader(@Nullable ClassLoader tempClassLoader);
+    @Nullable
+    ClassLoader getTempClassLoader();
+
+    &#x2F;**
+     * 是否缓存BeanDefinition，如果需要热加载bean，需要将缓存关闭
+     *&#x2F;
+    void setCacheBeanMetadata(boolean cacheBeanMetadata);
+    boolean isCacheBeanMetadata();
+
+    &#x2F;**
+     * EL表达式解析器相关，默认为SpEL
+     *&#x2F;
+    void setBeanExpressionResolver(@Nullable BeanExpressionResolver resolver);
+    @Nullable
+    BeanExpressionResolver getBeanExpressionResolver();
+
+    &#x2F;**
+     * Spring类型转换相关
+     * XML时代主力PropertyEditor，TypeConverter配合PropertyEditor一起使用
+     * ConversionService是后续继任者
+     *
+     *&#x2F;
+    void setConversionService(@Nullable ConversionService conversionService);
+    @Nullable
+    ConversionService getConversionService();
+    void addPropertyEditorRegistrar(PropertyEditorRegistrar registrar);
+    void registerCustomEditor(Class&lt;?&gt; requiredType, Class&lt;? extends PropertyEditor&gt; propertyEditorClass);
+    void copyRegisteredEditorsTo(PropertyEditorRegistry registry);
+    void setTypeConverter(TypeConverter typeConverter);
+    TypeConverter getTypeConverter();
+
+    &#x2F;**
+     * 属性解析器，用于解析$&#123;&#125;、#&#123;&#125;属性
+     *&#x2F;
+    void addEmbeddedValueResolver(StringValueResolver valueResolver);
+    boolean hasEmbeddedValueResolver();
+    @Nullable
+    String resolveEmbeddedValue(String value);
+
+    &#x2F;**
+     * 大名鼎鼎bean后置处理器
+     *&#x2F;
+    void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
+    int getBeanPostProcessorCount();
+
+    &#x2F;**
+     * 注册scope
+     * 除了常见的singleton和prototype
+     * spring还提供了request，session等
+     *&#x2F;
+    void registerScope(String scopeName, Scope scope);
+    String[] getRegisteredScopeNames();
+    @Nullable
+    Scope getRegisteredScope(String scopeName);
+
+    &#x2F;**
+     * 提供ApplicationStartup
+     *&#x2F;
+    void setApplicationStartup(ApplicationStartup applicationStartup);
+    ApplicationStartup getApplicationStartup();
+
+    &#x2F;**
+     * 获取java安全许可
+     *&#x2F;
+    AccessControlContext getAccessControlContext();
+
+    &#x2F;**
+     * Copy ConfigurableBeanFactory
+     *&#x2F;
+    void copyConfigurationFrom(ConfigurableBeanFactory otherFactory);
+
+    &#x2F;**
+     * 别名相关
+     *&#x2F;
+    void registerAlias(String beanName, String alias) throws BeanDefinitionStoreException;
+    void resolveAliases(StringValueResolver valueResolver);
+
+    &#x2F;**
+     * 合并并创建RootBeanDefinition
+     *&#x2F;
+    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 判断是否工厂bean
+     *&#x2F;
+    boolean isFactoryBean(String name) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * bean是否在创建中
+     *&#x2F;
+    void setCurrentlyInCreation(String beanName, boolean inCreation);
+    boolean isCurrentlyInCreation(String beanName);
+
+    &#x2F;**
+     * bean依赖相关
+     *&#x2F;
+    void registerDependentBean(String beanName, String dependentBeanName);
+    String[] getDependentBeans(String beanName);
+    String[] getDependenciesForBean(String beanName);
+
+    &#x2F;**
+     * bean销毁相关
+     *&#x2F;
+    void destroyBean(String beanName, Object beanInstance);
+    void destroyScopedBean(String beanName);
+    void destroySingletons();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从接口定义看，ConfigurableBeanFactory一共提供了<code>40</code>个方法，这些方法涉及多个领域，丰富了BeanFactory的能力</p>
+<h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
+<p>ConfigurableListableBeanFactory和ConfigurableBeanFactory相比更近一步，提供了分析和修改bean定义以及预实例化单例的工具</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableListableBeanFactory extends ListableBeanFactory, AutowireCapableBeanFactory, ConfigurableBeanFactory &#123;
+
+  &#x2F;**
+   * 忽略依赖，注册依赖
+   *&#x2F;
+  void ignoreDependencyType(Class&lt;?&gt; type);
+  void ignoreDependencyInterface(Class&lt;?&gt; ifc);
+  void registerResolvableDependency(Class&lt;?&gt; dependencyType, @Nullable Object autowiredValue);
+
+  &#x2F;**
+   * 获取bean是否可以自动注入
+   *&#x2F;
+  boolean isAutowireCandidate(String beanName, DependencyDescriptor descriptor)
+          throws NoSuchBeanDefinitionException;
+
+  &#x2F;**
+   * BeanFactory中唯一可以获取BeanDefinition的方法
+   * 意味着可以修改bean的定义
+   *&#x2F;
+  BeanDefinition getBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+  Iterator&lt;String&gt; getBeanNamesIterator();
+
+  &#x2F;**
+   * 清空MergedBeanDefinition缓存
+   * Spring框架中只在BeanFactoryProcessor执行，和ApplicationContext启动流程强相关
+   * 在后续分析refresh是会关注
+   *&#x2F;
+  void clearMetadataCache();
+
+  &#x2F;**
+   * beanDefinition冻结相关
+   *&#x2F;
+  void freezeConfiguration();
+  boolean isConfigurationFrozen();
+
+  &#x2F;**
+   * 预实例化单例bean，abstract和lazy除外
+   *&#x2F;
+  void preInstantiateSingletons() throws BeansException;
+&#125;
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="StaticListableBeanFactory">StaticListableBeanFactory</h2>
+<p>StaticListableBeanFactory是一个极简的ListableBeanFactory，只能通过手工添加bean，提供了获取/批量获取bean等能力，分析StaticListableBeanFactory可以简单理解BeanFactory的一些设计思想</p>
+<h3 id="存储">存储</h3>
+<p>StaticListableBeanFactory成员变量只有一个LinkedHashMap，bean的增删改查都是围绕这个map进行的</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class StaticListableBeanFactory implements ListableBeanFactory &#123;
+
+  &#x2F;** Map from bean name to bean instance. *&#x2F;
+  private final Map&lt;String, Object&gt; beans;
+
+
+  &#x2F;**
+   * Create a regular &#123;@code StaticListableBeanFactory&#125;, to be populated
+   * with singleton bean instances through &#123;@link #addBean&#125; calls.
+   *&#x2F;
+  public StaticListableBeanFactory() &#123;
+      this.beans &#x3D; new LinkedHashMap&lt;&gt;();
+  &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="添加bean">添加bean</h3>
+<p>同DefaultListableBeanFactory相比，StaticListableBeanFactory没有继承<code>BeanDefinitionRegistry</code>接口，说明了StaticListableBeanFactory和BeanDefinition无关，注定了不能通过xml等方式定义bean，只能通过手工添加bean。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public void addBean(String name, Object bean) &#123;
+    this.beans.put(name, bean);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<h3 id="获取bean">获取bean</h3>
+<p>获取bean的代码和简单，其实就是做了两件事</p>
+<ol>
+<li>使用transformedBeanName去map中获取bean</li>
+<li>如果是FactoryBean，使用getObejct返回对象，否则直接返回对象</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public Object getBean(String name) throws BeansException &#123;
+  String beanName &#x3D; BeanFactoryUtils.transformedBeanName(name);
+  Object bean &#x3D; this.beans.get(beanName);
+
+  if (bean &#x3D;&#x3D; null) &#123;
+      throw new NoSuchBeanDefinitionException(beanName,
+              &quot;Defined beans are [&quot; + StringUtils.collectionToCommaDelimitedString(this.beans.keySet()) + &quot;]&quot;);
+  &#125;
+
+  &#x2F;&#x2F; Don&#39;t let calling code try to dereference the
+  &#x2F;&#x2F; bean factory if the bean isn&#39;t a factory
+  if (BeanFactoryUtils.isFactoryDereference(name) &amp;&amp; !(bean instanceof FactoryBean)) &#123;
+      throw new BeanIsNotAFactoryException(beanName, bean.getClass());
+  &#125;
+
+  if (bean instanceof FactoryBean &amp;&amp; !BeanFactoryUtils.isFactoryDereference(name)) &#123;
+      try &#123;
+          Object exposedObject &#x3D; ((FactoryBean&lt;?&gt;) bean).getObject();
+          if (exposedObject &#x3D;&#x3D; null) &#123;
+              throw new BeanCreationException(beanName, &quot;FactoryBean exposed null object&quot;);
+          &#125;
+          return exposedObject;
+      &#125;
+      catch (Exception ex) &#123;
+          throw new BeanCreationException(beanName, &quot;FactoryBean threw exception on object creation&quot;, ex);
+      &#125;
+  &#125;
+  else &#123;
+      return bean;
+  &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="DefaultListableBeanFactory">DefaultListableBeanFactory</h2>
+<p>DefaultListableBeanFactory是Spring唯一正牌BeanFactory，所有Spring组件都是用的DefaultListableBeanFactory，后续会有一系列文章逐步拆解DefaultListableBeanFactory的各种功能<br>
+从依赖图上可以看出，DefaultListableBeanFactory在实现了上文提到的所有接口的同时，还实现了<code>BeanDefinitionRegistry</code>用于bean的注册<br>
+同时在依赖图上还可以看到两个重点虚拟类，这为后面拆解DefaultListableBeanFactory提供了路径</p>
+<ol>
+<li>AbstractBeanFactory</li>
+<li>AbstractAutowireCapableBeanFactory</li>
+</ol>
+<p><img src="/posts/f5f30183/DefaultListableBeanFactory.svg" alt="DefaultListableBeanFactory"></p>
 ]]></content>
       <categories>
-        <category>redis</category>
+        <category>Spring</category>
       </categories>
       <tags>
-        <tag>redis源码</tag>
-        <tag>redis数据结构</tag>
+        <tag>Spring IOC</tag>
       </tags>
   </entry>
   <entry>
