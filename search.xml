@@ -186,6 +186,206 @@ public Enumeration&lt;String&gt; getParameterNames() &#123;
       </tags>
   </entry>
   <entry>
+    <title>RedisDesktopManager编译</title>
+    <url>/posts/cfa83ab0.html</url>
+    <content><![CDATA[<p><strong>最近重装了系统，重新编译了下2022.5.1，编译过程基本一致，有些许差别</strong></p>
+<blockquote>
+<p><a href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
+在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="前言">前言</h2>
+<p><a href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
+<blockquote>
+<p>本次编译过程基于RedisDesktopManager（2021.10）</p>
+</blockquote>
+<h2 id="环境准备">环境准备</h2>
+<h3 id="系统">系统</h3>
+<blockquote>
+<p>Windows 10 21H2<br>
+Windows 11 22H2</p>
+</blockquote>
+<h3 id="git-clone">git clone</h3>
+<ol>
+<li>使用以下命令clone RedisDesktopManager的项目仓库
+<blockquote>
+<p>git clone --recursive <a href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
+</blockquote>
+</li>
+<li>需要注意submodule处理
+<ul>
+<li>RedisDesktopManager包含submodule，在3rdparty下</li>
+<li>submodule里面也包含submodule，如3rdparty/qredisclient/hiredis等</li>
+<li>需要使用--recursive递归clone</li>
+<li>如果没有使用--recursive来clone，需要人为保证submodule都down下来了</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
+<img src="/posts/cfa83ab0/2.png" alt="项目概述"></p>
+</blockquote>
+<h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
+<p><a href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
+<img src="/posts/cfa83ab0/1.png" alt="选择使用C++在线安装"></p>
+<h3 id="下载QT5-15">下载QT5.15</h3>
+<p>Qt5.15只能在线安装，下载<a href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
+<blockquote>
+<p>Qt下载时间很长，网不好容易断，请保持耐心</p>
+</blockquote>
+<p><img src="/posts/cfa83ab0/3.png" alt="Qt安装"></p>
+<h3 id="Python-3-9-9">Python 3.9.9</h3>
+<p>下载<a href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
+<ul>
+<li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
+</ul>
+<p><img src="/posts/cfa83ab0/4.png" alt="Python安装"><br>
+<img src="/posts/cfa83ab0/5.png" alt="Python安装"><br>
+<img src="/posts/cfa83ab0/6.png" alt="Python安装"></p>
+<h3 id="Cmake">Cmake</h3>
+<p>下载<a href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
+<h3 id="nuget">nuget</h3>
+<p>下载<a href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
+<h2 id="Python依赖安装">Python依赖安装</h2>
+<p>使用以下命令安装Python依赖</p>
+<blockquote>
+<p>pip3 install -r src/py/requirements.txt</p>
+</blockquote>
+<p>如果出现git仓库SSL握手失败，可以将requirements中git的https协议换成git协议。</p>
+<ul>
+<li>原始requirements内容
+<blockquote>
+<p>bitstring<br>
+cbor<br>
+msgpack<br>
+git+<a href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
+git+<a href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
+python-lzf</p>
+</blockquote>
+</li>
+<li>替换后requirements内容
+<blockquote>
+<p>bitstring<br>
+cbor<br>
+msgpack<br>
+git+git://github.com/mrnom/phpserialize.git#egg=phpserialize<br>
+git+git://github.com/uglide/redis-rdb-tools#egg=rdbtools<br>
+python-lzf</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="三方依赖编译">三方依赖编译</h2>
+<h3 id="准备工作">准备工作</h3>
+<h4 id="安装zlib">安装zlib</h4>
+<p>在<code>3rdparty</code>目录下，使用<code>nuget</code>安装zlib</p>
+<blockquote>
+<p>nuget install zlib-msvc14-x64 -Version 1.2.11.7795</p>
+</blockquote>
+<h4 id="hiredis在Windowns下编译修正">hiredis在Windowns下编译修正</h4>
+<p><strong>2022.5.1已经没有这一步了</strong><br>
+<s>在<code>3rdparty/qredisclient/3rdparty/hiredis</code>目录下，为<code>hirdis</code>打<code>patch</code></s></p>
+<blockquote>
+<p><s>git apply …/hiredis-win.patch</s></p>
+</blockquote>
+<h3 id="lz4编译">lz4编译</h3>
+<p>官方文档中已经给出了lz4的编译方法，只是Windows没有make命令，需要使用<code>VS</code>来替代make编译项目</p>
+<blockquote>
+<p>cd 3rdparty/lz4/build/cmake<br>
+cmake -DLZ4_BUNDLED_MODE=ON  .<br>
+make</p>
+</blockquote>
+<ol>
+<li>Cmake生成编译文件<br>
+<img src="/posts/cfa83ab0/7.png" alt="cmake"></li>
+<li>用VS2022打开<code>LZ4.sln</code><br>
+<img src="/posts/cfa83ab0/8.png" alt="cmake"></li>
+<li>编译<br>
+<img src="/posts/cfa83ab0/9.png" alt="cmake"></li>
+</ol>
+<h3 id="zstd编译">zstd编译</h3>
+<p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\zstd\build\cmake</code>
+<blockquote>
+<p>cmake ./</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>zstd.sln</code>编译</li>
+</ol>
+<h3 id="snappy编译">snappy编译</h3>
+<p>官方Windows编译文档中同样没有提及\snappy。编译方式如下</p>
+<ol>
+<li>执行cmake，执行目录为<code>3rdparty\snappy\cmake</code>
+<blockquote>
+<p>cmake ./</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>Snappy.sln</code>编译</li>
+<li>将目录<code>3rdparty\snappy\cmake\Release</code>拷贝到<code>3rdparty\snappy</code>下</li>
+</ol>
+<h3 id="brotli编译">brotli编译</h3>
+<ol>
+<li>执行cmake执行目录为<code>3rdparty\brotli</code>
+<blockquote>
+<p>cmake -DBUILD_SHARED_LIBS=OFF</p>
+</blockquote>
+</li>
+<li>使用<code>4.2</code>同样的方法找到<code>brotli.sln</code>编译</li>
+</ol>
+<h2 id="RedisDesktopManager编译">RedisDesktopManager编译</h2>
+<h3 id="编译">编译</h3>
+<ol>
+<li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
+<img src="/posts/cfa83ab0/10.png" alt="qt工程"></li>
+<li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
+<img src="/posts/cfa83ab0/12.png" alt="发布更新"></li>
+<li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
+<img src="/posts/cfa83ab0/11.png" alt="发布更新"></li>
+<li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
+<img src="/posts/cfa83ab0/13.png" alt="发布更新"></li>
+</ol>
+<h3 id="打包">打包</h3>
+<p>现在在<code>bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
+<ol>
+<li>
+<p>将<code>bin\windows\release\rdm.exe</code>拷贝到<code>build\windows\installer\resources</code>下</p>
+</li>
+<li>
+<p>为了提供Python运行环境，下载<a href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
+</li>
+<li>
+<p>执行以下命令</p>
+<blockquote>
+<p>C:\Qt\5.15.2\msvc2019_64\bin\windeployqt --release --qmldir C:\RedisDesktopManager\src\qml rdm.exe</p>
+</blockquote>
+</li>
+<li>
+<p>下载<a href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
+</li>
+<li>
+<p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
+<ol>
+<li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
+<img src="/posts/cfa83ab0/15.png" alt="nsi"><br>
+<img src="/posts/cfa83ab0/14.png" alt="nsi"></li>
+</ol>
+</li>
+<li>
+<p>等待nsis执行完毕后，当前目录就得到了安装包<code>rdm-2021.11.0.exe</code></p>
+</li>
+</ol>
+<h2 id="完结散花">完结散花</h2>
+<p><a href="https://www.aliyundrive.com/s/goXTba7Bfgo">RedisDesktopManager2022.5.1 Windows 64bit 安装包</a></p>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis</tag>
+        <tag>RDM</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>dict字典</title>
     <url>/posts/4fcbe513.html</url>
     <content><![CDATA[<blockquote>
@@ -562,708 +762,6 @@ redis执行命令都是单线程操作，很明显在字典rehash的过程中会
 </tr>
 </tbody>
 </table>
-]]></content>
-      <categories>
-        <category>redis</category>
-      </categories>
-      <tags>
-        <tag>redis源码</tag>
-        <tag>redis数据结构</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>RedisDesktopManager编译</title>
-    <url>/posts/cfa83ab0.html</url>
-    <content><![CDATA[<blockquote>
-<p><a href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
-在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
-</blockquote>
-<span id="more"></span>
-<h2 id="前言">前言</h2>
-<p><a href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
-<blockquote>
-<p>本次编译过程基于RedisDesktopManager（2021.10）</p>
-</blockquote>
-<h2 id="环境准备">环境准备</h2>
-<h3 id="系统">系统</h3>
-<blockquote>
-<p>Windows 10 21H2</p>
-</blockquote>
-<h3 id="git-clone">git clone</h3>
-<ol>
-<li>使用以下命令clone RedisDesktopManager的项目仓库
-<blockquote>
-<p>git clone --recursive <a href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
-</blockquote>
-</li>
-<li>需要注意submodule处理
-<ul>
-<li>RedisDesktopManager包含submodule，在3rdparty下</li>
-<li>submodule里面也包含submodule，如3rdparty/qredisclient/hiredis等</li>
-<li>需要使用--recursive递归clone</li>
-<li>如果没有使用--recursive来clone，需要人为保证submodule都down下来了</li>
-</ul>
-</li>
-</ol>
-<blockquote>
-<p>完全clone的仓库一共277兆，包含3058个文件和610个目录<br>
-<img src="/posts/cfa83ab0/2.png" alt="项目概述"></p>
-</blockquote>
-<h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
-<p><a href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
-<img src="/posts/cfa83ab0/1.png" alt="选择使用C++在线安装"></p>
-<h3 id="下载QT5-15">下载QT5.15</h3>
-<p>Qt5.15只能在线安装，下载<a href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
-<blockquote>
-<p>Qt下载时间很长，网不好容易断，请保持耐心</p>
-</blockquote>
-<p><img src="/posts/cfa83ab0/3.png" alt="Qt安装"></p>
-<h3 id="Python-3-9-9">Python 3.9.9</h3>
-<p>下载<a href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
-<ul>
-<li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
-</ul>
-<p><img src="/posts/cfa83ab0/4.png" alt="Python安装"><br>
-<img src="/posts/cfa83ab0/5.png" alt="Python安装"><br>
-<img src="/posts/cfa83ab0/6.png" alt="Python安装"></p>
-<h3 id="Cmake">Cmake</h3>
-<p>下载<a href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
-<h3 id="nuget">nuget</h3>
-<p>下载<a href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
-<h2 id="Python依赖安装">Python依赖安装</h2>
-<p>使用以下命令安装Python依赖</p>
-<blockquote>
-<p>pip3 install -r src/py/requirements.txt</p>
-</blockquote>
-<p>如果出现git仓库SSL握手失败，可以将requirements中git的https协议换成git协议。</p>
-<ul>
-<li>原始requirements内容
-<blockquote>
-<p>bitstring<br>
-cbor<br>
-msgpack<br>
-git+<a href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
-git+<a href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
-python-lzf</p>
-</blockquote>
-</li>
-<li>替换后requirements内容
-<blockquote>
-<p>bitstring<br>
-cbor<br>
-msgpack<br>
-git+git://github.com/mrnom/phpserialize.git#egg=phpserialize<br>
-git+git://github.com/uglide/redis-rdb-tools#egg=rdbtools<br>
-python-lzf</p>
-</blockquote>
-</li>
-</ul>
-<h2 id="三方依赖编译">三方依赖编译</h2>
-<h3 id="准备工作">准备工作</h3>
-<h4 id="安装zlib">安装zlib</h4>
-<p>在<code>3rdparty</code>目录下，使用<code>nuget</code>安装zlib</p>
-<blockquote>
-<p>nuget install zlib-msvc14-x64 -Version 1.2.11.7795</p>
-</blockquote>
-<h4 id="hiredis在Windowns下编译修正">hiredis在Windowns下编译修正</h4>
-<p>在<code>3rdparty/qredisclient/3rdparty/hiredis</code>目录下，为<code>hirdis</code>打<code>patch</code></p>
-<blockquote>
-<p>git apply …/hiredis-win.patch</p>
-</blockquote>
-<h3 id="lz4编译">lz4编译</h3>
-<p>官方文档中已经给出了lz4的编译方法，只是Windows没有make命令，需要使用<code>VS</code>来替代make编译项目</p>
-<blockquote>
-<p>cd 3rdparty/lz4/build/cmake<br>
-cmake -DLZ4_BUNDLED_MODE=ON  .<br>
-make</p>
-</blockquote>
-<ol>
-<li>Cmake生成编译文件<br>
-<img src="/posts/cfa83ab0/7.png" alt="cmake"></li>
-<li>用VS2022打开<code>LZ4.sln</code><br>
-<img src="/posts/cfa83ab0/8.png" alt="cmake"></li>
-<li>编译<br>
-<img src="/posts/cfa83ab0/9.png" alt="cmake"></li>
-</ol>
-<h3 id="zstd编译">zstd编译</h3>
-<p>官方Windows编译文档中没有提及zstd的编译，但后面确实是需要的，使用以下方法编译zstd</p>
-<ol>
-<li>执行cmake，执行目录为<code>3rdparty\zstd\build\cmake</code>
-<blockquote>
-<p>cmake ./</p>
-</blockquote>
-</li>
-<li>使用<code>4.2</code>同样的方法找到<code>zstd.sln</code>编译</li>
-</ol>
-<h3 id="snappy编译">snappy编译</h3>
-<p>官方Windows编译文档中同样没有提及\snappy。编译方式如下</p>
-<ol>
-<li>执行cmake，执行目录为<code>3rdparty\snappy\cmake</code>
-<blockquote>
-<p>cmake ./</p>
-</blockquote>
-</li>
-<li>使用<code>4.2</code>同样的方法找到<code>Snappy.sln</code>编译</li>
-<li>将目录<code>3rdparty\snappy\cmake\Release</code>拷贝到<code>3rdparty\snappy</code>下</li>
-</ol>
-<h3 id="brotli编译">brotli编译</h3>
-<ol>
-<li>执行cmake执行目录为<code>3rdparty\brotli</code>
-<blockquote>
-<p>cmake -DBUILD_SHARED_LIBS=OFF</p>
-</blockquote>
-</li>
-<li>使用<code>4.2</code>同样的方法找到<code>brotli.sln</code>编译</li>
-</ol>
-<h2 id="RedisDesktopManager编译">RedisDesktopManager编译</h2>
-<h3 id="编译">编译</h3>
-<ol>
-<li>打开src/rdm.pro，使用Desktop Qt5.15.2 MSVC2019 64bit配置工程<br>
-<img src="/posts/cfa83ab0/10.png" alt="qt工程"></li>
-<li>修改<code>pyotherside.pri</code>中的Python版本，这里我们可以看到项目写死的Python目录<br>
-<img src="/posts/cfa83ab0/12.png" alt="发布更新"></li>
-<li>选择<code>发布更新</code>，编译版本选择<code>Release</code>，并点击左下角<code>锤子</code>构建<br>
-<img src="/posts/cfa83ab0/11.png" alt="发布更新"></li>
-<li>编译完成后点击<code>运行</code>按钮（锤子上面那个）可以看到以下界面了<br>
-<img src="/posts/cfa83ab0/13.png" alt="发布更新"></li>
-</ol>
-<h3 id="打包">打包</h3>
-<p>现在在<code>bin\windows\release</code>下已经可以找到<code>rdm.exe</code>了，但双击会提示找不到<code>Qt5Quick.dll</code>等一系列文件，这就需要打包。</p>
-<ol>
-<li>
-<p>将<code>bin\windows\release\rdm.exe</code>拷贝到<code>build\windows\installer\resources</code>下</p>
-</li>
-<li>
-<p>为了提供Python运行环境，下载<a href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
-</li>
-<li>
-<p>执行以下命令</p>
-<blockquote>
-<p>C:\Qt\5.15.2\msvc2019_64\bin\windeployqt --release --qmldir C:\RedisDesktopManager\src\qml rdm.exe</p>
-</blockquote>
-</li>
-<li>
-<p>下载<a href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
-</li>
-<li>
-<p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
-<ol>
-<li>installer.nsi需要加一行定义版本号，否则会报错<code>!define VERSION &quot;2021.10.0&quot;</code><br>
-<img src="/posts/cfa83ab0/15.png" alt="nsi"><br>
-<img src="/posts/cfa83ab0/14.png" alt="nsi"></li>
-</ol>
-</li>
-<li>
-<p>等待nsis执行完毕后，当前目录就得到了安装包<code>rdm-2021.11.0.exe</code></p>
-</li>
-</ol>
-<h2 id="完结散花">完结散花</h2>
-<p><a href="./rdm-2021.10.0.exe">RedisDesktopManager2021.10 Windows 64bit 安装包</a></p>
-]]></content>
-      <categories>
-        <category>redis</category>
-      </categories>
-      <tags>
-        <tag>redis</tag>
-        <tag>RDM</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>intset整数集合</title>
-    <url>/posts/c03ff393.html</url>
-    <content><![CDATA[<blockquote>
-<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
-</blockquote>
-<p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
-<span id="more"></span>
-<h2 id="数据结构">数据结构</h2>
-<p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct __attribute__ ((__packed__)) sdshdr64 &#123;
-    uint64_t len; &#x2F;* used *&#x2F;
-    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
-    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
-    char buf[];
-&#125;;
-
-typedef struct intset &#123;
-    uint32_t encoding;
-    uint32_t length;
-    int8_t contents[];
-&#125; intset;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<blockquote>
-<p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
-</blockquote>
-<p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define INTSET_ENC_INT16 (sizeof(int16_t))
-#define INTSET_ENC_INT32 (sizeof(int32_t))
-#define INTSET_ENC_INT64 (sizeof(int64_t))
-
-&#x2F;* Return the required encoding for the provided value. *&#x2F;
-static uint8_t _intsetValueEncoding(int64_t v) &#123;
-    if (v &lt; INT32_MIN || v &gt; INT32_MAX)
-        return INTSET_ENC_INT64;
-    else if (v &lt; INT16_MIN || v &gt; INT16_MAX)
-        return INTSET_ENC_INT32;
-    else
-        return INTSET_ENC_INT16;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<table>
-<thead>
-<tr>
-<th>encoding枚举</th>
-<th>值</th>
-<th>含义</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>INTSET_ENC_INT16</td>
-<td>2 sizeof(int16_t)</td>
-<td>intset值范围是 [-2<sup>16</sup>,2<sup>16</sup>-1]</td>
-</tr>
-<tr>
-<td>INTSET_ENC_INT32</td>
-<td>4 sizeof(int32_t)</td>
-<td>intset值范围是 [-2<sup>32</sup>,-2<sup>16</sup>) $\bigcup$ (2<sup>16</sup>-1,2<sup>32</sup>-1]</td>
-</tr>
-<tr>
-<td>INTSET_ENC_INT64</td>
-<td>8 sizeof(int64_t)</td>
-<td>intset值范围是 [-2<sup>64</sup>,-2<sup>32</sup>) $\bigcup$ (2<sup>32</sup>-1,2<sup>64</sup>-1]</td>
-</tr>
-</tbody>
-</table>
-<h2 id="操作">操作</h2>
-<p>整数集合没有什么复杂的操作</p>
-<h3 id="创建">创建</h3>
-<p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetNew(void) &#123;
-    intset *is &#x3D; zmalloc(sizeof(intset));
-    is-&gt;encoding &#x3D; intrev32ifbe(INTSET_ENC_INT16);
-    is-&gt;length &#x3D; 0;
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<blockquote>
-<p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
-在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
-</blockquote>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#if (BYTE_ORDER &#x3D;&#x3D; LITTLE_ENDIAN)
-#define memrev16ifbe(p) ((void)(0))
-#define memrev32ifbe(p) ((void)(0))
-#define memrev64ifbe(p) ((void)(0))
-#define intrev16ifbe(v) (v)
-#define intrev32ifbe(v) (v)
-#define intrev64ifbe(v) (v)
-#else
-#define memrev16ifbe(p) memrev16(p)
-#define memrev32ifbe(p) memrev32(p)
-#define memrev64ifbe(p) memrev64(p)
-#define intrev16ifbe(v) intrev16(v)
-#define intrev32ifbe(v) intrev32(v)
-#define intrev64ifbe(v) intrev64(v)
-#endif<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="查找">查找</h3>
-<p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
-<ol>
-<li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
-<li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Search for the position of &quot;value&quot;. Return 1 when the value was found and
- * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when
- * the value is not present in the intset and sets &quot;pos&quot; to the position
- * where &quot;value&quot; can be inserted. *&#x2F;
-static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) &#123;
-    int min &#x3D; 0, max &#x3D; intrev32ifbe(is-&gt;length)-1, mid &#x3D; -1;
-    int64_t cur &#x3D; -1;
-
-    &#x2F;* The value can never be found when the set is empty *&#x2F;
-    if (intrev32ifbe(is-&gt;length) &#x3D;&#x3D; 0) &#123;
-        if (pos) *pos &#x3D; 0;
-        return 0;
-    &#125; else &#123;
-        &#x2F;* Check for the case where we know we cannot find the value,
-         * but do know the insert position. *&#x2F;
-        if (value &gt; _intsetGet(is,max)) &#123;
-            if (pos) *pos &#x3D; intrev32ifbe(is-&gt;length);
-            return 0;
-        &#125; else if (value &lt; _intsetGet(is,0)) &#123;
-            if (pos) *pos &#x3D; 0;
-            return 0;
-        &#125;
-    &#125;
-
-    while(max &gt;&#x3D; min) &#123;
-        mid &#x3D; ((unsigned int)min + (unsigned int)max) &gt;&gt; 1;
-        cur &#x3D; _intsetGet(is,mid);
-        if (value &gt; cur) &#123;
-            min &#x3D; mid+1;
-        &#125; else if (value &lt; cur) &#123;
-            max &#x3D; mid-1;
-        &#125; else &#123;
-            break;
-        &#125;
-    &#125;
-
-    if (value &#x3D;&#x3D; cur) &#123;
-        if (pos) *pos &#x3D; mid;
-        return 1;
-    &#125; else &#123;
-        if (pos) *pos &#x3D; min;
-        return 0;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="新增">新增</h3>
-<h4 id="add">add</h4>
-<p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
-<ol>
-<li>判断插入的value是否超过当前集合能处理的范围（encoding），如果超过了，需要<code>升级</code>整数数组。</li>
-<li>根据value查找该元素是否在intset中，intsetSearch中传入了一个参数pos，pos表示了search之后可以插入元素的位置<br>
-2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
-2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetAdd(intset *is, int64_t value, uint8_t *success) &#123;
-    uint8_t valenc &#x3D; _intsetValueEncoding(value);
-    uint32_t pos;
-    if (success) *success &#x3D; 1;
-
-    &#x2F;* Upgrade encoding if necessary. If we need to upgrade, we know that
-     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),
-     * because it lies outside the range of existing values. *&#x2F;
-    if (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;
-        &#x2F;* This always succeeds, so we don&#39;t need to curry *success. *&#x2F;
-        return intsetUpgradeAndAdd(is,value);
-    &#125; else &#123;
-        &#x2F;* Abort if the value is already present in the set.
-         * This call will populate &quot;pos&quot; with the right position to insert
-         * the value when it cannot be found. *&#x2F;
-        if (intsetSearch(is,value,&amp;pos)) &#123;
-            if (success) *success &#x3D; 0;
-            return is;
-        &#125;
-
-        is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
-        if (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+1);
-    &#125;
-
-    _intsetSet(is,pos,value);
-    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h4 id="upgradeAndAdd">upgradeAndAdd</h4>
-<p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
-<blockquote>
-<p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
-代码中使用了<code>prepend</code>这个变量来处理</p>
-</blockquote>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">static intset *intsetUpgradeAndAdd(intset *is, int64_t value) &#123;
-    uint8_t curenc &#x3D; intrev32ifbe(is-&gt;encoding);
-    uint8_t newenc &#x3D; _intsetValueEncoding(value);
-    int length &#x3D; intrev32ifbe(is-&gt;length);
-    int prepend &#x3D; value &lt; 0 ? 1 : 0;
-
-    &#x2F;* First set new encoding and resize *&#x2F;
-    is-&gt;encoding &#x3D; intrev32ifbe(newenc);
-    is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
-
-    &#x2F;* Upgrade back-to-front so we don&#39;t overwrite values.
-     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty
-     * space at either the beginning or the end of the intset. *&#x2F;
-    while(length--)
-        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));
-
-    &#x2F;* Set the value at the beginning or the end. *&#x2F;
-    if (prepend)
-        _intsetSet(is,0,value);
-    else
-        _intsetSet(is,intrev32ifbe(is-&gt;length),value);
-    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="删除">删除</h2>
-<p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetRemove(intset *is, int64_t value, int *success) &#123;
-    uint8_t valenc &#x3D; _intsetValueEncoding(value);
-    uint32_t pos;
-    if (success) *success &#x3D; 0;
-
-    if (valenc &lt;&#x3D; intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;
-        uint32_t len &#x3D; intrev32ifbe(is-&gt;length);
-
-        &#x2F;* We know we can delete *&#x2F;
-        if (success) *success &#x3D; 1;
-
-        &#x2F;* Overwrite value with tail and update length *&#x2F;
-        if (pos &lt; (len-1)) intsetMoveTail(is,pos+1,pos);
-        is &#x3D; intsetResize(is,len-1);
-        is-&gt;length &#x3D; intrev32ifbe(len-1);
-    &#125;
-    return is;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="总结">总结</h2>
-<p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
-]]></content>
-      <categories>
-        <category>redis</category>
-      </categories>
-      <tags>
-        <tag>redis源码</tag>
-        <tag>redis数据结构</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>sds字符串</title>
-    <url>/posts/cffaa119.html</url>
-    <content><![CDATA[<blockquote>
-<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
-</blockquote>
-<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。</p>
-<span id="more"></span>
-<h2 id="数据结构">数据结构</h2>
-<p>在sds.h中定义了sds的数据结构。<code>typedef char *sds;</code>单从数据结构的定义上看，sds就是一个char数组。但和c的char数组不同。sds保存了额外的数据信息，保证<strong>高效字符串操作</strong>和<strong>二进制安全</strong>。</p>
-<ul>
-<li><strong>STRLEN</strong>可以获取字符串的长度，c中String获取字符串长度是O(N)的复杂度。实际应用中一个大几百K的字符串也不少见，采用O(N)的复杂度太得不偿失，这样就需要有个字段记录实际字符长度。</li>
-<li>字符串实际大小已经记录了，这样字符就不必要强制采用/0结尾，这也保证了二进制安全。</li>
-<li><strong>APPEND</strong>可以在现有字符串的基础上追加字符，c中String分配的空间刚刚好存放字符，所以在append时需要对新字符串重新分配空间，这样的操作是很不划算的。解决方法就是预先分配一块空间（如java中ArrayList），这就要求有个字段记录预分配空间的大小。</li>
-</ul>
-<p>按照这个思路，早期redis的数据结构中，除了char数组外，还额为定义了预分配数组的大小和剩余空间。我们可以通过len减去free得到字符串的实际长度。并且sds指向的是char buf[]，这样就可以使用*(sds-4)和*(sds-8)直接访问free和len的地址。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct sdshdr &#123;
-    int len;    &#x2F;&#x2F; buf 已占用长度
-    int free;   &#x2F;&#x2F; buf 剩余可用长度
-    char buf[];     &#x2F;&#x2F; 实际保存字符串数据的地方
-&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从这个sdshdr的定义中可以看出，int类型的len和free可以描述2G的空间，但实际应用过程中我们并不需要这么大的空间。所以在redis的后续发展中，定义了一系列sdshdrX，可以根据不同大小的字符串分配不同的结构题，已达到节省空间的目的。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Note: sdshdr5 is never used, we just access the flags byte directly.
- * However is here to document the layout of type 5 SDS strings. *&#x2F;
-struct __attribute__ ((__packed__)) sdshdr5 &#123;
-    unsigned char flags; &#x2F;* 3 lsb of type, and 5 msb of string length *&#x2F;
-    char buf[];
-&#125;;
-struct __attribute__ ((__packed__)) sdshdr8 &#123;
-    uint8_t len; &#x2F;* used *&#x2F;
-    uint8_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
-    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
-    char buf[];
-&#125;;
-struct __attribute__ ((__packed__)) sdshdr16 &#123;
-    uint16_t len; &#x2F;* used *&#x2F;
-    uint16_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
-    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
-    char buf[];
-&#125;;
-struct __attribute__ ((__packed__)) sdshdr32 &#123;
-    uint32_t len; &#x2F;* used *&#x2F;
-    uint32_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
-    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
-    char buf[];
-&#125;;
-struct __attribute__ ((__packed__)) sdshdr64 &#123;
-    uint64_t len; &#x2F;* used *&#x2F;
-    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
-    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
-    char buf[];
-&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从数据结构可以看出，redis一共定义了5中sdshdr结构（sdshdr5并没有使用），分别可以支持长度为2<sup>5</sup>，2<sup>8</sup>，2<sup>16</sup>，2<sup>32</sup>和2<sup>64</sup>的字符串（其实Redis中字符串长度不能超过512M）。redis可以通过字符串长度选择合适的sdshdr结构体。<br>
-现在有多种sdshdr结构体了，我们就必须在结构体中存储结构体的类型，这个字段就是unsigned char flags。它使用了3位来表示这5种类型</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_TYPE_5  0
-#define SDS_TYPE_8  1
-#define SDS_TYPE_16 2
-#define SDS_TYPE_32 3
-#define SDS_TYPE_64 4
-static inline char sdsReqType(size_t string_size) &#123;
-    if (string_size &lt; 1&lt;&lt;5)
-        return SDS_TYPE_5;
-    if (string_size &lt; 1&lt;&lt;8)
-        return SDS_TYPE_8;
-    if (string_size &lt; 1&lt;&lt;16)
-        return SDS_TYPE_16;
-#if (LONG_MAX &#x3D;&#x3D; LLONG_MAX)
-    if (string_size &lt; 1ll&lt;&lt;32)
-        return SDS_TYPE_32;
-    return SDS_TYPE_64;
-#else
-    return SDS_TYPE_32;
-#endif
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>redis中还定义了两个宏SDS_HDR_VAR和SDS_HDR，都是根据sds的地址计算结构体sdshdr的地址。我们需要记住的是sds的地址永远指向的是char[] buf。</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_HDR_VAR(T,s) struct sdshdr##T *sh &#x3D; (void*)((s)-(sizeof(struct sdshdr##T)));
-#define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
-<h2 id="SDS使用">SDS使用</h2>
-<p>在搞清楚SDS基本数据结构后，现在来看看redis是怎么使用SDS的。</p>
-<h3 id="创建">创建</h3>
-<p>sds采用函数sdsnewlen进行创建。</p>
-<ol>
-<li>通过字符串长度获取sdshdr的实际类型。如果是sdshdr5则转换为sdshdr8</li>
-<li>分配初始化内存空间给sh，分配空间大小为sdshdr头大小+字符串大小+1，注意sds依然是\0结尾</li>
-<li>根据类型（type）使用宏SDS_HDR_VAR获取实际结构体，并把初始化header中len，alloc和type字段</li>
-<li>将传入的字符串拷贝到sds中的buf</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new sds string with the content specified by the &#39;init&#39; pointer
- * and &#39;initlen&#39;.
- * If NULL is used for &#39;init&#39; the string is initialized with zero bytes.
- * If SDS_NOINIT is used, the buffer is left uninitialized;
- *
- * The string is always null-termined (all the sds strings are, always) so
- * even if you create an sds string with:
- *
- * mystring &#x3D; sdsnewlen(&quot;abc&quot;,3);
- *
- * You can print the string with printf() as there is an implicit \0 at the
- * end of the string. However the string is binary safe and can contain
- * \0 characters in the middle, as the length is stored in the sds header. *&#x2F;
-sds sdsnewlen(const void *init, size_t initlen) &#123;
-    void *sh;
-    sds s;
-    char type &#x3D; sdsReqType(initlen);
-    &#x2F;* Empty strings are usually created in order to append. Use type 8
-     * since type 5 is not good at this. *&#x2F;
-    if (type &#x3D;&#x3D; SDS_TYPE_5 &amp;&amp; initlen &#x3D;&#x3D; 0) type &#x3D; SDS_TYPE_8;
-    int hdrlen &#x3D; sdsHdrSize(type);
-    unsigned char *fp; &#x2F;* flags pointer. *&#x2F;
-
-    assert(hdrlen+initlen+1 &gt; initlen); &#x2F;* Catch size_t overflow *&#x2F;
-    sh &#x3D; s_malloc(hdrlen+initlen+1);
-    if (init&#x3D;&#x3D;SDS_NOINIT)
-        init &#x3D; NULL;
-    else if (!init)
-        memset(sh, 0, hdrlen+initlen+1);
-    if (sh &#x3D;&#x3D; NULL) return NULL;
-    s &#x3D; (char*)sh+hdrlen;
-    fp &#x3D; ((unsigned char*)s)-1;
-    switch(type) &#123;
-        case SDS_TYPE_5: &#123;
-            *fp &#x3D; type | (initlen &lt;&lt; SDS_TYPE_BITS);
-            break;
-        &#125;
-        case SDS_TYPE_8: &#123;
-            SDS_HDR_VAR(8,s);
-            sh-&gt;len &#x3D; initlen;
-            sh-&gt;alloc &#x3D; initlen;
-            *fp &#x3D; type;
-            break;
-        &#125;
-        case SDS_TYPE_16: &#123;
-            SDS_HDR_VAR(16,s);
-            sh-&gt;len &#x3D; initlen;
-            sh-&gt;alloc &#x3D; initlen;
-            *fp &#x3D; type;
-            break;
-        &#125;
-        case SDS_TYPE_32: &#123;
-            SDS_HDR_VAR(32,s);
-            sh-&gt;len &#x3D; initlen;
-            sh-&gt;alloc &#x3D; initlen;
-            *fp &#x3D; type;
-            break;
-        &#125;
-        case SDS_TYPE_64: &#123;
-            SDS_HDR_VAR(64,s);
-            sh-&gt;len &#x3D; initlen;
-            sh-&gt;alloc &#x3D; initlen;
-            *fp &#x3D; type;
-            break;
-        &#125;
-    &#125;
-    if (initlen &amp;&amp; init)
-        memcpy(s, init, initlen);
-    s[initlen] &#x3D; &#39;\0&#39;;
-    return s;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="释放">释放</h3>
-<p>sds的释放比较简单</p>
-<ol>
-<li>记住sds指向的char buf[]，那么s[-1]指向的是flags，即sdshdr的类型</li>
-<li>sdsHdrSize计算出sds的header大小</li>
-<li>(char*)s-sdsHdrSize(s[-1])直接指向了结构体地址</li>
-<li>释放空间，这里没有对buf释放因为申请空间的时候buf作为结构体一起申请了。</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">void sdsfree(sds s) &#123;
-    if (s &#x3D;&#x3D; NULL) return;
-    s_free((char*)s-sdsHdrSize(s[-1]));
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="清空">清空</h3>
-<p>redis中更多的是使用清空操作（惰性删除），只是把字符串的长度设置为0，并不释放空间。下一次使用的时候就可以使用清空的sds，避免内存的分配操作</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">void sdsclear(sds s) &#123;
-    sdssetlen(s, 0);
-    s[0] &#x3D; &#39;\0&#39;;
-&#125;
-static inline void sdssetlen(sds s, size_t newlen) &#123;
-    unsigned char flags &#x3D; s[-1];
-    switch(flags&amp;SDS_TYPE_MASK) &#123;
-        case SDS_TYPE_5:
-            &#123;
-                unsigned char *fp &#x3D; ((unsigned char*)s)-1;
-                *fp &#x3D; SDS_TYPE_5 | (newlen &lt;&lt; SDS_TYPE_BITS);
-            &#125;
-            break;
-        case SDS_TYPE_8:
-            SDS_HDR(8,s)-&gt;len &#x3D; newlen;
-            break;
-        case SDS_TYPE_16:
-            SDS_HDR(16,s)-&gt;len &#x3D; newlen;
-            break;
-        case SDS_TYPE_32:
-            SDS_HDR(32,s)-&gt;len &#x3D; newlen;
-            break;
-        case SDS_TYPE_64:
-            SDS_HDR(64,s)-&gt;len &#x3D; newlen;
-            break;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="扩容">扩容</h3>
-<p>扩容的思想很简单</p>
-<ol>
-<li>计算出扩容后需要空间大小。需要注意的是扩容策略：如果新字符串大小（newlen）小于SDS_MAX_PREALLOC（1M）， 则扩容空间是newlen的两倍；否则扩容空间是newlen+SDS_MAX_PREALLOC</li>
-<li>根据新字符串大小（newlen）判断是否需要升级sdshdr，如果不需要升级，在原有sdshdr基础上重新分配空间即可；如果需要升级，新建sdshdr赋值，然后将老的sdshdr释放</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_MAX_PREALLOC (1024*1024)
-sds sdsMakeRoomFor(sds s, size_t addlen) &#123;
-    void *sh, *newsh;
-    size_t avail &#x3D; sdsavail(s);
-    size_t len, newlen;
-    char type, oldtype &#x3D; s[-1] &amp; SDS_TYPE_MASK;
-    int hdrlen;
-
-    &#x2F;* Return ASAP if there is enough space left. *&#x2F;
-    if (avail &gt;&#x3D; addlen) return s;
-
-    len &#x3D; sdslen(s);
-    sh &#x3D; (char*)s-sdsHdrSize(oldtype);
-    newlen &#x3D; (len+addlen);
-    assert(newlen &gt; len);   &#x2F;* Catch size_t overflow *&#x2F;
-    if (newlen &lt; SDS_MAX_PREALLOC)
-        newlen *&#x3D; 2;
-    else
-        newlen +&#x3D; SDS_MAX_PREALLOC;
-
-    type &#x3D; sdsReqType(newlen);
-
-    &#x2F;* Don&#39;t use type 5: the user is appending to the string and type 5 is
-     * not able to remember empty space, so sdsMakeRoomFor() must be called
-     * at every appending operation. *&#x2F;
-    if (type &#x3D;&#x3D; SDS_TYPE_5) type &#x3D; SDS_TYPE_8;
-
-    hdrlen &#x3D; sdsHdrSize(type);
-    assert(hdrlen+newlen+1 &gt; len);  &#x2F;* Catch size_t overflow *&#x2F;
-    if (oldtype&#x3D;&#x3D;type) &#123;
-        newsh &#x3D; s_realloc(sh, hdrlen+newlen+1);
-        if (newsh &#x3D;&#x3D; NULL) return NULL;
-        s &#x3D; (char*)newsh+hdrlen;
-    &#125; else &#123;
-        &#x2F;* Since the header size changes, need to move the string forward,
-         * and can&#39;t use realloc *&#x2F;
-        newsh &#x3D; s_malloc(hdrlen+newlen+1);
-        if (newsh &#x3D;&#x3D; NULL) return NULL;
-        memcpy((char*)newsh+hdrlen, s, len+1);
-        s_free(sh);
-        s &#x3D; (char*)newsh+hdrlen;
-        s[-1] &#x3D; type;
-        sdssetlen(s, len);
-    &#125;
-    sdssetalloc(s, newlen);
-    return s;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 ]]></content>
       <categories>
         <category>redis</category>
@@ -2094,50 +1592,501 @@ public class MongoAutoConfiguration &#123;
       </tags>
   </entry>
   <entry>
-    <title>ziplist压缩列表</title>
-    <url>/posts/2bd24f59.html</url>
+    <title>intset整数集合</title>
+    <url>/posts/c03ff393.html</url>
     <content><![CDATA[<blockquote>
 <p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
+intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
 </blockquote>
-<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
-<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
-<ul>
-<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
-<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
-<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
-</ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
- * to be very memory efficient. It stores both strings and integer values,
- * where integers are encoded as actual integers instead of a series of
- * characters. It allows push and pop operations on either side of the list
- * in O(1) time. However, because every operation requires a reallocation of
- * the memory used by the ziplist, the actual complexity is related to the
- * amount of memory used by the ziplist.
- * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
- <span id="more"></span>
+<p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
+<span id="more"></span>
 <h2 id="数据结构">数据结构</h2>
-<p>和其他数据类型不一样，我们在<code>ziplist.h</code>中没有找到任何结构体的定义<br>
-我们在来看下创建ziplist的代码，好家伙，ziplist就是个一维数组</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new empty ziplist. *&#x2F;
-unsigned char *ziplistNew(void) &#123;
-    unsigned int bytes &#x3D; ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
-    unsigned char *zl &#x3D; zmalloc(bytes);
-    ZIPLIST_BYTES(zl) &#x3D; intrev32ifbe(bytes);
-    ZIPLIST_TAIL_OFFSET(zl) &#x3D; intrev32ifbe(ZIPLIST_HEADER_SIZE);
-    ZIPLIST_LENGTH(zl) &#x3D; 0;
-    zl[bytes-1] &#x3D; ZIP_END;
-    return zl;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里我们要回到<code>ziplist.h</code>中，官方很详细的写了ziplist的设计思路</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* ZIPLIST OVERALL LAYOUT
-* &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
-*
-* The general layout of the ziplist is as follows:
-*
-* &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; &lt;entry&gt; ... &lt;entry&gt; &lt;zlend&gt;
-* ………………
-* &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>在<code>intset.h</code>中，我们能找到唯一一个结构体定义。从这个定义我们发现和sds的很像，都是使用一个字段<code>flags</code>、<code>encoding</code>记录实际类型，记录已使用了量<code>uint64_t len</code>、<code>uint32_t length</code>,并用一个buffer<code>char buf[]</code>、<code>int8_t contents[]</code>来记录数据。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct __attribute__ ((__packed__)) sdshdr64 &#123;
+    uint64_t len; &#x2F;* used *&#x2F;
+    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+
+typedef struct intset &#123;
+    uint32_t encoding;
+    uint32_t length;
+    int8_t contents[];
+&#125; intset;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>从这里看出，intset使用的<code>数组</code>的方式来实现的<code>集合</code>，而不是我们认为的<code>hash</code></p>
+</blockquote>
+<p>intset中，我们唯一需要搞清楚的枚举值就是<code>encoding</code>，在<code>intset.c</code>中，我们可以找到对应的代码</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define INTSET_ENC_INT16 (sizeof(int16_t))
+#define INTSET_ENC_INT32 (sizeof(int32_t))
+#define INTSET_ENC_INT64 (sizeof(int64_t))
+
+&#x2F;* Return the required encoding for the provided value. *&#x2F;
+static uint8_t _intsetValueEncoding(int64_t v) &#123;
+    if (v &lt; INT32_MIN || v &gt; INT32_MAX)
+        return INTSET_ENC_INT64;
+    else if (v &lt; INT16_MIN || v &gt; INT16_MAX)
+        return INTSET_ENC_INT32;
+    else
+        return INTSET_ENC_INT16;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<table>
+<thead>
+<tr>
+<th>encoding枚举</th>
+<th>值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>INTSET_ENC_INT16</td>
+<td>2 sizeof(int16_t)</td>
+<td>intset值范围是 [-2<sup>16</sup>,2<sup>16</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT32</td>
+<td>4 sizeof(int32_t)</td>
+<td>intset值范围是 [-2<sup>32</sup>,-2<sup>16</sup>) $\bigcup$ (2<sup>16</sup>-1,2<sup>32</sup>-1]</td>
+</tr>
+<tr>
+<td>INTSET_ENC_INT64</td>
+<td>8 sizeof(int64_t)</td>
+<td>intset值范围是 [-2<sup>64</sup>,-2<sup>32</sup>) $\bigcup$ (2<sup>32</sup>-1,2<sup>64</sup>-1]</td>
+</tr>
+</tbody>
+</table>
+<h2 id="操作">操作</h2>
+<p>整数集合没有什么复杂的操作</p>
+<h3 id="创建">创建</h3>
+<p>创建很简单，分配好空间就行了，开始的数据类型为<code>INTSET_ENC_INT16</code></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetNew(void) &#123;
+    intset *is &#x3D; zmalloc(sizeof(intset));
+    is-&gt;encoding &#x3D; intrev32ifbe(INTSET_ENC_INT16);
+    is-&gt;length &#x3D; 0;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>需要注意的是，这里有个宏定义<code>intrev32ifbe</code>，这是因为reids大部分都使用的<code>小端</code>。<br>
+在<code>endianconv.h</code>中，我们能找到对应的宏定义。这里维护了一系列的宏，都是将最终的数据排列转为<code>小端</code></p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#if (BYTE_ORDER &#x3D;&#x3D; LITTLE_ENDIAN)
+#define memrev16ifbe(p) ((void)(0))
+#define memrev32ifbe(p) ((void)(0))
+#define memrev64ifbe(p) ((void)(0))
+#define intrev16ifbe(v) (v)
+#define intrev32ifbe(v) (v)
+#define intrev64ifbe(v) (v)
+#else
+#define memrev16ifbe(p) memrev16(p)
+#define memrev32ifbe(p) memrev32(p)
+#define memrev64ifbe(p) memrev64(p)
+#define intrev16ifbe(v) intrev16(v)
+#define intrev32ifbe(v) intrev32(v)
+#define intrev64ifbe(v) intrev64(v)
+#endif<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="查找">查找</h3>
+<p>整数集合的查找采用的是<code>二分</code>，要注意下的是pos这个参数</p>
+<ol>
+<li>如果元素在集合中，intsetSearch返回1，pos代表元素在集合中的下标</li>
+<li>如果元素不在集合中，intsetSearch返回0，pos代表元素可以插入集合的下标</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Search for the position of &quot;value&quot;. Return 1 when the value was found and
+ * sets &quot;pos&quot; to the position of the value within the intset. Return 0 when
+ * the value is not present in the intset and sets &quot;pos&quot; to the position
+ * where &quot;value&quot; can be inserted. *&#x2F;
+static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) &#123;
+    int min &#x3D; 0, max &#x3D; intrev32ifbe(is-&gt;length)-1, mid &#x3D; -1;
+    int64_t cur &#x3D; -1;
+
+    &#x2F;* The value can never be found when the set is empty *&#x2F;
+    if (intrev32ifbe(is-&gt;length) &#x3D;&#x3D; 0) &#123;
+        if (pos) *pos &#x3D; 0;
+        return 0;
+    &#125; else &#123;
+        &#x2F;* Check for the case where we know we cannot find the value,
+         * but do know the insert position. *&#x2F;
+        if (value &gt; _intsetGet(is,max)) &#123;
+            if (pos) *pos &#x3D; intrev32ifbe(is-&gt;length);
+            return 0;
+        &#125; else if (value &lt; _intsetGet(is,0)) &#123;
+            if (pos) *pos &#x3D; 0;
+            return 0;
+        &#125;
+    &#125;
+
+    while(max &gt;&#x3D; min) &#123;
+        mid &#x3D; ((unsigned int)min + (unsigned int)max) &gt;&gt; 1;
+        cur &#x3D; _intsetGet(is,mid);
+        if (value &gt; cur) &#123;
+            min &#x3D; mid+1;
+        &#125; else if (value &lt; cur) &#123;
+            max &#x3D; mid-1;
+        &#125; else &#123;
+            break;
+        &#125;
+    &#125;
+
+    if (value &#x3D;&#x3D; cur) &#123;
+        if (pos) *pos &#x3D; mid;
+        return 1;
+    &#125; else &#123;
+        if (pos) *pos &#x3D; min;
+        return 0;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="新增">新增</h3>
+<h4 id="add">add</h4>
+<p>代码上看，整数集合的新增是个很复杂的过程。这是因为整数集合的底层实现是<code>数组</code>，为了保证良好的查找效率，这个数组必须是有序的。这就要求在插入的过程中进行排序。</p>
+<ol>
+<li>判断插入的value是否超过当前集合能处理的范围（encoding），如果超过了，需要<code>升级</code>整数数组。</li>
+<li>根据value查找该元素是否在intset中，intsetSearch中传入了一个参数pos，pos表示了search之后可以插入元素的位置<br>
+2.1 如果在，反正集合只保证元素的有无，就不用处理了<br>
+2.2 如果集合中不包含该元素，现在可以在pos处插入该元素。先对intset扩容，然后在pos插入数据。注意乳沟pos不在数组的末尾，需要吧pos后面的数据都向后移动一位</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetAdd(intset *is, int64_t value, uint8_t *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 1;
+
+    &#x2F;* Upgrade encoding if necessary. If we need to upgrade, we know that
+     * this value should be either appended (if &gt; 0) or prepended (if &lt; 0),
+     * because it lies outside the range of existing values. *&#x2F;
+    if (valenc &gt; intrev32ifbe(is-&gt;encoding)) &#123;
+        &#x2F;* This always succeeds, so we don&#39;t need to curry *success. *&#x2F;
+        return intsetUpgradeAndAdd(is,value);
+    &#125; else &#123;
+        &#x2F;* Abort if the value is already present in the set.
+         * This call will populate &quot;pos&quot; with the right position to insert
+         * the value when it cannot be found. *&#x2F;
+        if (intsetSearch(is,value,&amp;pos)) &#123;
+            if (success) *success &#x3D; 0;
+            return is;
+        &#125;
+
+        is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+        if (pos &lt; intrev32ifbe(is-&gt;length)) intsetMoveTail(is,pos,pos+1);
+    &#125;
+
+    _intsetSet(is,pos,value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="upgradeAndAdd">upgradeAndAdd</h4>
+<p>如果插入的整数超过整数集合的范围了，需要升级整数集合，扩容并重新分配空间，最后插入新数据</p>
+<blockquote>
+<p>这里有个小技巧：插入的数据都超过原来集合的范围了，所以新插入的数据要么在新集合中是第一个，要么是最后一个<br>
+代码中使用了<code>prepend</code>这个变量来处理</p>
+</blockquote>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static intset *intsetUpgradeAndAdd(intset *is, int64_t value) &#123;
+    uint8_t curenc &#x3D; intrev32ifbe(is-&gt;encoding);
+    uint8_t newenc &#x3D; _intsetValueEncoding(value);
+    int length &#x3D; intrev32ifbe(is-&gt;length);
+    int prepend &#x3D; value &lt; 0 ? 1 : 0;
+
+    &#x2F;* First set new encoding and resize *&#x2F;
+    is-&gt;encoding &#x3D; intrev32ifbe(newenc);
+    is &#x3D; intsetResize(is,intrev32ifbe(is-&gt;length)+1);
+
+    &#x2F;* Upgrade back-to-front so we don&#39;t overwrite values.
+     * Note that the &quot;prepend&quot; variable is used to make sure we have an empty
+     * space at either the beginning or the end of the intset. *&#x2F;
+    while(length--)
+        _intsetSet(is,length+prepend,_intsetGetEncoded(is,length,curenc));
+
+    &#x2F;* Set the value at the beginning or the end. *&#x2F;
+    if (prepend)
+        _intsetSet(is,0,value);
+    else
+        _intsetSet(is,intrev32ifbe(is-&gt;length),value);
+    is-&gt;length &#x3D; intrev32ifbe(intrev32ifbe(is-&gt;length)+1);
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="删除">删除</h2>
+<p>删除使用intsetSearch找到需要删除元素的位置（找不到就不删了呗），移动后面的元素并缩容即可</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">intset *intsetRemove(intset *is, int64_t value, int *success) &#123;
+    uint8_t valenc &#x3D; _intsetValueEncoding(value);
+    uint32_t pos;
+    if (success) *success &#x3D; 0;
+
+    if (valenc &lt;&#x3D; intrev32ifbe(is-&gt;encoding) &amp;&amp; intsetSearch(is,value,&amp;pos)) &#123;
+        uint32_t len &#x3D; intrev32ifbe(is-&gt;length);
+
+        &#x2F;* We know we can delete *&#x2F;
+        if (success) *success &#x3D; 1;
+
+        &#x2F;* Overwrite value with tail and update length *&#x2F;
+        if (pos &lt; (len-1)) intsetMoveTail(is,pos+1,pos);
+        is &#x3D; intsetResize(is,len-1);
+        is-&gt;length &#x3D; intrev32ifbe(len-1);
+    &#125;
+    return is;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="总结">总结</h2>
+<p>看完了整数集合，这就是个用<code>时间</code>换<code>空间</code>的典型。内存到是很省，但插入，删除的效率都是<code>O(N)</code>，查找的效率是<code>O(logN)</code>。这就限定了整数集合不适合存放大量的数据。</p>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>sds字符串</title>
+    <url>/posts/cffaa119.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
+</blockquote>
+<p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。</p>
+<span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>在sds.h中定义了sds的数据结构。<code>typedef char *sds;</code>单从数据结构的定义上看，sds就是一个char数组。但和c的char数组不同。sds保存了额外的数据信息，保证<strong>高效字符串操作</strong>和<strong>二进制安全</strong>。</p>
+<ul>
+<li><strong>STRLEN</strong>可以获取字符串的长度，c中String获取字符串长度是O(N)的复杂度。实际应用中一个大几百K的字符串也不少见，采用O(N)的复杂度太得不偿失，这样就需要有个字段记录实际字符长度。</li>
+<li>字符串实际大小已经记录了，这样字符就不必要强制采用/0结尾，这也保证了二进制安全。</li>
+<li><strong>APPEND</strong>可以在现有字符串的基础上追加字符，c中String分配的空间刚刚好存放字符，所以在append时需要对新字符串重新分配空间，这样的操作是很不划算的。解决方法就是预先分配一块空间（如java中ArrayList），这就要求有个字段记录预分配空间的大小。</li>
+</ul>
+<p>按照这个思路，早期redis的数据结构中，除了char数组外，还额为定义了预分配数组的大小和剩余空间。我们可以通过len减去free得到字符串的实际长度。并且sds指向的是char buf[]，这样就可以使用*(sds-4)和*(sds-8)直接访问free和len的地址。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct sdshdr &#123;
+    int len;    &#x2F;&#x2F; buf 已占用长度
+    int free;   &#x2F;&#x2F; buf 剩余可用长度
+    char buf[];     &#x2F;&#x2F; 实际保存字符串数据的地方
+&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从这个sdshdr的定义中可以看出，int类型的len和free可以描述2G的空间，但实际应用过程中我们并不需要这么大的空间。所以在redis的后续发展中，定义了一系列sdshdrX，可以根据不同大小的字符串分配不同的结构题，已达到节省空间的目的。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Note: sdshdr5 is never used, we just access the flags byte directly.
+ * However is here to document the layout of type 5 SDS strings. *&#x2F;
+struct __attribute__ ((__packed__)) sdshdr5 &#123;
+    unsigned char flags; &#x2F;* 3 lsb of type, and 5 msb of string length *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr8 &#123;
+    uint8_t len; &#x2F;* used *&#x2F;
+    uint8_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr16 &#123;
+    uint16_t len; &#x2F;* used *&#x2F;
+    uint16_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr32 &#123;
+    uint32_t len; &#x2F;* used *&#x2F;
+    uint32_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;
+struct __attribute__ ((__packed__)) sdshdr64 &#123;
+    uint64_t len; &#x2F;* used *&#x2F;
+    uint64_t alloc; &#x2F;* excluding the header and null terminator *&#x2F;
+    unsigned char flags; &#x2F;* 3 lsb of type, 5 unused bits *&#x2F;
+    char buf[];
+&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从数据结构可以看出，redis一共定义了5中sdshdr结构（sdshdr5并没有使用），分别可以支持长度为2<sup>5</sup>，2<sup>8</sup>，2<sup>16</sup>，2<sup>32</sup>和2<sup>64</sup>的字符串（其实Redis中字符串长度不能超过512M）。redis可以通过字符串长度选择合适的sdshdr结构体。<br>
+现在有多种sdshdr结构体了，我们就必须在结构体中存储结构体的类型，这个字段就是unsigned char flags。它使用了3位来表示这5种类型</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_TYPE_5  0
+#define SDS_TYPE_8  1
+#define SDS_TYPE_16 2
+#define SDS_TYPE_32 3
+#define SDS_TYPE_64 4
+static inline char sdsReqType(size_t string_size) &#123;
+    if (string_size &lt; 1&lt;&lt;5)
+        return SDS_TYPE_5;
+    if (string_size &lt; 1&lt;&lt;8)
+        return SDS_TYPE_8;
+    if (string_size &lt; 1&lt;&lt;16)
+        return SDS_TYPE_16;
+#if (LONG_MAX &#x3D;&#x3D; LLONG_MAX)
+    if (string_size &lt; 1ll&lt;&lt;32)
+        return SDS_TYPE_32;
+    return SDS_TYPE_64;
+#else
+    return SDS_TYPE_32;
+#endif
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>redis中还定义了两个宏SDS_HDR_VAR和SDS_HDR，都是根据sds的地址计算结构体sdshdr的地址。我们需要记住的是sds的地址永远指向的是char[] buf。</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_HDR_VAR(T,s) struct sdshdr##T *sh &#x3D; (void*)((s)-(sizeof(struct sdshdr##T)));
+#define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<h2 id="SDS使用">SDS使用</h2>
+<p>在搞清楚SDS基本数据结构后，现在来看看redis是怎么使用SDS的。</p>
+<h3 id="创建">创建</h3>
+<p>sds采用函数sdsnewlen进行创建。</p>
+<ol>
+<li>通过字符串长度获取sdshdr的实际类型。如果是sdshdr5则转换为sdshdr8</li>
+<li>分配初始化内存空间给sh，分配空间大小为sdshdr头大小+字符串大小+1，注意sds依然是\0结尾</li>
+<li>根据类型（type）使用宏SDS_HDR_VAR获取实际结构体，并把初始化header中len，alloc和type字段</li>
+<li>将传入的字符串拷贝到sds中的buf</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new sds string with the content specified by the &#39;init&#39; pointer
+ * and &#39;initlen&#39;.
+ * If NULL is used for &#39;init&#39; the string is initialized with zero bytes.
+ * If SDS_NOINIT is used, the buffer is left uninitialized;
+ *
+ * The string is always null-termined (all the sds strings are, always) so
+ * even if you create an sds string with:
+ *
+ * mystring &#x3D; sdsnewlen(&quot;abc&quot;,3);
+ *
+ * You can print the string with printf() as there is an implicit \0 at the
+ * end of the string. However the string is binary safe and can contain
+ * \0 characters in the middle, as the length is stored in the sds header. *&#x2F;
+sds sdsnewlen(const void *init, size_t initlen) &#123;
+    void *sh;
+    sds s;
+    char type &#x3D; sdsReqType(initlen);
+    &#x2F;* Empty strings are usually created in order to append. Use type 8
+     * since type 5 is not good at this. *&#x2F;
+    if (type &#x3D;&#x3D; SDS_TYPE_5 &amp;&amp; initlen &#x3D;&#x3D; 0) type &#x3D; SDS_TYPE_8;
+    int hdrlen &#x3D; sdsHdrSize(type);
+    unsigned char *fp; &#x2F;* flags pointer. *&#x2F;
+
+    assert(hdrlen+initlen+1 &gt; initlen); &#x2F;* Catch size_t overflow *&#x2F;
+    sh &#x3D; s_malloc(hdrlen+initlen+1);
+    if (init&#x3D;&#x3D;SDS_NOINIT)
+        init &#x3D; NULL;
+    else if (!init)
+        memset(sh, 0, hdrlen+initlen+1);
+    if (sh &#x3D;&#x3D; NULL) return NULL;
+    s &#x3D; (char*)sh+hdrlen;
+    fp &#x3D; ((unsigned char*)s)-1;
+    switch(type) &#123;
+        case SDS_TYPE_5: &#123;
+            *fp &#x3D; type | (initlen &lt;&lt; SDS_TYPE_BITS);
+            break;
+        &#125;
+        case SDS_TYPE_8: &#123;
+            SDS_HDR_VAR(8,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+        case SDS_TYPE_16: &#123;
+            SDS_HDR_VAR(16,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+        case SDS_TYPE_32: &#123;
+            SDS_HDR_VAR(32,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+        case SDS_TYPE_64: &#123;
+            SDS_HDR_VAR(64,s);
+            sh-&gt;len &#x3D; initlen;
+            sh-&gt;alloc &#x3D; initlen;
+            *fp &#x3D; type;
+            break;
+        &#125;
+    &#125;
+    if (initlen &amp;&amp; init)
+        memcpy(s, init, initlen);
+    s[initlen] &#x3D; &#39;\0&#39;;
+    return s;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="释放">释放</h3>
+<p>sds的释放比较简单</p>
+<ol>
+<li>记住sds指向的char buf[]，那么s[-1]指向的是flags，即sdshdr的类型</li>
+<li>sdsHdrSize计算出sds的header大小</li>
+<li>(char*)s-sdsHdrSize(s[-1])直接指向了结构体地址</li>
+<li>释放空间，这里没有对buf释放因为申请空间的时候buf作为结构体一起申请了。</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">void sdsfree(sds s) &#123;
+    if (s &#x3D;&#x3D; NULL) return;
+    s_free((char*)s-sdsHdrSize(s[-1]));
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="清空">清空</h3>
+<p>redis中更多的是使用清空操作（惰性删除），只是把字符串的长度设置为0，并不释放空间。下一次使用的时候就可以使用清空的sds，避免内存的分配操作</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">void sdsclear(sds s) &#123;
+    sdssetlen(s, 0);
+    s[0] &#x3D; &#39;\0&#39;;
+&#125;
+static inline void sdssetlen(sds s, size_t newlen) &#123;
+    unsigned char flags &#x3D; s[-1];
+    switch(flags&amp;SDS_TYPE_MASK) &#123;
+        case SDS_TYPE_5:
+            &#123;
+                unsigned char *fp &#x3D; ((unsigned char*)s)-1;
+                *fp &#x3D; SDS_TYPE_5 | (newlen &lt;&lt; SDS_TYPE_BITS);
+            &#125;
+            break;
+        case SDS_TYPE_8:
+            SDS_HDR(8,s)-&gt;len &#x3D; newlen;
+            break;
+        case SDS_TYPE_16:
+            SDS_HDR(16,s)-&gt;len &#x3D; newlen;
+            break;
+        case SDS_TYPE_32:
+            SDS_HDR(32,s)-&gt;len &#x3D; newlen;
+            break;
+        case SDS_TYPE_64:
+            SDS_HDR(64,s)-&gt;len &#x3D; newlen;
+            break;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="扩容">扩容</h3>
+<p>扩容的思想很简单</p>
+<ol>
+<li>计算出扩容后需要空间大小。需要注意的是扩容策略：如果新字符串大小（newlen）小于SDS_MAX_PREALLOC（1M）， 则扩容空间是newlen的两倍；否则扩容空间是newlen+SDS_MAX_PREALLOC</li>
+<li>根据新字符串大小（newlen）判断是否需要升级sdshdr，如果不需要升级，在原有sdshdr基础上重新分配空间即可；如果需要升级，新建sdshdr赋值，然后将老的sdshdr释放</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">#define SDS_MAX_PREALLOC (1024*1024)
+sds sdsMakeRoomFor(sds s, size_t addlen) &#123;
+    void *sh, *newsh;
+    size_t avail &#x3D; sdsavail(s);
+    size_t len, newlen;
+    char type, oldtype &#x3D; s[-1] &amp; SDS_TYPE_MASK;
+    int hdrlen;
+
+    &#x2F;* Return ASAP if there is enough space left. *&#x2F;
+    if (avail &gt;&#x3D; addlen) return s;
+
+    len &#x3D; sdslen(s);
+    sh &#x3D; (char*)s-sdsHdrSize(oldtype);
+    newlen &#x3D; (len+addlen);
+    assert(newlen &gt; len);   &#x2F;* Catch size_t overflow *&#x2F;
+    if (newlen &lt; SDS_MAX_PREALLOC)
+        newlen *&#x3D; 2;
+    else
+        newlen +&#x3D; SDS_MAX_PREALLOC;
+
+    type &#x3D; sdsReqType(newlen);
+
+    &#x2F;* Don&#39;t use type 5: the user is appending to the string and type 5 is
+     * not able to remember empty space, so sdsMakeRoomFor() must be called
+     * at every appending operation. *&#x2F;
+    if (type &#x3D;&#x3D; SDS_TYPE_5) type &#x3D; SDS_TYPE_8;
+
+    hdrlen &#x3D; sdsHdrSize(type);
+    assert(hdrlen+newlen+1 &gt; len);  &#x2F;* Catch size_t overflow *&#x2F;
+    if (oldtype&#x3D;&#x3D;type) &#123;
+        newsh &#x3D; s_realloc(sh, hdrlen+newlen+1);
+        if (newsh &#x3D;&#x3D; NULL) return NULL;
+        s &#x3D; (char*)newsh+hdrlen;
+    &#125; else &#123;
+        &#x2F;* Since the header size changes, need to move the string forward,
+         * and can&#39;t use realloc *&#x2F;
+        newsh &#x3D; s_malloc(hdrlen+newlen+1);
+        if (newsh &#x3D;&#x3D; NULL) return NULL;
+        memcpy((char*)newsh+hdrlen, s, len+1);
+        s_free(sh);
+        s &#x3D; (char*)newsh+hdrlen;
+        s[-1] &#x3D; type;
+        sdssetlen(s, len);
+    &#125;
+    sdssetalloc(s, newlen);
+    return s;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 ]]></content>
       <categories>
         <category>redis</category>
@@ -2351,6 +2300,60 @@ span的作用在这里就体现了，它记录了下一个节点的距离，没�
     &#125;
     return NULL;
 &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>ziplist压缩列表</title>
+    <url>/posts/2bd24f59.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
+</blockquote>
+<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
+<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
+<ul>
+<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
+<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
+<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
+ * to be very memory efficient. It stores both strings and integer values,
+ * where integers are encoded as actual integers instead of a series of
+ * characters. It allows push and pop operations on either side of the list
+ * in O(1) time. However, because every operation requires a reallocation of
+ * the memory used by the ziplist, the actual complexity is related to the
+ * amount of memory used by the ziplist.
+ * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+ <span id="more"></span>
+<h2 id="数据结构">数据结构</h2>
+<p>和其他数据类型不一样，我们在<code>ziplist.h</code>中没有找到任何结构体的定义<br>
+我们在来看下创建ziplist的代码，好家伙，ziplist就是个一维数组</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new empty ziplist. *&#x2F;
+unsigned char *ziplistNew(void) &#123;
+    unsigned int bytes &#x3D; ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
+    unsigned char *zl &#x3D; zmalloc(bytes);
+    ZIPLIST_BYTES(zl) &#x3D; intrev32ifbe(bytes);
+    ZIPLIST_TAIL_OFFSET(zl) &#x3D; intrev32ifbe(ZIPLIST_HEADER_SIZE);
+    ZIPLIST_LENGTH(zl) &#x3D; 0;
+    zl[bytes-1] &#x3D; ZIP_END;
+    return zl;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们要回到<code>ziplist.h</code>中，官方很详细的写了ziplist的设计思路</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* ZIPLIST OVERALL LAYOUT
+* &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;
+*
+* The general layout of the ziplist is as follows:
+*
+* &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; &lt;entry&gt; ... &lt;entry&gt; &lt;zlend&gt;
+* ………………
+* &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 ]]></content>
       <categories>
         <category>redis</category>
