@@ -1,0 +1,22 @@
+@startuml
+
+class GenericBeanDefinition
+interface AnnotatedBeanDefinition
+
+class AnnotatedGenericBeanDefinition
+AnnotatedGenericBeanDefinition --|> GenericBeanDefinition
+AnnotatedGenericBeanDefinition --|> AnnotatedBeanDefinition
+
+class BasePackagesBeanDefinition
+BasePackagesBeanDefinition --|> GenericBeanDefinition
+
+class EntityScanPackagesBeanDefinition
+EntityScanPackagesBeanDefinition --|> GenericBeanDefinition
+
+class ServletComponentRegisteringPostProcessorBeanDefinition
+ServletComponentRegisteringPostProcessorBeanDefinition --|> GenericBeanDefinition
+
+class ScannedGenericBeanDefinition
+ScannedGenericBeanDefinition --|> AnnotatedBeanDefinition
+ScannedGenericBeanDefinition --|> GenericBeanDefinition
+@enduml

@@ -1,0 +1,35 @@
+@startuml
+
+interface AttributeAccessor
+class AttributeAccessorSupport
+interface BeanMetadataElement
+
+interface BeanDefinition
+interface AnnotatedBeanDefinition
+abstract class AbstractBeanDefinition
+class BeanMetadataAttributeAccessor
+
+interface BeanMetadataElement
+
+AbstractBeanDefinition --|> BeanMetadataAttributeAccessor
+AbstractBeanDefinition --|> BeanDefinition
+
+BeanMetadataAttributeAccessor --|> BeanMetadataElement
+BeanMetadataAttributeAccessor --|> AttributeAccessorSupport
+
+AttributeAccessorSupport --|> AttributeAccessor
+
+BeanDefinition --|> BeanMetadataElement
+BeanDefinition --|> AttributeAccessor
+AnnotatedBeanDefinition --|> BeanDefinition
+
+ChildBeanDefinition --|> AbstractBeanDefinition
+note top of ChildBeanDefinition :  @Deprecated
+
+class GenericBeanDefinition
+GenericBeanDefinition --|> AbstractBeanDefinition
+
+class RootBeanDefinition
+RootBeanDefinition --|> AbstractBeanDefinition
+
+@enduml

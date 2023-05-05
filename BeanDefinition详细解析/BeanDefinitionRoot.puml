@@ -1,0 +1,13 @@
+@startuml
+
+class RootBeanDefinition
+interface AnnotatedBeanDefinition
+
+class ConfigurationClassBeanDefinition
+ConfigurationClassBeanDefinition --|> AnnotatedBeanDefinition
+ConfigurationClassBeanDefinition --|> RootBeanDefinition
+
+class ClassDerivedBeanDefinition
+ClassDerivedBeanDefinition --|> RootBeanDefinition
+
+@enduml

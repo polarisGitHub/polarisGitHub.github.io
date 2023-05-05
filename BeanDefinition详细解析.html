@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+<link rel="stylesheet" href="/css/prism/prism.css">
+<link rel="stylesheet" href="">
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.3.0/css/all.min.css" integrity="sha256-/4UQcSmErDzPCMAiuOiWPVVsNN2s3ZY/NsmXNcj0IFc=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"polarisgithub.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.15.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="本文基于Spring Boot 2.7.9与Spring Framework 5.3.25  对于Spring来说，主流的bean加载方式有以下几种  xml加载bean @Configuration加载bean 扫描加载bean 手动加载bean  上面4种方式中，除了第四点使用了registerSingleton直接注册一个bean以外，其他三种方式都需要解析出BeanDefinition，">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BeanDefinition详细解析">
+<meta property="og:url" content="https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90.html">
+<meta property="og:site_name" content="polaris_he">
+<meta property="og:description" content="本文基于Spring Boot 2.7.9与Spring Framework 5.3.25  对于Spring来说，主流的bean加载方式有以下几种  xml加载bean @Configuration加载bean 扫描加载bean 手动加载bean  上面4种方式中，除了第四点使用了registerSingleton直接注册一个bean以外，其他三种方式都需要解析出BeanDefinition，">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionCore.svg">
+<meta property="og:image" content="https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionGeneric.svg">
+<meta property="og:image" content="https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionRoot.svg">
+<meta property="article:published_time" content="2023-04-09T13:45:00.000Z">
+<meta property="article:modified_time" content="2023-05-05T09:54:11.011Z">
+<meta property="article:author" content="polaris_he">
+<meta property="article:tag" content="Spring IOC">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionCore.svg">
+
+
+<link rel="canonical" href="https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90.html">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":false,"lang":"zh-CN","comments":true,"permalink":"https://polarisgithub.github.io/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90.html","path":"BeanDefinition详细解析.html","title":"BeanDefinition详细解析"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>BeanDefinition详细解析 | polaris_he
+</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<style>.darkmode--activated{--body-bg-color:#282828;--content-bg-color:#333;--card-bg-color:#555;--text-color:#ccc;--blockquote-color:#bbb;--link-color:#ccc;--link-hover-color:#eee;--brand-color:#ddd;--brand-hover-color:#ddd;--table-row-odd-bg-color:#282828;--table-row-hover-bg-color:#363636;--menu-item-bg-color:#555;--btn-default-bg:#222;--btn-default-color:#ccc;--btn-default-border-color:#555;--btn-default-hover-bg:#666;--btn-default-hover-color:#ccc;--btn-default-hover-border-color:#666;--highlight-background:#282b2e;--highlight-foreground:#a9b7c6;--highlight-gutter-background:#34393d;--highlight-gutter-foreground:#9ca9b6}.darkmode--activated img{opacity:.75}.darkmode--activated img:hover{opacity:.9}.darkmode--activated code{color:#69dbdc;background:0 0}button.darkmode-toggle{z-index:9999}.darkmode-ignore,img{display:flex!important}.beian img{display:inline-block!important}</style></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">polaris_he</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">随便写写</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索 | search" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">9</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索 | search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanDefinition%E4%BE%9D%E8%B5%96%E5%88%86%E6%9E%90"><span class="nav-number">1.</span> <span class="nav-text">BeanDefinition依赖分析</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BE%9D%E8%B5%96"><span class="nav-number">1.1.</span> <span class="nav-text">核心依赖</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#GenericBeanDefinition"><span class="nav-number">1.2.</span> <span class="nav-text">GenericBeanDefinition</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#RootBeanDefinition"><span class="nav-number">2.</span> <span class="nav-text">RootBeanDefinition</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanDefinftion%E7%88%B6%E6%8E%A5%E5%8F%A3"><span class="nav-number">3.</span> <span class="nav-text">BeanDefinftion父接口</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#BeanMetadataElement"><span class="nav-number">3.1.</span> <span class="nav-text">BeanMetadataElement</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AttributeAccessor"><span class="nav-number">3.2.</span> <span class="nav-text">AttributeAccessor</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanDefintion%E6%A0%B8%E5%BF%83%E5%AE%9E%E7%8E%B0%E7%B1%BB"><span class="nav-number">4.</span> <span class="nav-text">BeanDefintion核心实现类</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractBeanDefinition"><span class="nav-number">4.1.</span> <span class="nav-text">AbstractBeanDefinition</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#GenericBeanDefinition-v2"><span class="nav-number">4.2.</span> <span class="nav-text">GenericBeanDefinition</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#RootBeanDefinition-v2"><span class="nav-number">4.3.</span> <span class="nav-text">RootBeanDefinition</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanFactory%E5%AF%B9BeanDefinition%E5%A4%84%E7%90%86"><span class="nav-number">5.</span> <span class="nav-text">BeanFactory对BeanDefinition处理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ListableBeanFactory"><span class="nav-number">5.1.</span> <span class="nav-text">ListableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableListableBeanFactory"><span class="nav-number">5.2.</span> <span class="nav-text">ConfigurableListableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConfigurableBeanFactory"><span class="nav-number">5.3.</span> <span class="nav-text">ConfigurableBeanFactory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#BeanDefinitionRegistry"><span class="nav-number">5.4.</span> <span class="nav-text">BeanDefinitionRegistry</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanDefinition%E5%90%88%E5%B9%B6"><span class="nav-number">6.</span> <span class="nav-text">BeanDefinition合并</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">10</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">9</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner page posts-expand">
+
+
+    
+    
+    
+    <div class="post-block" lang="zh-CN"><header class="post-header">
+
+<h1 class="post-title" itemprop="name headline">BeanDefinition详细解析
+</h1>
+
+<div class="post-meta-container">
+</div>
+
+</header>
+
+      
+      
+      <div class="post-body">
+          <blockquote>
+<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
+</blockquote>
+<p>对于Spring来说，主流的bean加载方式有以下几种</p>
+<ol>
+<li>xml加载bean</li>
+<li>@Configuration加载bean</li>
+<li>扫描加载bean</li>
+<li>手动加载bean</li>
+</ol>
+<p>上面4种方式中，除了第四点使用了<code>registerSingleton</code>直接注册一个bean以外，其他三种方式都需要解析出BeanDefinition，最终通过BeanDefinition创建出Bean。这里我们可以看出BeanDefinition在Spring中的核心地位，今天我们就一起看看，BeanDefinition在Spring中是怎么工作的</p>
+<span id="more"></span>
+<h2 id="BeanDefinition依赖分析">BeanDefinition依赖分析</h2>
+<p>BeanDefinition依赖图比较大，这里拆解为三个图</p>
+<ol>
+<li>核心依赖</li>
+<li>GenericBeanDefinition</li>
+<li>RootBeanDefinition</li>
+</ol>
+<h3 id="核心依赖">核心依赖</h3>
+<p>从核心依赖图上可以看到</p>
+<ol>
+<li>BeanDefinition除了保持Bean定义数据之外，还提供了<code>Attibute</code>和<code>Metadata</code>的保存接口，大大提高了BeanDefinition的灵活性</li>
+<li>AnnotatedBeanDefinintion继承BeanDefinition，为注解定义Bean的基础</li>
+<li>核心的BeanDefinition有三个，均继承了AbstractBeanDefinition
+<ol>
+<li>ChildBeanDefinition：用户父子关系的BeanDefinition，Spring已经不建议使用，推荐使用GenericBeanDefintion</li>
+<li>GenericBeanDefinition：通用的BeanDefinition</li>
+<li>RootBeanDefinition：不能作为子BeanDefintion</li>
+</ol>
+</li>
+</ol>
+<p><img src="/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionCore.svg" alt="BeanDefinitionCore"></p>
+<h3 id="GenericBeanDefinition">GenericBeanDefinition</h3>
+<p>GenericBeanDefinition有五个扩展实现类，分别在GenericBeanDefinition继承上扩展了其他能力</p>
+<ol>
+<li>ScannedGenericBeanDefinition：实现了<code>AnnotatedBeanDefinition</code>用于保存注解相关信息，被<code>@ComponentScan</code>或者<code>context:component-scan</code>扫描出来的Bean会被创建为ScannedGenericBeanDefinition。能被扫描出来，说明定义Bean时有<code>@Configuration</code></li>
+<li>AnnotatedGenericBeanDefinition：和ScannedGenericBeanDefinition类似，在import导入Bean时会使用到</li>
+<li>EntityScanPackagesBeanDefinition：和<code>@EntityScan</code>相关，Spring自己注册的一个InfrastructureBean</li>
+<li>BasePackagesBeanDefinition：和<code>@AutoConfigurationPackage</code>相关，Spring自己注册的一个InfrastructureBean</li>
+<li>ServletComponentRegisteringPostProcessorBeanDefinition：和<code>@ServletComponentScan</code>相关，Spring自己注册的一个InfrastructureBean</li>
+</ol>
+<p><img src="/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionGeneric.svg" alt="BeanDefinitionGeneric"></p>
+<h2 id="RootBeanDefinition">RootBeanDefinition</h2>
+<p>RootBeanDefinition有两个个扩展实现类，分别在RootBeanDefinition继承上扩展了其他能力</p>
+<ol>
+<li>ClassDerivedBeanDefinition：只在<code>GenericApplicationContext</code>中使用，使用BeanClass注册Bean时使用</li>
+<li>ConfigurationClassBeanDefinition：被<code>@Bean</code>注解的Bean会被注册为ConfigurationClassBeanDefinition，这里注意和<br>
+ScannedGenericBeanDefinition的区别。被<code>@Configuration</code>注解的Bean会被注册为ScannedGenericBeanDefinition</li>
+</ol>
+<p><img src="/BeanDefinition%E8%AF%A6%E7%BB%86%E8%A7%A3%E6%9E%90/BeanDefinitionRoot.svg" alt="BeanDefinitionRoot"></p>
+<h2 id="BeanDefinftion父接口">BeanDefinftion父接口</h2>
+<p>BeanDefinition的父接口有两个，分别是BeanMetadataElement和AttributeAccessor</p>
+<h3 id="BeanMetadataElement">BeanMetadataElement</h3>
+<p>BeanMetadataElement接口很简单只有一个getSource方法，这里的问题就是source究竟是啥，类型还是一个Obejct</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Interface to be implemented by bean metadata elements
+ * that carry a configuration source object.
+ *
+ * @author Juergen Hoeller
+ * @since 2.0
+ *&#x2F;
+public interface BeanMetadataElement &#123;
+    
+    @Nullable
+    default Object getSource() &#123;
+        return null;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>在java doc里面已经写了，这个source的含义是<code>configuration source</code>，这个和bean的解析方式有关。我们可以通过一段代码体验下</p>
+<p>这里定义了三个Bean</p>
+<ol>
+<li>ScanBean，类上添加了@Component，一会儿会被扫描出来</li>
+<li>GenericBean，在xml中加载</li>
+<li>ConfigurationBean，在@Configuration中加载</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
+public class ScanBean &#123;
+&#125;
+
+public class GenericBean &#123;
+&#125;
+
+public class ConfigurationBean &#123;
+&#125;
+
+@Configuration
+public class Config &#123;
+
+    @Bean
+    public ConfigurationBean configurationBean()&#123;
+        return new ConfigurationBean();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>有了上面的设计后，我们就可以写出对应的xml</p>
+<pre class="line-numbers language-markup" data-language="markup"><code class="language-markup"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>context</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/context<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+	   http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd<span class="token punctuation">"</span></span><span class="token punctuation">></span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>genericBean<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.polaris.he.spring.bean.GenericBean<span class="token punctuation">"</span></span><span class="token punctuation">/></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>component-scan</span> <span class="token attr-name">base-package</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.polaris.he.spring.bean<span class="token punctuation">"</span></span><span class="token punctuation">/></span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们使用<code>ClassPathXmlApplicationContext</code>来加载这几个bean，并打印对应的source</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class ClassPathApplication &#123;
+
+    public static void main(String[] args) &#123;
+        ClassPathXmlApplicationContext ctx &#x3D; new ClassPathXmlApplicationContext(&quot;classpath:application.xml&quot;);
+        printSource(ctx, &quot;genericBean&quot;);
+        printSource(ctx, &quot;scanBean&quot;);
+        printSource(ctx, &quot;configurationBean&quot;);
+    &#125;
+
+    private static void printSource(AbstractApplicationContext ctx, String beanName) &#123;
+        Object source &#x3D; ctx.getBeanFactory().getBeanDefinition(beanName).getSource();
+        String sourceClazzName &#x3D; Optional.ofNullable(source).map(Object::getClass).map(Class::getName).orElse(null);
+        System.out.printf(&quot;%s [%s] %s%n&quot;, beanName, sourceClazzName, source);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们可以看到，对于不同方式加载的bean，对应的source都不同，这个source保留了加载bean时的原始信息</p>
+<pre class="line-numbers language-text" data-language="text"><code class="language-text">genericBean [null] null
+scanBean [org.springframework.core.io.FileSystemResource] file [C:\Users\xxxx\IdeaProjects\Spring\target\classes\com\polaris\he\spring\bean\ScanBean.class]
+configurationBean [org.springframework.core.type.classreading.SimpleMethodMetadata] com.polaris.he.spring.bean.Config.configurationBean()<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<ul>
+<li>xml是由<code>XmlBeanDefinitionReader</code>解析，source解析器为<code>NullSourceExtractor</code>，返回为固定值null</li>
+<li>component-scan是由<code>ClassPathScanningCandidateComponentProvider</code>解析，source为<code>basePackage</code>路径下扫描出来的class resource</li>
+<li>@Configuration是由<code>ConfigurationClassBeanDefinitionReader</code>解析，source解析器为<code>PassThroughSourceExtractor</code>，是将@Configuration中扫描出的<code>MethodMetadata</code>保存为了source</li>
+</ul>
+<h3 id="AttributeAccessor">AttributeAccessor</h3>
+<p>AttributeAccessor设置获取属性的一系列方法</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AttributeAccessor &#123;
+
+    void setAttribute(String name, @Nullable Object value);
+
+    @Nullable
+    Object getAttribute(String name);
+
+    
+    @SuppressWarnings(&quot;unchecked&quot;)
+    default &lt;T&gt; T computeAttribute(String name, Function&lt;String, T&gt; computeFunction) &#123;
+        Assert.notNull(name, &quot;Name must not be null&quot;);
+        Assert.notNull(computeFunction, &quot;Compute function must not be null&quot;);
+        Object value &#x3D; getAttribute(name);
+        if (value &#x3D;&#x3D; null) &#123;
+            value &#x3D; computeFunction.apply(name);
+            Assert.state(value !&#x3D; null,
+                    () -&gt; String.format(&quot;Compute function must not return null for attribute named &#39;%s&#39;&quot;, name));
+            setAttribute(name, value);
+        &#125;
+        return (T) value;
+    &#125;
+
+    @Nullable
+    Object removeAttribute(String name);
+
+    boolean hasAttribute(String name);
+
+    String[] attributeNames();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>其实看到这里，经常写业务代码的大佬们应该都笑了，这不就是业务代码中为了扩展性而经常出现的<code>Map&lt;String,Obejct&gt; ext</code>吗？<br>
+我们细究下Spring中的实现类<code>AttributeAccessorSupport</code>，也是使用了LinkedHashMap来存储额外的属性值</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public abstract class AttributeAccessorSupport implements AttributeAccessor, Serializable &#123;
+
+    &#x2F;** Map with String keys and Object values. *&#x2F;
+    private final Map&lt;String, Object&gt; attributes &#x3D; new LinkedHashMap&lt;&gt;();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="BeanDefintion核心实现类">BeanDefintion核心实现类</h2>
+<h3 id="AbstractBeanDefinition">AbstractBeanDefinition</h3>
+<h3 id="GenericBeanDefinition-v2">GenericBeanDefinition</h3>
+<h3 id="RootBeanDefinition-v2">RootBeanDefinition</h3>
+<h2 id="BeanFactory对BeanDefinition处理">BeanFactory对BeanDefinition处理</h2>
+<p>BeanFactory体系中，BeanFactory各自提供了不同的方法管理BeanDefinition</p>
+<h3 id="ListableBeanFactory">ListableBeanFactory</h3>
+<p>ListableBeanFactory中，可以获取一共有多少/有哪些BeanDefinition，可以查阅BeanDefinintion是否在BeanFactory中</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ListableBeanFactory extends BeanFactory &#123;
+
+    &#x2F;**
+     * 是否包含给定名字的BeanDefinition
+     *&#x2F;
+    boolean containsBeanDefinition(String beanName);
+
+    &#x2F;**
+     * BeanDefinition数量
+     *&#x2F;
+    int getBeanDefinitionCount();
+
+    &#x2F;**
+     * BeanDefinition名称枚举，如果有父工厂，不包含父工厂的BeanDefinition，不包含手工注入Bean
+     *&#x2F;
+    String[] getBeanDefinitionNames();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
+<p>ConfigurableListableBeanFactory中获取</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableListableBeanFactory
+            extends ListableBeanFactory, AutowireCapableBeanFactory, ConfigurableBeanFactory &#123;
+
+    &#x2F;**
+     * 获取BeanDefinition
+     *&#x2F;
+    BeanDefinition getBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<p>ConfigurableBeanFactory中可以获取合并后的BeanDefintion，Spring最终创建Bean时都是使用的MergedBeanDefinition</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, SingletonBeanRegistry &#123;
+
+    &#x2F;**
+     * 获取合并后的BeanDefinition
+     *&#x2F;
+    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="BeanDefinitionRegistry">BeanDefinitionRegistry</h3>
+<p>BeanFactory中对于BeanDefition都是读操作，对BeanDefition完整的管理（增删改查）都收口到了接口<code>BeanDefinitionRegistry</code>中，同时对别名进行了管理</p>
+<blockquote>
+<p>BeanFactory中，DefaultListableBeanFactory实现了该接口</p>
+</blockquote>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanDefinitionRegistry extends AliasRegistry &#123;
+
+    &#x2F;**
+     * 注册BeanBeanDefinition
+     *&#x2F;
+    void registerBeanDefinition(String beanName, BeanDefinition beanDefinition)
+            throws BeanDefinitionStoreException;
+
+    &#x2F;**
+     * 删除BeanBeanDefinition
+     *&#x2F;
+    void removeBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 获取BeanDefinition
+     *&#x2F;
+    BeanDefinition getBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 是否包含给定名字的BeanDefinition
+     *&#x2F;
+    boolean containsBeanDefinition(String beanName);
+
+    &#x2F;**
+     * 获取BeanDefinition名字枚举
+     *&#x2F;
+    String[] getBeanDefinitionNames();
+
+    &#x2F;**
+     * BeanDefinition数量
+     *&#x2F;
+    int getBeanDefinitionCount();
+
+    &#x2F;**
+     * BeanName是否被占用
+     *&#x2F;
+    boolean isBeanNameInUse(String beanName);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>细心的朋友可能已经发现了，<code>BeanDefinitionRegistry</code>中乱入了一个方法<code>isBeanNameInUse</code></p>
+<ul>
+<li>BeanDefinitionRegistry管理BeanDefinition，在这堆方法中突然出现了一个针对Bean的方法</li>
+<li>Spring大部分Bean都是通过BeanDefinition</li>
+<li>Spring也可以通过<code>registerSingleton</code>手动注入Bean，手动注入的Bean没有BeanDefinition</li>
+<li>从代码层面看
+<ul>
+<li>BeanDefinitionRegistry大部分方法都是在和<code>beanDefinitionMap</code>打交道</li>
+<li>isBeanNameInUse完全和<code>beanDefinitionMap</code>无关</li>
+</ul>
+</li>
+</ul>
+<p>这里提供了代码一探究竟</p>
+<ul>
+<li>application.xml通过定义或扫描的方式加载Bean</li>
+<li>AbstractApplicationContext在refresh时，会通过<code>registerSingleton</code>手动注入InfrastructureBean</li>
+<li>在refrsh后，通过getBeanDefinitionNames，getBeanNamesIterator打印BeanDefinitionName</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class PrintBeanName &#123;
+
+    public static void main(String[] args) &#123;
+        ClassPathXmlApplicationContext ctx &#x3D; new ClassPathXmlApplicationContext(&quot;classpath:application.xml&quot;);
+
+        String[] beanName &#x3D; ctx.getBeanFactory().getBeanDefinitionNames();
+        String beanNameStr &#x3D; Arrays.stream(beanName)
+                .filter(l -&gt; !l.startsWith(&quot;org.springframework&quot;))
+                .collect(Collectors.joining(&quot;,&quot;));
+        System.out.println(beanNameStr);
+
+        Iterator&lt;String&gt; beanNameIterator &#x3D; ctx.getBeanFactory().getBeanNamesIterator();
+        String beanNameIteratorStr &#x3D; StreamSupport.stream(Spliterators.spliteratorUnknownSize(beanNameIterator, Spliterator.ORDERED), false).
+                filter(l -&gt; !l.startsWith(&quot;org.springframework&quot;))
+                .collect(Collectors.joining(&quot;,&quot;));
+        System.out.println(beanNameIteratorStr);
+        System.out.println(&quot;containsBeanDefinition environment: &quot; + ctx.getBeanFactory().containsBeanDefinition(&quot;environment&quot;));
+        System.out.println(&quot;isBeanNameInUse environment: &quot; + ((BeanDefinitionRegistry) ctx.getBeanFactory()).isBeanNameInUse(&quot;environment&quot;));
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从结果中可以看到</p>
+<ul>
+<li>getBeanDefinitionNames只能获取我们自己定义的Bean</li>
+<li>手动注入的Bean<code>没有</code>BeanDefinition</li>
+</ul>
+<pre class="line-numbers language-none"><code class="language-none">getBeanDefinitionNames: genericBean,config,scanBean,configurationBean
+getBeanNamesIterator: genericBean,config,scanBean,configurationBean,environment,systemProperties,systemEnvironment,applicationStartup,messageSource,applicationEventMulticaster,lifecycleProcessor
+containsBeanDefinition environment: false
+isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="BeanDefinition合并">BeanDefinition合并</h2>
+
+      </div>
+      
+      
+      
+    </div>
+
+    
+    
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2023</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">polaris_he</span>
+</div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+    <span title="站点总字数">19k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">1:02</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/prism/prism.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+
+</body>
+</html>
