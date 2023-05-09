@@ -1,6 +1,191 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>MockMvc对form/multipart支持的问题</title>
+    <url>/posts/ddf27974.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
+</blockquote>
+<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
+这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
+<blockquote>
+<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="场景">场景</h2>
+<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
+复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
+@Setter
+@ToString
+public class UploadEntity &#123;
+    private String code;
+    private MultipartFile file;
+&#125;
+@PostMapping(&quot;&#x2F;upload&quot;)
+public String upload(UploadEntity file)&#123;
+ return file.toString();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这段代码使用postman来提交是没有任何问题的。<br>
+<img src="/posts/ddf27974/1.jpg" alt="示例"><br>
+但我们使用MockMvc来写test case呢？</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
+public void test() throws Exception &#123;
+    mockMvc.perform(
+            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
+                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+    ).andDo(MockMvcResultHandlers.print());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
+           Status &#x3D; 200
+    Error message &#x3D; null
+          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
+     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
+             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
+    Forwarded URL &#x3D; null
+   Redirected URL &#x3D; null
+          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="分析">分析</h2>
+<p>现在进入代码跟踪环节😄<br>
+从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
+    try &#123;
+        Collection&lt;Part&gt; parts &#x3D; request.getParts();
+        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
+        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
+        for (Part part : parts) &#123;
+            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
+            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
+            String filename &#x3D; disposition.getFilename();
+            if (filename !&#x3D; null) &#123;
+                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
+                    filename &#x3D; MimeDelegate.decode(filename);
+                &#125;
+                files.add(part.getName(), new StandardMultipartFile(part, filename));
+            &#125;
+            else &#123;
+                this.multipartParameterNames.add(part.getName());
+            &#125;
+        &#125;
+        setMultipartFiles(files);
+    &#125;
+    catch (Throwable ex) &#123;
+        handleParseFailure(ex);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Return a collection of all uploaded Parts.
+ *
+ * @return A collection of all uploaded Parts.
+ * @throws IOException
+ *             if an I&#x2F;O error occurs
+ * @throws IllegalStateException
+ *             if size limits are exceeded or no multipart configuration is
+ *             provided
+ * @throws ServletException
+ *             if the request is not multipart&#x2F;form-data
+ * @since Servlet 3.0
+ *&#x2F;
+public Collection&lt;Part&gt; getParts() throws IOException,
+        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
+<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
+<blockquote>
+<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
+the string value of the part will also be available via the getParameter /<br>
+getParameterValues methods on HttpServletRequest, using the name of the part.</p>
+</blockquote>
+<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Enumeration&lt;String&gt; getParameterNames() &#123;
+ if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
+  initializeMultipart();
+ &#125;
+ if (this.multipartParameterNames.isEmpty()) &#123;
+  return super.getParameterNames();
+ &#125;
+  
+ &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
+ &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
+ Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
+ Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
+ while (paramEnum.hasMoreElements()) &#123;
+  paramNames.add(paramEnum.nextElement());
+ &#125;
+ paramNames.addAll(this.multipartParameterNames);
+ return Collections.enumeration(paramNames);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="修复方法">修复方法</h2>
+<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
+    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
+    this.files.forEach(request::addFile);
+    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
+        request.addPart(part);
+        try &#123;
+            MultipartFile file &#x3D; this.asMultipartFile(part);
+            if (file !&#x3D; null) &#123;
+                request.addFile(file);
+            &#125; else &#123;
+                String value &#x3D; this.toParameterValue(part);
+                if (value !&#x3D; null) &#123;
+                    request.addParameter(part.getName(), this.toParameterValue(part));
+                &#125;
+            &#125;
+        &#125; catch (IOException var5) &#123;
+            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
+        &#125;
+    &#125;);
+    return request;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
+<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
+代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
+    ApplicationPart part &#x3D; new ApplicationPart(item, location);
+    parts.add(part);
+    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
+        String name &#x3D; part.getName();
+        String value &#x3D; null;
+        try &#123;
+            value &#x3D; part.getString(charset.name());
+        &#125; catch (UnsupportedEncodingException uee) &#123;
+            &#x2F;&#x2F; Not possible
+        &#125;
+        if (maxPostSize &gt;&#x3D; 0) &#123;
+            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
+            &#x2F;&#x2F; accurate but close enough.
+            postSize +&#x3D; name.getBytes(charset).length;
+            if (value !&#x3D; null) &#123;
+                &#x2F;&#x2F; Equals sign
+                postSize++;
+                &#x2F;&#x2F; Value length
+                postSize +&#x3D; part.getSize();
+            &#125;
+            &#x2F;&#x2F; Value separator
+            postSize++;
+            if (postSize &gt; maxPostSize) &#123;
+                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
+                throw new IllegalStateException(sm.getString(
+                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
+            &#125;
+        &#125;
+        parameters.addParameter(name, value);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring Test</tag>
+        <tag>Servlet3.0</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>BeanDefinition详细解析</title>
     <url>/posts/60fee82c.html</url>
     <content><![CDATA[<blockquote>
@@ -312,191 +497,6 @@ isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-ro
       </categories>
       <tags>
         <tag>Spring IOC</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>MockMvc对form/multipart支持的问题</title>
-    <url>/posts/ddf27974.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
-</blockquote>
-<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
-这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
-<blockquote>
-<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
-</blockquote>
-<span id="more"></span>
-<h2 id="场景">场景</h2>
-<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
-复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
-@Setter
-@ToString
-public class UploadEntity &#123;
-    private String code;
-    private MultipartFile file;
-&#125;
-@PostMapping(&quot;&#x2F;upload&quot;)
-public String upload(UploadEntity file)&#123;
- return file.toString();
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这段代码使用postman来提交是没有任何问题的。<br>
-<img src="/posts/ddf27974/1.jpg" alt="示例"><br>
-但我们使用MockMvc来写test case呢？</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
-public void test() throws Exception &#123;
-    mockMvc.perform(
-            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
-                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-    ).andDo(MockMvcResultHandlers.print());
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
-           Status &#x3D; 200
-    Error message &#x3D; null
-          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
-     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
-             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
-    Forwarded URL &#x3D; null
-   Redirected URL &#x3D; null
-          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="分析">分析</h2>
-<p>现在进入代码跟踪环节😄<br>
-从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
-    try &#123;
-        Collection&lt;Part&gt; parts &#x3D; request.getParts();
-        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
-        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
-        for (Part part : parts) &#123;
-            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
-            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
-            String filename &#x3D; disposition.getFilename();
-            if (filename !&#x3D; null) &#123;
-                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
-                    filename &#x3D; MimeDelegate.decode(filename);
-                &#125;
-                files.add(part.getName(), new StandardMultipartFile(part, filename));
-            &#125;
-            else &#123;
-                this.multipartParameterNames.add(part.getName());
-            &#125;
-        &#125;
-        setMultipartFiles(files);
-    &#125;
-    catch (Throwable ex) &#123;
-        handleParseFailure(ex);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
- * Return a collection of all uploaded Parts.
- *
- * @return A collection of all uploaded Parts.
- * @throws IOException
- *             if an I&#x2F;O error occurs
- * @throws IllegalStateException
- *             if size limits are exceeded or no multipart configuration is
- *             provided
- * @throws ServletException
- *             if the request is not multipart&#x2F;form-data
- * @since Servlet 3.0
- *&#x2F;
-public Collection&lt;Part&gt; getParts() throws IOException,
-        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
-<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
-<blockquote>
-<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
-the string value of the part will also be available via the getParameter /<br>
-getParameterValues methods on HttpServletRequest, using the name of the part.</p>
-</blockquote>
-<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public Enumeration&lt;String&gt; getParameterNames() &#123;
- if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
-  initializeMultipart();
- &#125;
- if (this.multipartParameterNames.isEmpty()) &#123;
-  return super.getParameterNames();
- &#125;
-  
- &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
- &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
- Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
- Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
- while (paramEnum.hasMoreElements()) &#123;
-  paramNames.add(paramEnum.nextElement());
- &#125;
- paramNames.addAll(this.multipartParameterNames);
- return Collections.enumeration(paramNames);
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="修复方法">修复方法</h2>
-<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
-    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
-    this.files.forEach(request::addFile);
-    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
-        request.addPart(part);
-        try &#123;
-            MultipartFile file &#x3D; this.asMultipartFile(part);
-            if (file !&#x3D; null) &#123;
-                request.addFile(file);
-            &#125; else &#123;
-                String value &#x3D; this.toParameterValue(part);
-                if (value !&#x3D; null) &#123;
-                    request.addParameter(part.getName(), this.toParameterValue(part));
-                &#125;
-            &#125;
-        &#125; catch (IOException var5) &#123;
-            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
-        &#125;
-    &#125;);
-    return request;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
-<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
-代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
-    ApplicationPart part &#x3D; new ApplicationPart(item, location);
-    parts.add(part);
-    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
-        String name &#x3D; part.getName();
-        String value &#x3D; null;
-        try &#123;
-            value &#x3D; part.getString(charset.name());
-        &#125; catch (UnsupportedEncodingException uee) &#123;
-            &#x2F;&#x2F; Not possible
-        &#125;
-        if (maxPostSize &gt;&#x3D; 0) &#123;
-            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
-            &#x2F;&#x2F; accurate but close enough.
-            postSize +&#x3D; name.getBytes(charset).length;
-            if (value !&#x3D; null) &#123;
-                &#x2F;&#x2F; Equals sign
-                postSize++;
-                &#x2F;&#x2F; Value length
-                postSize +&#x3D; part.getSize();
-            &#125;
-            &#x2F;&#x2F; Value separator
-            postSize++;
-            if (postSize &gt; maxPostSize) &#123;
-                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
-                throw new IllegalStateException(sm.getString(
-                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
-            &#125;
-        &#125;
-        parameters.addParameter(name, value);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring Test</tag>
-        <tag>Servlet3.0</tag>
       </tags>
   </entry>
   <entry>
@@ -2678,231 +2678,6 @@ unsigned char *ziplistNew(void) &#123;
       </tags>
   </entry>
   <entry>
-    <title>坑爹的@target</title>
-    <url>/posts/2ced797.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文基于Spring Boot 2.4.5</p>
-</blockquote>
-<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
-<ol>
-<li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
-<li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
-<li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
-<li>@target、@within对子类新增方法都不起作用。</li>
-</ol>
-<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
-<blockquote>
-<p><a href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
-<a href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
-</blockquote>
-<p>现在我们来翻译翻译什么是@target的惊喜。</p>
-<span id="more"></span>
-<h2 id="问题">问题</h2>
-<p>我们先来看一个实际的场景，我们使用策略模式时，一种写法如下，我们直接扫描bean上面的annotation。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
-public class StrategyFactory implements ApplicationContextAware &#123;
-    @Override
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException &#123;
-        Map&lt;String, Object&gt; beans &#x3D; applicationContext.getBeansWithAnnotation(StrategyMark.class);
-        for (Map.Entry&lt;String, Object&gt; entry : beans.entrySet()) &#123;
-            log.info(&quot;strategy:&#123;&#125;&quot;, entry.getValue().getClass().getAnnotation(StrategyMark.class));
-        &#125;
-    &#125;
-&#125;
-
-@Component
-@StrategyMark(value &#x3D; &quot;hello-word&quot;)
-public class HelloWordStrategy implements Strategy &#123;
-    @Override
-    public String execute() &#123;
-        return &quot;helloWord&quot;;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从日志可以看出，现在代码一切正常。</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:@com.polaris.he.target.annotation.StrategyMark(value&#x3D;hello-word)<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<p>现在随着业务的发展，需要定义一个业务路由，比如读写分离。我们希望注解到class上，class上有这个注解的都走从库。在这个思路的指导下，很快就可以写成下面的代码。</p>
-<blockquote>
-<p><strong>路由的定义和上面的策略模式完全没有任何关系</strong></p>
-</blockquote>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Router
-public class StatServiceImpl &#123;
-&#125;
-
-@Aspect
-@Component
-public class RouteAspect &#123;
-    &#x2F;&#x2F; 为什么加within？不加within，spring都不能启动。惊喜吧
-    @Around(&quot;within(com.polaris.he.target..*) &amp;&amp; @target(com.polaris.he.target.annotation.Router)&quot;)
-    public Object route(ProceedingJoinPoint pjp) throws Throwable &#123;
-        return pjp.proceed();
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>现在我们来执行下代码</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:null<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<p>看吧，这就是惊喜。加了个毫无关联的@target，就冒一个空指针出来了。</p>
-<h2 id="分析">分析</h2>
-<p>先不管三七二十一，打个断点再说。一看这下好家伙，这个类被代理了，代理类上面自然没有anntation。<br>
-<img src="/posts/2ced797/1.jpg" alt="代码"><br>
-现在问题来了，为什么会被代理呢？<br>
-如果你对Spring比较熟悉，可以定位到AOP发生代理的位置<br>
-<code>AbstractAutoProxyCreator.wrapIfNecessary(Object bean, String beanName, Object cacheKey)</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) &#123;
- if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) &#123;
-  return bean;
- &#125;
- if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) &#123;
-  return bean;
- &#125;
- if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) &#123;
-  this.advisedBeans.put(cacheKey, Boolean.FALSE);
-  return bean;
- &#125;
-
- &#x2F;&#x2F; 根据beanClass和beanName判断是否是需要创建proxy
- Object[] specificInterceptors &#x3D; getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
- if (specificInterceptors !&#x3D; DO_NOT_PROXY) &#123;
-  this.advisedBeans.put(cacheKey, Boolean.TRUE);
-  Object proxy &#x3D; createProxy(
-    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
-  this.proxyTypes.put(cacheKey, proxy.getClass());
-  return proxy;
- &#125;
-
- this.advisedBeans.put(cacheKey, Boolean.FALSE);
- return bean;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这样一路跟踪下去，我们能找到这个问题的核心方法<code>AopUtils.canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions)</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
- Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
- if (!pc.getClassFilter().matches(targetClass)) &#123;
-  return false;
- &#125;
- &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
- &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
- MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
- if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
-  &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
-  return true;
- &#125;
-
- IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
- if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
-  introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
- &#125;
-
- Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
- if (!Proxy.isProxyClass(targetClass)) &#123;
-  classes.add(ClassUtils.getUserClass(targetClass));
- &#125;
- classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
-
- for (Class&lt;?&gt; clazz : classes) &#123;
-  Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
-  &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
-  for (Method method : methods) &#123;
-   if (introductionAwareMethodMatcher !&#x3D; null ?
-     introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
-     methodMatcher.matches(method, targetClass)) &#123;
-    return true;
-   &#125;
-  &#125;
- &#125;
- return false;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>看到这里我们知道了<code>ntroductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)</code>这个判断了是不是满足切点，从上文可知，introductionAwareMethodMatcher的实现类就是<code>AspectJExpressionPointcut</code>，我们接着往下看。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
-    Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
-    if (!pc.getClassFilter().matches(targetClass)) &#123;
-        return false;
-    &#125;
-    &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
-    &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
-    MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
-    if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
-        &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
-        return true;
-    &#125;
-
-    IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
-    if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
-        introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
-    &#125;
-
-    Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
-    if (!Proxy.isProxyClass(targetClass)) &#123;
-        classes.add(ClassUtils.getUserClass(targetClass));
-    &#125;
-    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
-
-    for (Class&lt;?&gt; clazz : classes) &#123;
-        Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
-        &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
-        for (Method method : methods) &#123;
-            if (introductionAwareMethodMatcher !&#x3D; null ?
-                    introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
-                    methodMatcher.matches(method, targetClass)) &#123;
-                return true;
-            &#125;
-        &#125;
-    &#125;
-    return false;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>上面提到introductionAwareMethodMatcher来自于<code>AspectJExpressionPointcut</code>，我们进去接着看下</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public boolean matches(Method method, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
- obtainPointcutExpression();
- ShadowMatch shadowMatch &#x3D; getTargetShadowMatch(method, targetClass);
-
- &#x2F;&#x2F; Special handling for this, target, @this, @target, @annotation
- &#x2F;&#x2F; in Spring - we can optimize since we know we have exactly this class,
- &#x2F;&#x2F; and there will never be matching subclass at runtime.
- if (shadowMatch.alwaysMatches()) &#123;
-  return true;
- &#125;
- else if (shadowMatch.neverMatches()) &#123;
-  return false;
- &#125;
- else &#123;
-  &#x2F;&#x2F; the maybe case
-  if (hasIntroductions) &#123;
-   return true;
-  &#125;
-  &#x2F;&#x2F; A match test returned maybe - if there are any subtype sensitive variables
-  &#x2F;&#x2F; involved in the test (this, target, at_this, at_target, at_annotation) then
-  &#x2F;&#x2F; we say this is not a match as in Spring there will never be a different
-  &#x2F;&#x2F; runtime subtype.
-  RuntimeTestWalker walker &#x3D; getRuntimeTestWalker(shadowMatch);
-  return (!walker.testsSubtypeSensitiveVars() || walker.testTargetInstanceOfResidue(targetClass));
- &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>不用看逻辑了，Spring的注释已经写的很明白了。意思是有部分表达式不会涉及到<code>subclass at runtime</code>，Spring启动的时候就可以决定是否需要代理，但有部分表达式涉及<code>运行时子类</code>，这样Spring没有办法了，直接把所有bean都代理了，这样在运行时判断是否满足切点。<br>
-很不幸，使用了@target，你的所有bean都会被代理，这样也就回答了开始时网友们提到的问题。</p>
-<h2 id="深入分析">深入分析</h2>
-<blockquote>
-<p>造成这个问题的主要是Aspectj的语义，Aspectj使用织入，而Spring AOP采用的动态代理实现AOP。</p>
-<p>Aspectj和Spring AOP是AOP实现的两种方式，只是<code>@Aspectj</code>让Spring能使用Aspectj的语法</p>
-<p>既然使用Aspectj语法，<a href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
-</blockquote>
-<p>但我认为这块是有问题的</p>
-<ol>
-<li>注释中和Aspectj语法提到<code>this</code>,<code>target</code>,<code>args</code>,<code>@this</code>,<code>@target</code>,<code>@annotaiton</code>,<code>@args</code>都会使用在运行期判断，但实际测试只有<code>@target</code>，<code>@args</code>被特殊处理了。</li>
-<li><code>@target</code>的解析类是<code>ThisOrTargetAnnotationPointcut</code>，从类的名上看处理了<code>@this</code>和<code>@target</code>，但<code>@this</code>并不被Spring支持，应该是要处理<code>@this</code>的一些语义，但没实现完。从<code>@this</code>语义上看，和运行上下文是强相关的。</li>
-<li>从<a href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
-</a>和<a href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
-</ol>
-<p>最后，官方回复上看，似乎认定了是一个bug</p>
-<p><a href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
-<p><a href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring AOP</tag>
-        <tag>Aspect</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>初见BeanFactory</title>
     <url>/posts/f5f30183.html</url>
     <content><![CDATA[<blockquote>
@@ -3382,6 +3157,231 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
       </categories>
       <tags>
         <tag>Spring IOC</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>坑爹的@target</title>
+    <url>/posts/2ced797.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于Spring Boot 2.4.5</p>
+</blockquote>
+<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
+<ol>
+<li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
+<li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
+<li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
+<li>@target、@within对子类新增方法都不起作用。</li>
+</ol>
+<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
+<blockquote>
+<p><a href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
+<a href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
+</blockquote>
+<p>现在我们来翻译翻译什么是@target的惊喜。</p>
+<span id="more"></span>
+<h2 id="问题">问题</h2>
+<p>我们先来看一个实际的场景，我们使用策略模式时，一种写法如下，我们直接扫描bean上面的annotation。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
+public class StrategyFactory implements ApplicationContextAware &#123;
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException &#123;
+        Map&lt;String, Object&gt; beans &#x3D; applicationContext.getBeansWithAnnotation(StrategyMark.class);
+        for (Map.Entry&lt;String, Object&gt; entry : beans.entrySet()) &#123;
+            log.info(&quot;strategy:&#123;&#125;&quot;, entry.getValue().getClass().getAnnotation(StrategyMark.class));
+        &#125;
+    &#125;
+&#125;
+
+@Component
+@StrategyMark(value &#x3D; &quot;hello-word&quot;)
+public class HelloWordStrategy implements Strategy &#123;
+    @Override
+    public String execute() &#123;
+        return &quot;helloWord&quot;;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从日志可以看出，现在代码一切正常。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:@com.polaris.he.target.annotation.StrategyMark(value&#x3D;hello-word)<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>现在随着业务的发展，需要定义一个业务路由，比如读写分离。我们希望注解到class上，class上有这个注解的都走从库。在这个思路的指导下，很快就可以写成下面的代码。</p>
+<blockquote>
+<p><strong>路由的定义和上面的策略模式完全没有任何关系</strong></p>
+</blockquote>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Router
+public class StatServiceImpl &#123;
+&#125;
+
+@Aspect
+@Component
+public class RouteAspect &#123;
+    &#x2F;&#x2F; 为什么加within？不加within，spring都不能启动。惊喜吧
+    @Around(&quot;within(com.polaris.he.target..*) &amp;&amp; @target(com.polaris.he.target.annotation.Router)&quot;)
+    public Object route(ProceedingJoinPoint pjp) throws Throwable &#123;
+        return pjp.proceed();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>现在我们来执行下代码</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:null<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>看吧，这就是惊喜。加了个毫无关联的@target，就冒一个空指针出来了。</p>
+<h2 id="分析">分析</h2>
+<p>先不管三七二十一，打个断点再说。一看这下好家伙，这个类被代理了，代理类上面自然没有anntation。<br>
+<img src="/posts/2ced797/1.jpg" alt="代码"><br>
+现在问题来了，为什么会被代理呢？<br>
+如果你对Spring比较熟悉，可以定位到AOP发生代理的位置<br>
+<code>AbstractAutoProxyCreator.wrapIfNecessary(Object bean, String beanName, Object cacheKey)</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) &#123;
+ if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) &#123;
+  return bean;
+ &#125;
+ if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) &#123;
+  return bean;
+ &#125;
+ if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) &#123;
+  this.advisedBeans.put(cacheKey, Boolean.FALSE);
+  return bean;
+ &#125;
+
+ &#x2F;&#x2F; 根据beanClass和beanName判断是否是需要创建proxy
+ Object[] specificInterceptors &#x3D; getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+ if (specificInterceptors !&#x3D; DO_NOT_PROXY) &#123;
+  this.advisedBeans.put(cacheKey, Boolean.TRUE);
+  Object proxy &#x3D; createProxy(
+    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+  this.proxyTypes.put(cacheKey, proxy.getClass());
+  return proxy;
+ &#125;
+
+ this.advisedBeans.put(cacheKey, Boolean.FALSE);
+ return bean;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这样一路跟踪下去，我们能找到这个问题的核心方法<code>AopUtils.canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions)</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+ Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
+ if (!pc.getClassFilter().matches(targetClass)) &#123;
+  return false;
+ &#125;
+ &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
+ &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
+ MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
+ if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
+  &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
+  return true;
+ &#125;
+
+ IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
+ if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
+  introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
+ &#125;
+
+ Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
+ if (!Proxy.isProxyClass(targetClass)) &#123;
+  classes.add(ClassUtils.getUserClass(targetClass));
+ &#125;
+ classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+ for (Class&lt;?&gt; clazz : classes) &#123;
+  Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
+  &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
+  for (Method method : methods) &#123;
+   if (introductionAwareMethodMatcher !&#x3D; null ?
+     introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+     methodMatcher.matches(method, targetClass)) &#123;
+    return true;
+   &#125;
+  &#125;
+ &#125;
+ return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看到这里我们知道了<code>ntroductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)</code>这个判断了是不是满足切点，从上文可知，introductionAwareMethodMatcher的实现类就是<code>AspectJExpressionPointcut</code>，我们接着往下看。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+    Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
+    if (!pc.getClassFilter().matches(targetClass)) &#123;
+        return false;
+    &#125;
+    &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
+    &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
+    MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
+    if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
+        &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
+        return true;
+    &#125;
+
+    IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
+    if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
+        introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
+    &#125;
+
+    Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
+    if (!Proxy.isProxyClass(targetClass)) &#123;
+        classes.add(ClassUtils.getUserClass(targetClass));
+    &#125;
+    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+    for (Class&lt;?&gt; clazz : classes) &#123;
+        Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
+        &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
+        for (Method method : methods) &#123;
+            if (introductionAwareMethodMatcher !&#x3D; null ?
+                    introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+                    methodMatcher.matches(method, targetClass)) &#123;
+                return true;
+            &#125;
+        &#125;
+    &#125;
+    return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>上面提到introductionAwareMethodMatcher来自于<code>AspectJExpressionPointcut</code>，我们进去接着看下</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public boolean matches(Method method, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+ obtainPointcutExpression();
+ ShadowMatch shadowMatch &#x3D; getTargetShadowMatch(method, targetClass);
+
+ &#x2F;&#x2F; Special handling for this, target, @this, @target, @annotation
+ &#x2F;&#x2F; in Spring - we can optimize since we know we have exactly this class,
+ &#x2F;&#x2F; and there will never be matching subclass at runtime.
+ if (shadowMatch.alwaysMatches()) &#123;
+  return true;
+ &#125;
+ else if (shadowMatch.neverMatches()) &#123;
+  return false;
+ &#125;
+ else &#123;
+  &#x2F;&#x2F; the maybe case
+  if (hasIntroductions) &#123;
+   return true;
+  &#125;
+  &#x2F;&#x2F; A match test returned maybe - if there are any subtype sensitive variables
+  &#x2F;&#x2F; involved in the test (this, target, at_this, at_target, at_annotation) then
+  &#x2F;&#x2F; we say this is not a match as in Spring there will never be a different
+  &#x2F;&#x2F; runtime subtype.
+  RuntimeTestWalker walker &#x3D; getRuntimeTestWalker(shadowMatch);
+  return (!walker.testsSubtypeSensitiveVars() || walker.testTargetInstanceOfResidue(targetClass));
+ &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>不用看逻辑了，Spring的注释已经写的很明白了。意思是有部分表达式不会涉及到<code>subclass at runtime</code>，Spring启动的时候就可以决定是否需要代理，但有部分表达式涉及<code>运行时子类</code>，这样Spring没有办法了，直接把所有bean都代理了，这样在运行时判断是否满足切点。<br>
+很不幸，使用了@target，你的所有bean都会被代理，这样也就回答了开始时网友们提到的问题。</p>
+<h2 id="深入分析">深入分析</h2>
+<blockquote>
+<p>造成这个问题的主要是Aspectj的语义，Aspectj使用织入，而Spring AOP采用的动态代理实现AOP。</p>
+<p>Aspectj和Spring AOP是AOP实现的两种方式，只是<code>@Aspectj</code>让Spring能使用Aspectj的语法</p>
+<p>既然使用Aspectj语法，<a href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
+</blockquote>
+<p>但我认为这块是有问题的</p>
+<ol>
+<li>注释中和Aspectj语法提到<code>this</code>,<code>target</code>,<code>args</code>,<code>@this</code>,<code>@target</code>,<code>@annotaiton</code>,<code>@args</code>都会使用在运行期判断，但实际测试只有<code>@target</code>，<code>@args</code>被特殊处理了。</li>
+<li><code>@target</code>的解析类是<code>ThisOrTargetAnnotationPointcut</code>，从类的名上看处理了<code>@this</code>和<code>@target</code>，但<code>@this</code>并不被Spring支持，应该是要处理<code>@this</code>的一些语义，但没实现完。从<code>@this</code>语义上看，和运行上下文是强相关的。</li>
+<li>从<a href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
+</a>和<a href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
+</ol>
+<p>最后，官方回复上看，似乎认定了是一个bug</p>
+<p><a href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
+<p><a href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring AOP</tag>
+        <tag>Aspect</tag>
       </tags>
   </entry>
 </search>
