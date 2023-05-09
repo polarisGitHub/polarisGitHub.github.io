@@ -1,6 +1,320 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>BeanDefinition详细解析</title>
+    <url>/posts/60fee82c.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
+</blockquote>
+<p>对于Spring来说，主流的bean加载方式有以下几种</p>
+<ol>
+<li>xml加载bean</li>
+<li>@Configuration加载bean</li>
+<li>扫描加载bean</li>
+<li>手动加载bean</li>
+</ol>
+<p>上面4种方式中，除了第四点使用了<code>registerSingleton</code>直接注册一个bean以外，其他三种方式都需要解析出BeanDefinition，最终通过BeanDefinition创建出Bean。这里我们可以看出BeanDefinition在Spring中的核心地位，今天我们就一起看看，BeanDefinition在Spring中是怎么工作的</p>
+<span id="more"></span>
+<h2 id="BeanDefinition依赖分析">BeanDefinition依赖分析</h2>
+<p>BeanDefinition依赖图比较大，这里拆解为三个图</p>
+<ol>
+<li>核心依赖</li>
+<li>GenericBeanDefinition</li>
+<li>RootBeanDefinition</li>
+</ol>
+<h3 id="核心依赖">核心依赖</h3>
+<p>从核心依赖图上可以看到</p>
+<ol>
+<li>BeanDefinition除了保持Bean定义数据之外，还提供了<code>Attibute</code>和<code>Metadata</code>的保存接口，大大提高了BeanDefinition的灵活性</li>
+<li>AnnotatedBeanDefinintion继承BeanDefinition，为注解定义Bean的基础</li>
+<li>核心的BeanDefinition有三个，均继承了AbstractBeanDefinition
+<ol>
+<li>ChildBeanDefinition：用户父子关系的BeanDefinition，Spring已经不建议使用，推荐使用GenericBeanDefintion</li>
+<li>GenericBeanDefinition：通用的BeanDefinition</li>
+<li>RootBeanDefinition：不能作为子BeanDefintion</li>
+</ol>
+</li>
+</ol>
+<p><img src="/posts/60fee82c/BeanDefinitionCore.svg" alt="BeanDefinitionCore"></p>
+<h3 id="GenericBeanDefinition">GenericBeanDefinition</h3>
+<p>GenericBeanDefinition有五个扩展实现类，分别在GenericBeanDefinition继承上扩展了其他能力</p>
+<ol>
+<li>ScannedGenericBeanDefinition：实现了<code>AnnotatedBeanDefinition</code>用于保存注解相关信息，被<code>@ComponentScan</code>或者<code>context:component-scan</code>扫描出来的Bean会被创建为ScannedGenericBeanDefinition。能被扫描出来，说明定义Bean时有<code>@Configuration</code></li>
+<li>AnnotatedGenericBeanDefinition：和ScannedGenericBeanDefinition类似，在import导入Bean时会使用到</li>
+<li>EntityScanPackagesBeanDefinition：和<code>@EntityScan</code>相关，Spring自己注册的一个InfrastructureBean</li>
+<li>BasePackagesBeanDefinition：和<code>@AutoConfigurationPackage</code>相关，Spring自己注册的一个InfrastructureBean</li>
+<li>ServletComponentRegisteringPostProcessorBeanDefinition：和<code>@ServletComponentScan</code>相关，Spring自己注册的一个InfrastructureBean</li>
+</ol>
+<p><img src="/posts/60fee82c/BeanDefinitionGeneric.svg" alt="BeanDefinitionGeneric"></p>
+<h2 id="RootBeanDefinition">RootBeanDefinition</h2>
+<p>RootBeanDefinition有两个个扩展实现类，分别在RootBeanDefinition继承上扩展了其他能力</p>
+<ol>
+<li>ClassDerivedBeanDefinition：只在<code>GenericApplicationContext</code>中使用，使用BeanClass注册Bean时使用</li>
+<li>ConfigurationClassBeanDefinition：被<code>@Bean</code>注解的Bean会被注册为ConfigurationClassBeanDefinition，这里注意和<br>
+ScannedGenericBeanDefinition的区别。被<code>@Configuration</code>注解的Bean会被注册为ScannedGenericBeanDefinition</li>
+</ol>
+<p><img src="/posts/60fee82c/BeanDefinitionRoot.svg" alt="BeanDefinitionRoot"></p>
+<h2 id="BeanDefinftion父接口">BeanDefinftion父接口</h2>
+<p>BeanDefinition的父接口有两个，分别是BeanMetadataElement和AttributeAccessor</p>
+<h3 id="BeanMetadataElement">BeanMetadataElement</h3>
+<p>BeanMetadataElement接口很简单只有一个getSource方法，这里的问题就是source究竟是啥，类型还是一个Obejct</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Interface to be implemented by bean metadata elements
+ * that carry a configuration source object.
+ *
+ * @author Juergen Hoeller
+ * @since 2.0
+ *&#x2F;
+public interface BeanMetadataElement &#123;
+    
+    @Nullable
+    default Object getSource() &#123;
+        return null;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>在java doc里面已经写了，这个source的含义是<code>configuration source</code>，这个和bean的解析方式有关。我们可以通过一段代码体验下</p>
+<p>这里定义了三个Bean</p>
+<ol>
+<li>ScanBean，类上添加了@Component，一会儿会被扫描出来</li>
+<li>GenericBean，在xml中加载</li>
+<li>ConfigurationBean，在@Configuration中加载</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
+public class ScanBean &#123;
+&#125;
+
+public class GenericBean &#123;
+&#125;
+
+public class ConfigurationBean &#123;
+&#125;
+
+@Configuration
+public class Config &#123;
+
+    @Bean
+    public ConfigurationBean configurationBean()&#123;
+        return new ConfigurationBean();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>有了上面的设计后，我们就可以写出对应的xml</p>
+<pre class="line-numbers language-markup" data-language="markup"><code class="language-markup"><span class="token prolog">&lt;?xml version="1.0" encoding="UTF-8"?></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>beans</span> <span class="token attr-name">xmlns</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>xsi</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.w3.org/2001/XMLSchema-instance<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xmlns:</span>context</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/context<span class="token punctuation">"</span></span>
+       <span class="token attr-name"><span class="token namespace">xsi:</span>schemaLocation</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+	   http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd<span class="token punctuation">"</span></span><span class="token punctuation">></span></span>
+
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>bean</span> <span class="token attr-name">id</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>genericBean<span class="token punctuation">"</span></span> <span class="token attr-name">class</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.polaris.he.spring.bean.GenericBean<span class="token punctuation">"</span></span><span class="token punctuation">/></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span><span class="token namespace">context:</span>component-scan</span> <span class="token attr-name">base-package</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>com.polaris.he.spring.bean<span class="token punctuation">"</span></span><span class="token punctuation">/></span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>beans</span><span class="token punctuation">></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们使用<code>ClassPathXmlApplicationContext</code>来加载这几个bean，并打印对应的source</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class ClassPathApplication &#123;
+
+    public static void main(String[] args) &#123;
+        ClassPathXmlApplicationContext ctx &#x3D; new ClassPathXmlApplicationContext(&quot;classpath:application.xml&quot;);
+        printSource(ctx, &quot;genericBean&quot;);
+        printSource(ctx, &quot;scanBean&quot;);
+        printSource(ctx, &quot;configurationBean&quot;);
+    &#125;
+
+    private static void printSource(AbstractApplicationContext ctx, String beanName) &#123;
+        Object source &#x3D; ctx.getBeanFactory().getBeanDefinition(beanName).getSource();
+        String sourceClazzName &#x3D; Optional.ofNullable(source).map(Object::getClass).map(Class::getName).orElse(null);
+        System.out.printf(&quot;%s [%s] %s%n&quot;, beanName, sourceClazzName, source);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里我们可以看到，对于不同方式加载的bean，对应的source都不同，这个source保留了加载bean时的原始信息</p>
+<pre class="line-numbers language-text" data-language="text"><code class="language-text">genericBean [null] null
+scanBean [org.springframework.core.io.FileSystemResource] file [C:\Users\xxxx\IdeaProjects\Spring\target\classes\com\polaris\he\spring\bean\ScanBean.class]
+configurationBean [org.springframework.core.type.classreading.SimpleMethodMetadata] com.polaris.he.spring.bean.Config.configurationBean()<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<ul>
+<li>xml是由<code>XmlBeanDefinitionReader</code>解析，source解析器为<code>NullSourceExtractor</code>，返回为固定值null</li>
+<li>component-scan是由<code>ClassPathScanningCandidateComponentProvider</code>解析，source为<code>basePackage</code>路径下扫描出来的class resource</li>
+<li>@Configuration是由<code>ConfigurationClassBeanDefinitionReader</code>解析，source解析器为<code>PassThroughSourceExtractor</code>，是将@Configuration中扫描出的<code>MethodMetadata</code>保存为了source</li>
+</ul>
+<h3 id="AttributeAccessor">AttributeAccessor</h3>
+<p>AttributeAccessor设置获取属性的一系列方法</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface AttributeAccessor &#123;
+
+    void setAttribute(String name, @Nullable Object value);
+
+    @Nullable
+    Object getAttribute(String name);
+
+    
+    @SuppressWarnings(&quot;unchecked&quot;)
+    default &lt;T&gt; T computeAttribute(String name, Function&lt;String, T&gt; computeFunction) &#123;
+        Assert.notNull(name, &quot;Name must not be null&quot;);
+        Assert.notNull(computeFunction, &quot;Compute function must not be null&quot;);
+        Object value &#x3D; getAttribute(name);
+        if (value &#x3D;&#x3D; null) &#123;
+            value &#x3D; computeFunction.apply(name);
+            Assert.state(value !&#x3D; null,
+                    () -&gt; String.format(&quot;Compute function must not return null for attribute named &#39;%s&#39;&quot;, name));
+            setAttribute(name, value);
+        &#125;
+        return (T) value;
+    &#125;
+
+    @Nullable
+    Object removeAttribute(String name);
+
+    boolean hasAttribute(String name);
+
+    String[] attributeNames();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>其实看到这里，经常写业务代码的大佬们应该都笑了，这不就是业务代码中为了扩展性而经常出现的<code>Map&lt;String,Obejct&gt; ext</code>吗？<br>
+我们细究下Spring中的实现类<code>AttributeAccessorSupport</code>，也是使用了LinkedHashMap来存储额外的属性值</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public abstract class AttributeAccessorSupport implements AttributeAccessor, Serializable &#123;
+
+    &#x2F;** Map with String keys and Object values. *&#x2F;
+    private final Map&lt;String, Object&gt; attributes &#x3D; new LinkedHashMap&lt;&gt;();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="BeanDefintion核心实现类">BeanDefintion核心实现类</h2>
+<h3 id="AbstractBeanDefinition">AbstractBeanDefinition</h3>
+<h3 id="GenericBeanDefinition-v2">GenericBeanDefinition</h3>
+<h3 id="RootBeanDefinition-v2">RootBeanDefinition</h3>
+<h2 id="BeanFactory对BeanDefinition处理">BeanFactory对BeanDefinition处理</h2>
+<p>BeanFactory体系中，BeanFactory各自提供了不同的方法管理BeanDefinition</p>
+<h3 id="ListableBeanFactory">ListableBeanFactory</h3>
+<p>ListableBeanFactory中，可以获取一共有多少/有哪些BeanDefinition，可以查阅BeanDefinintion是否在BeanFactory中</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ListableBeanFactory extends BeanFactory &#123;
+
+    &#x2F;**
+     * 是否包含给定名字的BeanDefinition
+     *&#x2F;
+    boolean containsBeanDefinition(String beanName);
+
+    &#x2F;**
+     * BeanDefinition数量
+     *&#x2F;
+    int getBeanDefinitionCount();
+
+    &#x2F;**
+     * BeanDefinition名称枚举，如果有父工厂，不包含父工厂的BeanDefinition，不包含手工注入Bean
+     *&#x2F;
+    String[] getBeanDefinitionNames();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableListableBeanFactory">ConfigurableListableBeanFactory</h3>
+<p>ConfigurableListableBeanFactory中获取</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableListableBeanFactory
+            extends ListableBeanFactory, AutowireCapableBeanFactory, ConfigurableBeanFactory &#123;
+
+    &#x2F;**
+     * 获取BeanDefinition
+     *&#x2F;
+    BeanDefinition getBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConfigurableBeanFactory">ConfigurableBeanFactory</h3>
+<p>ConfigurableBeanFactory中可以获取合并后的BeanDefintion，Spring最终创建Bean时都是使用的MergedBeanDefinition</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, SingletonBeanRegistry &#123;
+
+    &#x2F;**
+     * 获取合并后的BeanDefinition
+     *&#x2F;
+    BeanDefinition getMergedBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="BeanDefinitionRegistry">BeanDefinitionRegistry</h3>
+<p>BeanFactory中对于BeanDefition都是读操作，对BeanDefition完整的管理（增删改查）都收口到了接口<code>BeanDefinitionRegistry</code>中，同时对别名进行了管理</p>
+<blockquote>
+<p>BeanFactory中，DefaultListableBeanFactory实现了该接口</p>
+</blockquote>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public interface BeanDefinitionRegistry extends AliasRegistry &#123;
+
+    &#x2F;**
+     * 注册BeanBeanDefinition
+     *&#x2F;
+    void registerBeanDefinition(String beanName, BeanDefinition beanDefinition)
+            throws BeanDefinitionStoreException;
+
+    &#x2F;**
+     * 删除BeanBeanDefinition
+     *&#x2F;
+    void removeBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 获取BeanDefinition
+     *&#x2F;
+    BeanDefinition getBeanDefinition(String beanName) throws NoSuchBeanDefinitionException;
+
+    &#x2F;**
+     * 是否包含给定名字的BeanDefinition
+     *&#x2F;
+    boolean containsBeanDefinition(String beanName);
+
+    &#x2F;**
+     * 获取BeanDefinition名字枚举
+     *&#x2F;
+    String[] getBeanDefinitionNames();
+
+    &#x2F;**
+     * BeanDefinition数量
+     *&#x2F;
+    int getBeanDefinitionCount();
+
+    &#x2F;**
+     * BeanName是否被占用
+     *&#x2F;
+    boolean isBeanNameInUse(String beanName);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>细心的朋友可能已经发现了，<code>BeanDefinitionRegistry</code>中乱入了一个方法<code>isBeanNameInUse</code></p>
+<ul>
+<li>BeanDefinitionRegistry管理BeanDefinition，在这堆方法中突然出现了一个针对Bean的方法</li>
+<li>Spring大部分Bean都是通过BeanDefinition</li>
+<li>Spring也可以通过<code>registerSingleton</code>手动注入Bean，手动注入的Bean没有BeanDefinition</li>
+<li>从代码层面看
+<ul>
+<li>BeanDefinitionRegistry大部分方法都是在和<code>beanDefinitionMap</code>打交道</li>
+<li>isBeanNameInUse完全和<code>beanDefinitionMap</code>无关</li>
+</ul>
+</li>
+</ul>
+<p>这里提供了代码一探究竟</p>
+<ul>
+<li>application.xml通过定义或扫描的方式加载Bean</li>
+<li>AbstractApplicationContext在refresh时，会通过<code>registerSingleton</code>手动注入InfrastructureBean</li>
+<li>在refrsh后，通过getBeanDefinitionNames，getBeanNamesIterator打印BeanDefinitionName</li>
+</ul>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class PrintBeanName &#123;
+
+    public static void main(String[] args) &#123;
+        ClassPathXmlApplicationContext ctx &#x3D; new ClassPathXmlApplicationContext(&quot;classpath:application.xml&quot;);
+
+        String[] beanName &#x3D; ctx.getBeanFactory().getBeanDefinitionNames();
+        String beanNameStr &#x3D; Arrays.stream(beanName)
+                .filter(l -&gt; !l.startsWith(&quot;org.springframework&quot;))
+                .collect(Collectors.joining(&quot;,&quot;));
+        System.out.println(beanNameStr);
+
+        Iterator&lt;String&gt; beanNameIterator &#x3D; ctx.getBeanFactory().getBeanNamesIterator();
+        String beanNameIteratorStr &#x3D; StreamSupport.stream(Spliterators.spliteratorUnknownSize(beanNameIterator, Spliterator.ORDERED), false).
+                filter(l -&gt; !l.startsWith(&quot;org.springframework&quot;))
+                .collect(Collectors.joining(&quot;,&quot;));
+        System.out.println(beanNameIteratorStr);
+        System.out.println(&quot;containsBeanDefinition environment: &quot; + ctx.getBeanFactory().containsBeanDefinition(&quot;environment&quot;));
+        System.out.println(&quot;isBeanNameInUse environment: &quot; + ((BeanDefinitionRegistry) ctx.getBeanFactory()).isBeanNameInUse(&quot;environment&quot;));
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从结果中可以看到</p>
+<ul>
+<li>getBeanDefinitionNames只能获取我们自己定义的Bean</li>
+<li>手动注入的Bean<code>没有</code>BeanDefinition</li>
+</ul>
+<pre class="line-numbers language-none"><code class="language-none">getBeanDefinitionNames: genericBean,config,scanBean,configurationBean
+getBeanNamesIterator: genericBean,config,scanBean,configurationBean,environment,systemProperties,systemEnvironment,applicationStartup,messageSource,applicationEventMulticaster,lifecycleProcessor
+containsBeanDefinition environment: false
+isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="BeanDefinition合并">BeanDefinition合并</h2>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring IOC</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>MockMvc对form/multipart支持的问题</title>
     <url>/posts/ddf27974.html</url>
     <content><![CDATA[<blockquote>
@@ -2364,6 +2678,231 @@ unsigned char *ziplistNew(void) &#123;
       </tags>
   </entry>
   <entry>
+    <title>坑爹的@target</title>
+    <url>/posts/2ced797.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文基于Spring Boot 2.4.5</p>
+</blockquote>
+<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
+<ol>
+<li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
+<li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
+<li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
+<li>@target、@within对子类新增方法都不起作用。</li>
+</ol>
+<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
+<blockquote>
+<p><a href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
+<a href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
+</blockquote>
+<p>现在我们来翻译翻译什么是@target的惊喜。</p>
+<span id="more"></span>
+<h2 id="问题">问题</h2>
+<p>我们先来看一个实际的场景，我们使用策略模式时，一种写法如下，我们直接扫描bean上面的annotation。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
+public class StrategyFactory implements ApplicationContextAware &#123;
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException &#123;
+        Map&lt;String, Object&gt; beans &#x3D; applicationContext.getBeansWithAnnotation(StrategyMark.class);
+        for (Map.Entry&lt;String, Object&gt; entry : beans.entrySet()) &#123;
+            log.info(&quot;strategy:&#123;&#125;&quot;, entry.getValue().getClass().getAnnotation(StrategyMark.class));
+        &#125;
+    &#125;
+&#125;
+
+@Component
+@StrategyMark(value &#x3D; &quot;hello-word&quot;)
+public class HelloWordStrategy implements Strategy &#123;
+    @Override
+    public String execute() &#123;
+        return &quot;helloWord&quot;;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从日志可以看出，现在代码一切正常。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:@com.polaris.he.target.annotation.StrategyMark(value&#x3D;hello-word)<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>现在随着业务的发展，需要定义一个业务路由，比如读写分离。我们希望注解到class上，class上有这个注解的都走从库。在这个思路的指导下，很快就可以写成下面的代码。</p>
+<blockquote>
+<p><strong>路由的定义和上面的策略模式完全没有任何关系</strong></p>
+</blockquote>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Router
+public class StatServiceImpl &#123;
+&#125;
+
+@Aspect
+@Component
+public class RouteAspect &#123;
+    &#x2F;&#x2F; 为什么加within？不加within，spring都不能启动。惊喜吧
+    @Around(&quot;within(com.polaris.he.target..*) &amp;&amp; @target(com.polaris.he.target.annotation.Router)&quot;)
+    public Object route(ProceedingJoinPoint pjp) throws Throwable &#123;
+        return pjp.proceed();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>现在我们来执行下代码</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:null<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>看吧，这就是惊喜。加了个毫无关联的@target，就冒一个空指针出来了。</p>
+<h2 id="分析">分析</h2>
+<p>先不管三七二十一，打个断点再说。一看这下好家伙，这个类被代理了，代理类上面自然没有anntation。<br>
+<img src="/posts/2ced797/1.jpg" alt="代码"><br>
+现在问题来了，为什么会被代理呢？<br>
+如果你对Spring比较熟悉，可以定位到AOP发生代理的位置<br>
+<code>AbstractAutoProxyCreator.wrapIfNecessary(Object bean, String beanName, Object cacheKey)</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) &#123;
+ if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) &#123;
+  return bean;
+ &#125;
+ if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) &#123;
+  return bean;
+ &#125;
+ if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) &#123;
+  this.advisedBeans.put(cacheKey, Boolean.FALSE);
+  return bean;
+ &#125;
+
+ &#x2F;&#x2F; 根据beanClass和beanName判断是否是需要创建proxy
+ Object[] specificInterceptors &#x3D; getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+ if (specificInterceptors !&#x3D; DO_NOT_PROXY) &#123;
+  this.advisedBeans.put(cacheKey, Boolean.TRUE);
+  Object proxy &#x3D; createProxy(
+    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+  this.proxyTypes.put(cacheKey, proxy.getClass());
+  return proxy;
+ &#125;
+
+ this.advisedBeans.put(cacheKey, Boolean.FALSE);
+ return bean;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这样一路跟踪下去，我们能找到这个问题的核心方法<code>AopUtils.canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions)</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+ Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
+ if (!pc.getClassFilter().matches(targetClass)) &#123;
+  return false;
+ &#125;
+ &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
+ &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
+ MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
+ if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
+  &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
+  return true;
+ &#125;
+
+ IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
+ if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
+  introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
+ &#125;
+
+ Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
+ if (!Proxy.isProxyClass(targetClass)) &#123;
+  classes.add(ClassUtils.getUserClass(targetClass));
+ &#125;
+ classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+ for (Class&lt;?&gt; clazz : classes) &#123;
+  Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
+  &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
+  for (Method method : methods) &#123;
+   if (introductionAwareMethodMatcher !&#x3D; null ?
+     introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+     methodMatcher.matches(method, targetClass)) &#123;
+    return true;
+   &#125;
+  &#125;
+ &#125;
+ return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看到这里我们知道了<code>ntroductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)</code>这个判断了是不是满足切点，从上文可知，introductionAwareMethodMatcher的实现类就是<code>AspectJExpressionPointcut</code>，我们接着往下看。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+    Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
+    if (!pc.getClassFilter().matches(targetClass)) &#123;
+        return false;
+    &#125;
+    &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
+    &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
+    MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
+    if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
+        &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
+        return true;
+    &#125;
+
+    IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
+    if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
+        introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
+    &#125;
+
+    Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
+    if (!Proxy.isProxyClass(targetClass)) &#123;
+        classes.add(ClassUtils.getUserClass(targetClass));
+    &#125;
+    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+    for (Class&lt;?&gt; clazz : classes) &#123;
+        Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
+        &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
+        for (Method method : methods) &#123;
+            if (introductionAwareMethodMatcher !&#x3D; null ?
+                    introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+                    methodMatcher.matches(method, targetClass)) &#123;
+                return true;
+            &#125;
+        &#125;
+    &#125;
+    return false;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>上面提到introductionAwareMethodMatcher来自于<code>AspectJExpressionPointcut</code>，我们进去接着看下</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public boolean matches(Method method, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
+ obtainPointcutExpression();
+ ShadowMatch shadowMatch &#x3D; getTargetShadowMatch(method, targetClass);
+
+ &#x2F;&#x2F; Special handling for this, target, @this, @target, @annotation
+ &#x2F;&#x2F; in Spring - we can optimize since we know we have exactly this class,
+ &#x2F;&#x2F; and there will never be matching subclass at runtime.
+ if (shadowMatch.alwaysMatches()) &#123;
+  return true;
+ &#125;
+ else if (shadowMatch.neverMatches()) &#123;
+  return false;
+ &#125;
+ else &#123;
+  &#x2F;&#x2F; the maybe case
+  if (hasIntroductions) &#123;
+   return true;
+  &#125;
+  &#x2F;&#x2F; A match test returned maybe - if there are any subtype sensitive variables
+  &#x2F;&#x2F; involved in the test (this, target, at_this, at_target, at_annotation) then
+  &#x2F;&#x2F; we say this is not a match as in Spring there will never be a different
+  &#x2F;&#x2F; runtime subtype.
+  RuntimeTestWalker walker &#x3D; getRuntimeTestWalker(shadowMatch);
+  return (!walker.testsSubtypeSensitiveVars() || walker.testTargetInstanceOfResidue(targetClass));
+ &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>不用看逻辑了，Spring的注释已经写的很明白了。意思是有部分表达式不会涉及到<code>subclass at runtime</code>，Spring启动的时候就可以决定是否需要代理，但有部分表达式涉及<code>运行时子类</code>，这样Spring没有办法了，直接把所有bean都代理了，这样在运行时判断是否满足切点。<br>
+很不幸，使用了@target，你的所有bean都会被代理，这样也就回答了开始时网友们提到的问题。</p>
+<h2 id="深入分析">深入分析</h2>
+<blockquote>
+<p>造成这个问题的主要是Aspectj的语义，Aspectj使用织入，而Spring AOP采用的动态代理实现AOP。</p>
+<p>Aspectj和Spring AOP是AOP实现的两种方式，只是<code>@Aspectj</code>让Spring能使用Aspectj的语法</p>
+<p>既然使用Aspectj语法，<a href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
+</blockquote>
+<p>但我认为这块是有问题的</p>
+<ol>
+<li>注释中和Aspectj语法提到<code>this</code>,<code>target</code>,<code>args</code>,<code>@this</code>,<code>@target</code>,<code>@annotaiton</code>,<code>@args</code>都会使用在运行期判断，但实际测试只有<code>@target</code>，<code>@args</code>被特殊处理了。</li>
+<li><code>@target</code>的解析类是<code>ThisOrTargetAnnotationPointcut</code>，从类的名上看处理了<code>@this</code>和<code>@target</code>，但<code>@this</code>并不被Spring支持，应该是要处理<code>@this</code>的一些语义，但没实现完。从<code>@this</code>语义上看，和运行上下文是强相关的。</li>
+<li>从<a href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
+</a>和<a href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
+</ol>
+<p>最后，官方回复上看，似乎认定了是一个bug</p>
+<p><a href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
+<p><a href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring AOP</tag>
+        <tag>Aspect</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>初见BeanFactory</title>
     <url>/posts/f5f30183.html</url>
     <content><![CDATA[<blockquote>
@@ -2843,231 +3382,6 @@ ListableBeanFactory和BeanFactory接口咋一看很像，提供了一次获取�
       </categories>
       <tags>
         <tag>Spring IOC</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>坑爹的@target</title>
-    <url>/posts/2ced797.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文基于Spring Boot 2.4.5</p>
-</blockquote>
-<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
-<ol>
-<li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
-<li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
-<li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
-<li>@target、@within对子类新增方法都不起作用。</li>
-</ol>
-<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
-<blockquote>
-<p><a href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
-<a href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
-</blockquote>
-<p>现在我们来翻译翻译什么是@target的惊喜。</p>
-<span id="more"></span>
-<h2 id="问题">问题</h2>
-<p>我们先来看一个实际的场景，我们使用策略模式时，一种写法如下，我们直接扫描bean上面的annotation。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Component
-public class StrategyFactory implements ApplicationContextAware &#123;
-    @Override
-    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException &#123;
-        Map&lt;String, Object&gt; beans &#x3D; applicationContext.getBeansWithAnnotation(StrategyMark.class);
-        for (Map.Entry&lt;String, Object&gt; entry : beans.entrySet()) &#123;
-            log.info(&quot;strategy:&#123;&#125;&quot;, entry.getValue().getClass().getAnnotation(StrategyMark.class));
-        &#125;
-    &#125;
-&#125;
-
-@Component
-@StrategyMark(value &#x3D; &quot;hello-word&quot;)
-public class HelloWordStrategy implements Strategy &#123;
-    @Override
-    public String execute() &#123;
-        return &quot;helloWord&quot;;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从日志可以看出，现在代码一切正常。</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:@com.polaris.he.target.annotation.StrategyMark(value&#x3D;hello-word)<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<p>现在随着业务的发展，需要定义一个业务路由，比如读写分离。我们希望注解到class上，class上有这个注解的都走从库。在这个思路的指导下，很快就可以写成下面的代码。</p>
-<blockquote>
-<p><strong>路由的定义和上面的策略模式完全没有任何关系</strong></p>
-</blockquote>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Router
-public class StatServiceImpl &#123;
-&#125;
-
-@Aspect
-@Component
-public class RouteAspect &#123;
-    &#x2F;&#x2F; 为什么加within？不加within，spring都不能启动。惊喜吧
-    @Around(&quot;within(com.polaris.he.target..*) &amp;&amp; @target(com.polaris.he.target.annotation.Router)&quot;)
-    public Object route(ProceedingJoinPoint pjp) throws Throwable &#123;
-        return pjp.proceed();
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>现在我们来执行下代码</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">strategy:null<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<p>看吧，这就是惊喜。加了个毫无关联的@target，就冒一个空指针出来了。</p>
-<h2 id="分析">分析</h2>
-<p>先不管三七二十一，打个断点再说。一看这下好家伙，这个类被代理了，代理类上面自然没有anntation。<br>
-<img src="/posts/2ced797/1.jpg" alt="代码"><br>
-现在问题来了，为什么会被代理呢？<br>
-如果你对Spring比较熟悉，可以定位到AOP发生代理的位置<br>
-<code>AbstractAutoProxyCreator.wrapIfNecessary(Object bean, String beanName, Object cacheKey)</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) &#123;
- if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) &#123;
-  return bean;
- &#125;
- if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) &#123;
-  return bean;
- &#125;
- if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) &#123;
-  this.advisedBeans.put(cacheKey, Boolean.FALSE);
-  return bean;
- &#125;
-
- &#x2F;&#x2F; 根据beanClass和beanName判断是否是需要创建proxy
- Object[] specificInterceptors &#x3D; getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
- if (specificInterceptors !&#x3D; DO_NOT_PROXY) &#123;
-  this.advisedBeans.put(cacheKey, Boolean.TRUE);
-  Object proxy &#x3D; createProxy(
-    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
-  this.proxyTypes.put(cacheKey, proxy.getClass());
-  return proxy;
- &#125;
-
- this.advisedBeans.put(cacheKey, Boolean.FALSE);
- return bean;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这样一路跟踪下去，我们能找到这个问题的核心方法<code>AopUtils.canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions)</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
- Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
- if (!pc.getClassFilter().matches(targetClass)) &#123;
-  return false;
- &#125;
- &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
- &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
- MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
- if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
-  &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
-  return true;
- &#125;
-
- IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
- if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
-  introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
- &#125;
-
- Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
- if (!Proxy.isProxyClass(targetClass)) &#123;
-  classes.add(ClassUtils.getUserClass(targetClass));
- &#125;
- classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
-
- for (Class&lt;?&gt; clazz : classes) &#123;
-  Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
-  &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
-  for (Method method : methods) &#123;
-   if (introductionAwareMethodMatcher !&#x3D; null ?
-     introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
-     methodMatcher.matches(method, targetClass)) &#123;
-    return true;
-   &#125;
-  &#125;
- &#125;
- return false;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>看到这里我们知道了<code>ntroductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)</code>这个判断了是不是满足切点，从上文可知，introductionAwareMethodMatcher的实现类就是<code>AspectJExpressionPointcut</code>，我们接着往下看。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">public static boolean canApply(Pointcut pc, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
-    Assert.notNull(pc, &quot;Pointcut must not be null&quot;);
-    if (!pc.getClassFilter().matches(targetClass)) &#123;
-        return false;
-    &#125;
-    &#x2F;&#x2F; 这里只有TruePointcut才会返回MethodMatcher.TRUE
-    &#x2F;&#x2F; 我们使用的是Aspect语法，对应的是AspectJExpressionPointcut
-    MethodMatcher methodMatcher &#x3D; pc.getMethodMatcher();
-    if (methodMatcher &#x3D;&#x3D; MethodMatcher.TRUE) &#123;
-        &#x2F;&#x2F; No need to iterate the methods if we&#39;re matching any method anyway...
-        return true;
-    &#125;
-
-    IntroductionAwareMethodMatcher introductionAwareMethodMatcher &#x3D; null;
-    if (methodMatcher instanceof IntroductionAwareMethodMatcher) &#123;
-        introductionAwareMethodMatcher &#x3D; (IntroductionAwareMethodMatcher) methodMatcher;
-    &#125;
-
-    Set&lt;Class&lt;?&gt;&gt; classes &#x3D; new LinkedHashSet&lt;&gt;();
-    if (!Proxy.isProxyClass(targetClass)) &#123;
-        classes.add(ClassUtils.getUserClass(targetClass));
-    &#125;
-    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
-
-    for (Class&lt;?&gt; clazz : classes) &#123;
-        Method[] methods &#x3D; ReflectionUtils.getAllDeclaredMethods(clazz);
-        &#x2F;&#x2F; 这里遍历class中的每一个class，看是否满足pointcut
-        for (Method method : methods) &#123;
-            if (introductionAwareMethodMatcher !&#x3D; null ?
-                    introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
-                    methodMatcher.matches(method, targetClass)) &#123;
-                return true;
-            &#125;
-        &#125;
-    &#125;
-    return false;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>上面提到introductionAwareMethodMatcher来自于<code>AspectJExpressionPointcut</code>，我们进去接着看下</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public boolean matches(Method method, Class&lt;?&gt; targetClass, boolean hasIntroductions) &#123;
- obtainPointcutExpression();
- ShadowMatch shadowMatch &#x3D; getTargetShadowMatch(method, targetClass);
-
- &#x2F;&#x2F; Special handling for this, target, @this, @target, @annotation
- &#x2F;&#x2F; in Spring - we can optimize since we know we have exactly this class,
- &#x2F;&#x2F; and there will never be matching subclass at runtime.
- if (shadowMatch.alwaysMatches()) &#123;
-  return true;
- &#125;
- else if (shadowMatch.neverMatches()) &#123;
-  return false;
- &#125;
- else &#123;
-  &#x2F;&#x2F; the maybe case
-  if (hasIntroductions) &#123;
-   return true;
-  &#125;
-  &#x2F;&#x2F; A match test returned maybe - if there are any subtype sensitive variables
-  &#x2F;&#x2F; involved in the test (this, target, at_this, at_target, at_annotation) then
-  &#x2F;&#x2F; we say this is not a match as in Spring there will never be a different
-  &#x2F;&#x2F; runtime subtype.
-  RuntimeTestWalker walker &#x3D; getRuntimeTestWalker(shadowMatch);
-  return (!walker.testsSubtypeSensitiveVars() || walker.testTargetInstanceOfResidue(targetClass));
- &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>不用看逻辑了，Spring的注释已经写的很明白了。意思是有部分表达式不会涉及到<code>subclass at runtime</code>，Spring启动的时候就可以决定是否需要代理，但有部分表达式涉及<code>运行时子类</code>，这样Spring没有办法了，直接把所有bean都代理了，这样在运行时判断是否满足切点。<br>
-很不幸，使用了@target，你的所有bean都会被代理，这样也就回答了开始时网友们提到的问题。</p>
-<h2 id="深入分析">深入分析</h2>
-<blockquote>
-<p>造成这个问题的主要是Aspectj的语义，Aspectj使用织入，而Spring AOP采用的动态代理实现AOP。</p>
-<p>Aspectj和Spring AOP是AOP实现的两种方式，只是<code>@Aspectj</code>让Spring能使用Aspectj的语法</p>
-<p>既然使用Aspectj语法，<a href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
-</blockquote>
-<p>但我认为这块是有问题的</p>
-<ol>
-<li>注释中和Aspectj语法提到<code>this</code>,<code>target</code>,<code>args</code>,<code>@this</code>,<code>@target</code>,<code>@annotaiton</code>,<code>@args</code>都会使用在运行期判断，但实际测试只有<code>@target</code>，<code>@args</code>被特殊处理了。</li>
-<li><code>@target</code>的解析类是<code>ThisOrTargetAnnotationPointcut</code>，从类的名上看处理了<code>@this</code>和<code>@target</code>，但<code>@this</code>并不被Spring支持，应该是要处理<code>@this</code>的一些语义，但没实现完。从<code>@this</code>语义上看，和运行上下文是强相关的。</li>
-<li>从<a href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
-</a>和<a href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
-</ol>
-<p>最后，官方回复上看，似乎认定了是一个bug</p>
-<p><a href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
-<p><a href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring AOP</tag>
-        <tag>Aspect</tag>
       </tags>
   </entry>
 </search>
