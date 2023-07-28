@@ -1,3 +1,4 @@
+https://polarisgithub.github.io/posts/be0090e6.html
 https://polarisgithub.github.io/posts/60fee82c.html
 https://polarisgithub.github.io/posts/cfa83ab0.html
 https://polarisgithub.github.io/posts/f5f30183.html
@@ -17,6 +18,8 @@ https://polarisgithub.github.io/
 https://polarisgithub.github.io/tags/Spring-IOC/
 https://polarisgithub.github.io/tags/Spring-Test/
 https://polarisgithub.github.io/tags/Servlet3-0/
+https://polarisgithub.github.io/tags/NexT/
+https://polarisgithub.github.io/tags/Hexo/
 https://polarisgithub.github.io/tags/redis/
 https://polarisgithub.github.io/tags/RDM/
 https://polarisgithub.github.io/tags/redis%E6%BA%90%E7%A0%81/

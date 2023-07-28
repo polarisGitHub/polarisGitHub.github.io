@@ -1,191 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
-    <title>MockMvc对form/multipart支持的问题</title>
-    <url>/posts/ddf27974.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
-</blockquote>
-<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
-这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
-<blockquote>
-<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
-</blockquote>
-<span id="more"></span>
-<h2 id="场景">场景</h2>
-<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
-复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
-@Setter
-@ToString
-public class UploadEntity &#123;
-    private String code;
-    private MultipartFile file;
-&#125;
-@PostMapping(&quot;&#x2F;upload&quot;)
-public String upload(UploadEntity file)&#123;
- return file.toString();
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这段代码使用postman来提交是没有任何问题的。<br>
-<img src="/posts/ddf27974/1.jpg" alt="示例"><br>
-但我们使用MockMvc来写test case呢？</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
-public void test() throws Exception &#123;
-    mockMvc.perform(
-            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
-                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-    ).andDo(MockMvcResultHandlers.print());
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
-           Status &#x3D; 200
-    Error message &#x3D; null
-          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
-     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
-             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
-    Forwarded URL &#x3D; null
-   Redirected URL &#x3D; null
-          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="分析">分析</h2>
-<p>现在进入代码跟踪环节😄<br>
-从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
-    try &#123;
-        Collection&lt;Part&gt; parts &#x3D; request.getParts();
-        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
-        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
-        for (Part part : parts) &#123;
-            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
-            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
-            String filename &#x3D; disposition.getFilename();
-            if (filename !&#x3D; null) &#123;
-                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
-                    filename &#x3D; MimeDelegate.decode(filename);
-                &#125;
-                files.add(part.getName(), new StandardMultipartFile(part, filename));
-            &#125;
-            else &#123;
-                this.multipartParameterNames.add(part.getName());
-            &#125;
-        &#125;
-        setMultipartFiles(files);
-    &#125;
-    catch (Throwable ex) &#123;
-        handleParseFailure(ex);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
- * Return a collection of all uploaded Parts.
- *
- * @return A collection of all uploaded Parts.
- * @throws IOException
- *             if an I&#x2F;O error occurs
- * @throws IllegalStateException
- *             if size limits are exceeded or no multipart configuration is
- *             provided
- * @throws ServletException
- *             if the request is not multipart&#x2F;form-data
- * @since Servlet 3.0
- *&#x2F;
-public Collection&lt;Part&gt; getParts() throws IOException,
-        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
-<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
-<blockquote>
-<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
-the string value of the part will also be available via the getParameter /<br>
-getParameterValues methods on HttpServletRequest, using the name of the part.</p>
-</blockquote>
-<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public Enumeration&lt;String&gt; getParameterNames() &#123;
- if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
-  initializeMultipart();
- &#125;
- if (this.multipartParameterNames.isEmpty()) &#123;
-  return super.getParameterNames();
- &#125;
-  
- &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
- &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
- Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
- Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
- while (paramEnum.hasMoreElements()) &#123;
-  paramNames.add(paramEnum.nextElement());
- &#125;
- paramNames.addAll(this.multipartParameterNames);
- return Collections.enumeration(paramNames);
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="修复方法">修复方法</h2>
-<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
-    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
-    this.files.forEach(request::addFile);
-    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
-        request.addPart(part);
-        try &#123;
-            MultipartFile file &#x3D; this.asMultipartFile(part);
-            if (file !&#x3D; null) &#123;
-                request.addFile(file);
-            &#125; else &#123;
-                String value &#x3D; this.toParameterValue(part);
-                if (value !&#x3D; null) &#123;
-                    request.addParameter(part.getName(), this.toParameterValue(part));
-                &#125;
-            &#125;
-        &#125; catch (IOException var5) &#123;
-            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
-        &#125;
-    &#125;);
-    return request;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
-<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
-代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
-    ApplicationPart part &#x3D; new ApplicationPart(item, location);
-    parts.add(part);
-    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
-        String name &#x3D; part.getName();
-        String value &#x3D; null;
-        try &#123;
-            value &#x3D; part.getString(charset.name());
-        &#125; catch (UnsupportedEncodingException uee) &#123;
-            &#x2F;&#x2F; Not possible
-        &#125;
-        if (maxPostSize &gt;&#x3D; 0) &#123;
-            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
-            &#x2F;&#x2F; accurate but close enough.
-            postSize +&#x3D; name.getBytes(charset).length;
-            if (value !&#x3D; null) &#123;
-                &#x2F;&#x2F; Equals sign
-                postSize++;
-                &#x2F;&#x2F; Value length
-                postSize +&#x3D; part.getSize();
-            &#125;
-            &#x2F;&#x2F; Value separator
-            postSize++;
-            if (postSize &gt; maxPostSize) &#123;
-                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
-                throw new IllegalStateException(sm.getString(
-                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
-            &#125;
-        &#125;
-        parameters.addParameter(name, value);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring Test</tag>
-        <tag>Servlet3.0</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>BeanDefinition详细解析</title>
     <url>/posts/60fee82c.html</url>
     <content><![CDATA[<blockquote>
@@ -497,6 +312,525 @@ isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-ro
       </categories>
       <tags>
         <tag>Spring IOC</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>MockMvc对form/multipart支持的问题</title>
+    <url>/posts/ddf27974.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
+</blockquote>
+<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
+这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
+<blockquote>
+<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="场景">场景</h2>
+<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
+复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
+@Setter
+@ToString
+public class UploadEntity &#123;
+    private String code;
+    private MultipartFile file;
+&#125;
+@PostMapping(&quot;&#x2F;upload&quot;)
+public String upload(UploadEntity file)&#123;
+ return file.toString();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这段代码使用postman来提交是没有任何问题的。<br>
+<img src="/posts/ddf27974/1.jpg" alt="示例"><br>
+但我们使用MockMvc来写test case呢？</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
+public void test() throws Exception &#123;
+    mockMvc.perform(
+            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
+                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+    ).andDo(MockMvcResultHandlers.print());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
+           Status &#x3D; 200
+    Error message &#x3D; null
+          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
+     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
+             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
+    Forwarded URL &#x3D; null
+   Redirected URL &#x3D; null
+          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="分析">分析</h2>
+<p>现在进入代码跟踪环节😄<br>
+从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
+    try &#123;
+        Collection&lt;Part&gt; parts &#x3D; request.getParts();
+        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
+        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
+        for (Part part : parts) &#123;
+            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
+            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
+            String filename &#x3D; disposition.getFilename();
+            if (filename !&#x3D; null) &#123;
+                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
+                    filename &#x3D; MimeDelegate.decode(filename);
+                &#125;
+                files.add(part.getName(), new StandardMultipartFile(part, filename));
+            &#125;
+            else &#123;
+                this.multipartParameterNames.add(part.getName());
+            &#125;
+        &#125;
+        setMultipartFiles(files);
+    &#125;
+    catch (Throwable ex) &#123;
+        handleParseFailure(ex);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Return a collection of all uploaded Parts.
+ *
+ * @return A collection of all uploaded Parts.
+ * @throws IOException
+ *             if an I&#x2F;O error occurs
+ * @throws IllegalStateException
+ *             if size limits are exceeded or no multipart configuration is
+ *             provided
+ * @throws ServletException
+ *             if the request is not multipart&#x2F;form-data
+ * @since Servlet 3.0
+ *&#x2F;
+public Collection&lt;Part&gt; getParts() throws IOException,
+        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
+<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
+<blockquote>
+<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
+the string value of the part will also be available via the getParameter /<br>
+getParameterValues methods on HttpServletRequest, using the name of the part.</p>
+</blockquote>
+<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Enumeration&lt;String&gt; getParameterNames() &#123;
+ if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
+  initializeMultipart();
+ &#125;
+ if (this.multipartParameterNames.isEmpty()) &#123;
+  return super.getParameterNames();
+ &#125;
+  
+ &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
+ &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
+ Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
+ Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
+ while (paramEnum.hasMoreElements()) &#123;
+  paramNames.add(paramEnum.nextElement());
+ &#125;
+ paramNames.addAll(this.multipartParameterNames);
+ return Collections.enumeration(paramNames);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="修复方法">修复方法</h2>
+<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
+    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
+    this.files.forEach(request::addFile);
+    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
+        request.addPart(part);
+        try &#123;
+            MultipartFile file &#x3D; this.asMultipartFile(part);
+            if (file !&#x3D; null) &#123;
+                request.addFile(file);
+            &#125; else &#123;
+                String value &#x3D; this.toParameterValue(part);
+                if (value !&#x3D; null) &#123;
+                    request.addParameter(part.getName(), this.toParameterValue(part));
+                &#125;
+            &#125;
+        &#125; catch (IOException var5) &#123;
+            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
+        &#125;
+    &#125;);
+    return request;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
+<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
+代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
+    ApplicationPart part &#x3D; new ApplicationPart(item, location);
+    parts.add(part);
+    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
+        String name &#x3D; part.getName();
+        String value &#x3D; null;
+        try &#123;
+            value &#x3D; part.getString(charset.name());
+        &#125; catch (UnsupportedEncodingException uee) &#123;
+            &#x2F;&#x2F; Not possible
+        &#125;
+        if (maxPostSize &gt;&#x3D; 0) &#123;
+            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
+            &#x2F;&#x2F; accurate but close enough.
+            postSize +&#x3D; name.getBytes(charset).length;
+            if (value !&#x3D; null) &#123;
+                &#x2F;&#x2F; Equals sign
+                postSize++;
+                &#x2F;&#x2F; Value length
+                postSize +&#x3D; part.getSize();
+            &#125;
+            &#x2F;&#x2F; Value separator
+            postSize++;
+            if (postSize &gt; maxPostSize) &#123;
+                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
+                throw new IllegalStateException(sm.getString(
+                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
+            &#125;
+        &#125;
+        parameters.addParameter(name, value);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring Test</tag>
+        <tag>Servlet3.0</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Prism和Hexo的整合</title>
+    <url>/posts/be0090e6.html</url>
+    <content><![CDATA[<p>Hexo提供了<code>highlight</code>和<code>prism</code>两种代码高亮插件，本博客在多次尝试对<code>hightlight</code>解析的语法树不太满意，采用Prism的方式实现了代码高亮<br>
+本博客采用主要的依赖如下。</p>
+<blockquote>
+<p>Hexo  6.3.0<br>
+NexT  8.17.1<br>
+hexo-asset-image 1.0.0</p>
+</blockquote>
+<p>注意<code>hexo-asset-image</code>，这个和引入js文件有一定冲突，需要做修改</p>
+<span id="more"></span>
+<h2 id="Hexo配置">Hexo配置</h2>
+<p>由于对Hexo自带的代码高亮功能不太满意，本方案直接将Hexo自动的代码高亮功能全部关闭了<br>
+在<code>_config.yml</code>中，将<code>hightlight.enable</code>设置为false</p>
+<pre class="line-numbers language-yaml" data-language="yaml"><code class="language-yaml">highlight:
+  enable: false
+  line_number: true
+  auto_detect: false
+  tab_replace: &#39;&#39;
+  wrap: true
+  hljs: false
+prism_plugin:
+  mode: &#39;preprocess&#39;
+  theme: &#39;&#39;
+  line_number: true
+prismjs:
+  enable: true
+  preprocess: true
+  line_number: true
+  tab_replace: &#39;&#39;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Prism配置">Prism配置</h2>
+<h3 id="Prism文件准备">Prism文件准备</h3>
+<p>在<a href="https://prismjs.com/download.html#themes=prism&amp;languages=markup+css+clike+javascript">Prism</a>中选择自己想要代码高亮的语言、主题和插件<br>
+本博客的选择了下列<a href="https://prismjs.com/download.html#themes=prism-solarizedlight&amp;languages=markup+css+clike+javascript+c+cpp+css-extras+diff+go+java+json+json5+regex+sql+xml-doc+yaml&amp;plugins=line-numbers+toolbar+diff-highlight">语言、样式和插件</a></p>
+<ul>
+<li>语音
+<ul>
+<li>markup-css</li>
+<li>clike</li>
+<li>javascript</li>
+<li>c</li>
+<li>cpp</li>
+<li>css-extras</li>
+<li>diff</li>
+<li>go</li>
+<li>java</li>
+<li>json</li>
+<li>json5</li>
+<li>regex</li>
+<li>sql</li>
+<li>xml-doc</li>
+<li>yaml</li>
+</ul>
+</li>
+<li>主题
+<ul>
+<li>prism-solarizedlight</li>
+</ul>
+</li>
+<li>插件
+<ul>
+<li>line-numbers</li>
+<li>toolbar</li>
+<li>diff-highlight</li>
+</ul>
+</li>
+</ul>
+<p>在选择好满意的语言、主题和插件后，拉倒最下方，将js和css下载下来，这就是我们需要的三方依赖</p>
+<p><img src="/posts/be0090e6/prismjs.jpg" alt="prismjs"></p>
+<p>将下载后的prism.js放到<code>source/js/prism/</code>下,prism.css放到<code>csss/js/prism/</code>下<br>
+![download](./download file.jpg)</p>
+<h3 id="NexT修改">NexT修改</h3>
+<p>我们定制好我们的prism库后，需要将定制的库引入NexT</p>
+<h4 id="引入js">引入js</h4>
+<p>在<code>themes/next/layout/_scripts/index.njk</code>中添加js</p>
+<pre class="line-numbers language-markup" data-language="markup"><code class="language-markup">&#123;&#123;- next_js('prism/prism.js') &#125;&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<h4 id="映入css">映入css</h4>
+<p>在<code>themes/next/layout/_partials/head/index.njk</code>中添加css</p>
+<pre class="line-numbers language-markup" data-language="markup"><code class="language-markup"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>link</span> <span class="token attr-name">rel</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>stylesheet<span class="token punctuation">"</span></span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>&#123;&#123; url_for(theme.css) &#125;&#125;/main.css<span class="token punctuation">"</span></span><span class="token punctuation">></span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>link</span> <span class="token attr-name">rel</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>stylesheet<span class="token punctuation">"</span></span> <span class="token attr-name">href</span><span class="token attr-value"><span class="token punctuation attr-equals">=</span><span class="token punctuation">"</span>&#123;&#123; url_for(theme.css) &#125;&#125;/prism/prism.css<span class="token punctuation">"</span></span><span class="token punctuation">></span></span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<h3 id="hexo-asset-image修改">hexo-asset-image修改</h3>
+<p>通过以上两步修改后，就将prism和hexo整合起来了，但如果你使用了hexo-asset-image，可以看到以下报错</p>
+<pre class="line-numbers language-javascript" data-language="javascript"><code class="language-javascript">Uncaught SyntaxError<span class="token operator">:</span> Invalid regular expression<span class="token operator">:</span> missing <span class="token operator">/</span> prism<span class="token punctuation">.</span>js<span class="token operator">:</span><span class="token number">3</span> <span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>这是由于hexo-asset-image对我们image重写时，对js文件进行了读取并写入，导致js文件被破坏<br>
+我们找到<code>node_modules/hexo-asset-image/index.js</code>在<code>25行</code>后添加逻辑</p>
+<pre class="line-numbers language-javascript" data-language="javascript"><code class="language-javascript"><span class="token string">'use strict'</span><span class="token punctuation">;</span>
+<span class="token keyword">var</span> cheerio <span class="token operator">=</span> <span class="token function">require</span><span class="token punctuation">(</span><span class="token string">'cheerio'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// http://stackoverflow.com/questions/14480345/how-to-get-the-nth-occurrence-in-a-string</span>
+<span class="token keyword">function</span> <span class="token function">getPosition</span><span class="token punctuation">(</span><span class="token parameter">str<span class="token punctuation">,</span> m<span class="token punctuation">,</span> i</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+  <span class="token keyword">return</span> str<span class="token punctuation">.</span><span class="token function">split</span><span class="token punctuation">(</span>m<span class="token punctuation">,</span> i<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">join</span><span class="token punctuation">(</span>m<span class="token punctuation">)</span><span class="token punctuation">.</span>length<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+hexo<span class="token punctuation">.</span>extend<span class="token punctuation">.</span>filter<span class="token punctuation">.</span><span class="token function">register</span><span class="token punctuation">(</span><span class="token string">'after_post_render'</span><span class="token punctuation">,</span> <span class="token keyword">function</span><span class="token punctuation">(</span><span class="token parameter">data</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+  <span class="token keyword">var</span> config <span class="token operator">=</span> hexo<span class="token punctuation">.</span>config<span class="token punctuation">;</span>
+  <span class="token keyword">if</span><span class="token punctuation">(</span>config<span class="token punctuation">.</span>post_asset_folder<span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+    <span class="token keyword">var</span> link <span class="token operator">=</span> data<span class="token punctuation">.</span>permalink<span class="token punctuation">;</span>
+    <span class="token keyword">var</span> beginPos <span class="token operator">=</span> <span class="token function">getPosition</span><span class="token punctuation">(</span>link<span class="token punctuation">,</span> <span class="token string">'/'</span><span class="token punctuation">,</span> <span class="token number">3</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token keyword">var</span> appendLink <span class="token operator">=</span> <span class="token string">''</span><span class="token punctuation">;</span>
+    <span class="token comment">// In hexo 3.1.1, the permalink of "about" page is like ".../about/index.html".</span>
+    <span class="token comment">// if not with index.html endpos = link.lastIndexOf('.') + 1 support hexo-abbrlink</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token regex"><span class="token regex-delimiter">/</span><span class="token regex-source language-regex">.*\/index\.html$</span><span class="token regex-delimiter">/</span></span><span class="token punctuation">.</span><span class="token function">test</span><span class="token punctuation">(</span>link<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+      <span class="token comment">// when permalink is end with index.html, for example 2019/02/20/xxtitle/index.html</span>
+      <span class="token comment">// image in xxtitle/ will go to xxtitle/index/</span>
+      appendLink <span class="token operator">=</span> <span class="token string">'index/'</span><span class="token punctuation">;</span>
+      <span class="token keyword">var</span> endPos <span class="token operator">=</span> link<span class="token punctuation">.</span><span class="token function">lastIndexOf</span><span class="token punctuation">(</span><span class="token string">'/'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+    <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+      <span class="token keyword">var</span> endPos <span class="token operator">=</span> link<span class="token punctuation">.</span><span class="token function">lastIndexOf</span><span class="token punctuation">(</span><span class="token string">'.'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+    link <span class="token operator">=</span> link<span class="token punctuation">.</span><span class="token function">substring</span><span class="token punctuation">(</span>beginPos<span class="token punctuation">,</span> endPos<span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">'/'</span> <span class="token operator">+</span> appendLink<span class="token punctuation">;</span>
+    <span class="token comment">// 添加以下逻辑</span>
+    <span class="token comment">// 如果读取的是我们js目录下面的文件，跳过处理</span>
+    <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token regex"><span class="token regex-delimiter">/</span><span class="token regex-source language-regex">^js\/.*</span><span class="token regex-delimiter">/</span></span><span class="token punctuation">.</span><span class="token function">test</span><span class="token punctuation">(</span>link<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+      <span class="token keyword">return</span>
+    <span class="token punctuation">&#125;</span>
+    <span class="token keyword">var</span> toprocess <span class="token operator">=</span> <span class="token punctuation">[</span><span class="token string">'excerpt'</span><span class="token punctuation">,</span> <span class="token string">'more'</span><span class="token punctuation">,</span> <span class="token string">'content'</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span><span class="token punctuation">(</span><span class="token keyword">var</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> toprocess<span class="token punctuation">.</span>length<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+      <span class="token keyword">var</span> key <span class="token operator">=</span> toprocess<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+      <span class="token keyword">var</span> $ <span class="token operator">=</span> cheerio<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span>data<span class="token punctuation">[</span>key<span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token punctuation">&#123;</span>
+        <span class="token literal-property property">ignoreWhitespace</span><span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span>
+        <span class="token literal-property property">xmlMode</span><span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span>
+        <span class="token literal-property property">lowerCaseTags</span><span class="token operator">:</span> <span class="token boolean">false</span><span class="token punctuation">,</span>
+        <span class="token literal-property property">decodeEntities</span><span class="token operator">:</span> <span class="token boolean">false</span>
+      <span class="token punctuation">&#125;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+      <span class="token function">$</span><span class="token punctuation">(</span><span class="token string">'img'</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">each</span><span class="token punctuation">(</span><span class="token keyword">function</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">$</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">attr</span><span class="token punctuation">(</span><span class="token string">'src'</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+          <span class="token comment">// For windows style path, we replace '\' to '/'.</span>
+          <span class="token keyword">var</span> src <span class="token operator">=</span> <span class="token function">$</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">attr</span><span class="token punctuation">(</span><span class="token string">'src'</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">replace</span><span class="token punctuation">(</span><span class="token string">'\\'</span><span class="token punctuation">,</span> <span class="token string">'/'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+          <span class="token keyword">if</span><span class="token punctuation">(</span><span class="token operator">!</span><span class="token punctuation">(</span><span class="token regex"><span class="token regex-delimiter">/</span><span class="token regex-source language-regex">http[s]*.*|\/\/.*</span><span class="token regex-delimiter">/</span></span><span class="token punctuation">.</span><span class="token function">test</span><span class="token punctuation">(</span>src<span class="token punctuation">)</span>
+            <span class="token operator">||</span> <span class="token regex"><span class="token regex-delimiter">/</span><span class="token regex-source language-regex">^\s+\/</span><span class="token regex-delimiter">/</span></span><span class="token punctuation">.</span><span class="token function">test</span><span class="token punctuation">(</span>src<span class="token punctuation">)</span>
+            <span class="token operator">||</span> <span class="token regex"><span class="token regex-delimiter">/</span><span class="token regex-source language-regex">^\s*\/uploads|images\/</span><span class="token regex-delimiter">/</span></span><span class="token punctuation">.</span><span class="token function">test</span><span class="token punctuation">(</span>src<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token comment">// For "about" page, the first part of "src" can't be removed.</span>
+            <span class="token comment">// In addition, to support multi-level local directory.</span>
+            <span class="token keyword">var</span> linkArray <span class="token operator">=</span> link<span class="token punctuation">.</span><span class="token function">split</span><span class="token punctuation">(</span><span class="token string">'/'</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token keyword">function</span><span class="token punctuation">(</span><span class="token parameter">elem</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+              <span class="token keyword">return</span> elem <span class="token operator">!=</span> <span class="token string">''</span><span class="token punctuation">;</span>
+            <span class="token punctuation">&#125;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">var</span> srcArray <span class="token operator">=</span> src<span class="token punctuation">.</span><span class="token function">split</span><span class="token punctuation">(</span><span class="token string">'/'</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span><span class="token keyword">function</span><span class="token punctuation">(</span><span class="token parameter">elem</span><span class="token punctuation">)</span><span class="token punctuation">&#123;</span>
+              <span class="token keyword">return</span> elem <span class="token operator">!=</span> <span class="token string">''</span> <span class="token operator">&amp;&amp;</span> elem <span class="token operator">!=</span> <span class="token string">'.'</span><span class="token punctuation">;</span>
+            <span class="token punctuation">&#125;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span><span class="token punctuation">(</span>srcArray<span class="token punctuation">.</span>length <span class="token operator">></span> <span class="token number">1</span><span class="token punctuation">)</span>
+            srcArray<span class="token punctuation">.</span><span class="token function">shift</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            src <span class="token operator">=</span> srcArray<span class="token punctuation">.</span><span class="token function">join</span><span class="token punctuation">(</span><span class="token string">'/'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token function">$</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">attr</span><span class="token punctuation">(</span><span class="token string">'src'</span><span class="token punctuation">,</span> config<span class="token punctuation">.</span>root <span class="token operator">+</span> link <span class="token operator">+</span> src<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            console<span class="token punctuation">.</span>info<span class="token operator">&amp;&amp;</span>console<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"update link as:-->"</span><span class="token operator">+</span>config<span class="token punctuation">.</span>root <span class="token operator">+</span> link <span class="token operator">+</span> src<span class="token punctuation">)</span><span class="token punctuation">;</span>
+          <span class="token punctuation">&#125;</span>
+        <span class="token punctuation">&#125;</span><span class="token keyword">else</span><span class="token punctuation">&#123;</span>
+          console<span class="token punctuation">.</span>info<span class="token operator">&amp;&amp;</span>console<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"no src attr, skipped..."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+          console<span class="token punctuation">.</span>info<span class="token operator">&amp;&amp;</span>console<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token function">$</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">&#125;</span>
+      <span class="token punctuation">&#125;</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+      <span class="token comment">// $.html()会丢失 > 等符号</span>
+      data<span class="token punctuation">[</span>key<span class="token punctuation">]</span> <span class="token operator">=</span> $<span class="token punctuation">.</span><span class="token function">html</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">&#125;</span>
+  <span class="token punctuation">&#125;</span>
+<span class="token punctuation">&#125;</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="附">附</h2>
+<h3 id="自定义css样式">自定义css样式</h3>
+<p>笔者比较喜欢vscode提供markdown的代码高亮风格，这里是笔者自定义仿照vscode的css样式</p>
+<pre class="line-numbers language-css" data-language="css"><code class="language-css"><span class="token selector">code[class*="language-"],
+pre[class*="language-"]</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #9FDDFD<span class="token punctuation">;</span>
+    <span class="token property">font-family</span><span class="token punctuation">:</span> <span class="token string">"Source Code Pro"</span><span class="token punctuation">,</span> <span class="token string">"Consolas"</span><span class="token punctuation">,</span> <span class="token string">"Bitstream Vera Sans Mono"</span><span class="token punctuation">,</span> <span class="token string">"Courier New"</span><span class="token punctuation">,</span> Courier<span class="token punctuation">,</span> monospace<span class="token punctuation">;</span>
+    <span class="token property">direction</span><span class="token punctuation">:</span> ltr<span class="token punctuation">;</span>
+    <span class="token property">text-align</span><span class="token punctuation">:</span> left<span class="token punctuation">;</span>
+    <span class="token property">white-space</span><span class="token punctuation">:</span> pre<span class="token punctuation">;</span>
+    <span class="token property">word-spacing</span><span class="token punctuation">:</span> normal<span class="token punctuation">;</span>
+    <span class="token property">word-break</span><span class="token punctuation">:</span> normal<span class="token punctuation">;</span>
+    <span class="token property">font-size</span><span class="token punctuation">:</span> .75em<span class="token punctuation">;</span>
+    <span class="token property">line-height</span><span class="token punctuation">:</span> 1.2em<span class="token punctuation">;</span>
+
+    <span class="token property">-moz-tab-size</span><span class="token punctuation">:</span> 4<span class="token punctuation">;</span>
+    <span class="token property">-o-tab-size</span><span class="token punctuation">:</span> 4<span class="token punctuation">;</span>
+    <span class="token property">tab-size</span><span class="token punctuation">:</span> 4<span class="token punctuation">;</span>
+
+    <span class="token property">-webkit-hyphens</span><span class="token punctuation">:</span> none<span class="token punctuation">;</span>
+    <span class="token property">-moz-hyphens</span><span class="token punctuation">:</span> none<span class="token punctuation">;</span>
+    <span class="token property">-ms-hyphens</span><span class="token punctuation">:</span> none<span class="token punctuation">;</span>
+    <span class="token property">hyphens</span><span class="token punctuation">:</span> none<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">pre > code[class*="language-"]</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">font-size</span><span class="token punctuation">:</span> 1em<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">pre[class*="language-"]::-moz-selection, pre[class*="language-"] ::-moz-selection,
+code[class*="language-"]::-moz-selection, code[class*="language-"] ::-moz-selection</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> #C1DEF1<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">pre[class*="language-"]::selection, pre[class*="language-"] ::selection,
+code[class*="language-"]::selection, code[class*="language-"] ::selection</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> #C1DEF1<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token comment">/* Code blocks */</span>
+<span class="token selector">pre[class*="language-"]</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">padding</span><span class="token punctuation">:</span> 1em<span class="token punctuation">;</span>
+    <span class="token property">margin</span><span class="token punctuation">:</span> .5em 0<span class="token punctuation">;</span>
+    <span class="token property">overflow</span><span class="token punctuation">:</span> auto<span class="token punctuation">;</span>
+    <span class="token property">border</span><span class="token punctuation">:</span> 1px solid #dddddd<span class="token punctuation">;</span>
+    <span class="token property">background-color</span><span class="token punctuation">:</span> <span class="token function">rgb</span><span class="token punctuation">(</span>21<span class="token punctuation">,</span>21<span class="token punctuation">,</span>21<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token comment">/* Inline code */</span>
+<span class="token selector">:not(pre) > code[class*="language-"]</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">padding</span><span class="token punctuation">:</span> .2em<span class="token punctuation">;</span>
+    <span class="token property">padding-top</span><span class="token punctuation">:</span> 1px<span class="token punctuation">;</span>
+    <span class="token property">padding-bottom</span><span class="token punctuation">:</span> 1px<span class="token punctuation">;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> #f8f8f8<span class="token punctuation">;</span>
+    <span class="token property">border</span><span class="token punctuation">:</span> 1px solid #dddddd<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #0A9858<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.namespace</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">opacity</span><span class="token punctuation">:</span> .7<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.string</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #CD917A<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.punctuation</span> <span class="token punctuation">&#123;</span>
+   <span class="token property">color</span><span class="token punctuation">:</span> #C169BD<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.annotation,
+.token.operator</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #51C0A9<span class="token punctuation">;</span> <span class="token comment">/* no highlight */</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.url,
+.token.symbol,
+.token.number,
+.token.boolean,
+.token.variable,
+.token.constant,
+.token.inserted</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #9FDDFD<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.atrule,
+.token.keyword,
+.token.attr-value,
+.language-autohotkey .token.selector,
+.language-json .token.boolean,
+.language-json .token.number,
+code[class*="language-css"]</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #599DD4<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.function</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #DADBAB<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.deleted,
+.language-autohotkey .token.tag</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #9a050f<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.selector,
+.language-autohotkey .token.keyword</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #00009f<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.important</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #e90<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.important,
+.token.bold</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">font-weight</span><span class="token punctuation">:</span> bold<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.italic</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">font-style</span><span class="token punctuation">:</span> italic<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.class-name,
+.language-json .token.property</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #51C0A9<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.tag,
+.token.selector</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #800000<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.attr-name,
+.token.property,
+.token.regex,
+.token.entity</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #ff0000<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.token.directive.tag .tag</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> #ffff00<span class="token punctuation">;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #393A34<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token comment">/* overrides color-values for the Line Numbers plugin
+ * http://prismjs.com/plugins/line-numbers/
+ */</span>
+<span class="token selector">.line-numbers.line-numbers .line-numbers-rows</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">border-right-color</span><span class="token punctuation">:</span> #a5a5a5<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token selector">.line-numbers .line-numbers-rows > span:before</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">color</span><span class="token punctuation">:</span> #2B91AF<span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span>
+
+<span class="token comment">/* overrides color-values for the Line Highlight plugin
+* http://prismjs.com/plugins/line-highlight/
+*/</span>
+<span class="token selector">.line-highlight.line-highlight</span> <span class="token punctuation">&#123;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> <span class="token function">rgba</span><span class="token punctuation">(</span>193<span class="token punctuation">,</span> 222<span class="token punctuation">,</span> 241<span class="token punctuation">,</span> 0.2<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> <span class="token function">-webkit-linear-gradient</span><span class="token punctuation">(</span>left<span class="token punctuation">,</span> <span class="token function">rgba</span><span class="token punctuation">(</span>193<span class="token punctuation">,</span> 222<span class="token punctuation">,</span> 241<span class="token punctuation">,</span> 0.2<span class="token punctuation">)</span> 70%<span class="token punctuation">,</span> <span class="token function">rgba</span><span class="token punctuation">(</span>221<span class="token punctuation">,</span> 222<span class="token punctuation">,</span> 241<span class="token punctuation">,</span> 0<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token property">background</span><span class="token punctuation">:</span> <span class="token function">linear-gradient</span><span class="token punctuation">(</span>to right<span class="token punctuation">,</span> <span class="token function">rgba</span><span class="token punctuation">(</span>193<span class="token punctuation">,</span> 222<span class="token punctuation">,</span> 241<span class="token punctuation">,</span> 0.2<span class="token punctuation">)</span> 70%<span class="token punctuation">,</span> <span class="token function">rgba</span><span class="token punctuation">(</span>221<span class="token punctuation">,</span> 222<span class="token punctuation">,</span> 241<span class="token punctuation">,</span> 0<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>]]></content>
+      <tags>
+        <tag>NexT</tag>
+        <tag>Hexo</tag>
       </tags>
   </entry>
   <entry>
