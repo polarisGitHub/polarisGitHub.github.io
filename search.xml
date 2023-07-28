@@ -570,7 +570,7 @@ prismjs:
 <p>在选择好满意的语言、主题和插件后，拉倒最下方，将js和css下载下来，这就是我们需要的三方依赖</p>
 <p><img src="/posts/be0090e6/prismjs.jpg" alt="prismjs"></p>
 <p>将下载后的prism.js放到<code>source/js/prism/</code>下,prism.css放到<code>csss/js/prism/</code>下<br>
-![download](./download file.jpg)</p>
+<img src="/posts/be0090e6/download.jpg" alt="download"></p>
 <h3 id="NexT修改">NexT修改</h3>
 <p>我们定制好我们的prism库后，需要将定制的库引入NexT</p>
 <h4 id="引入js">引入js</h4>
