@@ -315,6 +315,192 @@ isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-ro
       </tags>
   </entry>
   <entry>
+    <title>MockMvc对form/multipart支持的问题</title>
+    <url>/posts/ddf27974.html</url>
+    <content><![CDATA[<blockquote>
+<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
+</blockquote>
+<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
+这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
+<blockquote>
+<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
+</blockquote>
+<span id="more"></span>
+<h2 id="场景">场景</h2>
+<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
+复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
+@Setter
+@ToString
+public class UploadEntity &#123;
+    private String code;
+    private MultipartFile file;
+&#125;
+@PostMapping(&quot;&#x2F;upload&quot;)
+public String upload(UploadEntity file)&#123;
+ return file.toString();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这段代码使用postman来提交是没有任何问题的。<br>
+<img src="/posts/ddf27974/1.jpg" alt="示例"><br>
+但我们使用MockMvc来写test case呢？</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
+public void test() throws Exception &#123;
+    mockMvc.perform(
+            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
+                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
+    ).andDo(MockMvcResultHandlers.print());
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
+<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
+           Status &#x3D; 200
+    Error message &#x3D; null
+          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
+     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
+             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
+    Forwarded URL &#x3D; null
+   Redirected URL &#x3D; null
+          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="分析">分析</h2>
+<p>现在进入代码跟踪环节😄<br>
+从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
+    try &#123;
+        Collection&lt;Part&gt; parts &#x3D; request.getParts();
+        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
+        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
+        for (Part part : parts) &#123;
+            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
+            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
+            String filename &#x3D; disposition.getFilename();
+            if (filename !&#x3D; null) &#123;
+                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
+                    filename &#x3D; MimeDelegate.decode(filename);
+                &#125;
+                files.add(part.getName(), new StandardMultipartFile(part, filename));
+            &#125;
+            else &#123;
+                this.multipartParameterNames.add(part.getName());
+            &#125;
+        &#125;
+        setMultipartFiles(files);
+    &#125;
+    catch (Throwable ex) &#123;
+        handleParseFailure(ex);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
+ * Return a collection of all uploaded Parts.
+ *
+ * @return A collection of all uploaded Parts.
+ * @throws IOException
+ *             if an I&#x2F;O error occurs
+ * @throws IllegalStateException
+ *             if size limits are exceeded or no multipart configuration is
+ *             provided
+ * @throws ServletException
+ *             if the request is not multipart&#x2F;form-data
+ * @since Servlet 3.0
+ *&#x2F;
+public Collection&lt;Part&gt; getParts() throws IOException,
+        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
+<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
+<blockquote>
+<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
+the string value of the part will also be available via the getParameter /<br>
+getParameterValues methods on HttpServletRequest, using the name of the part.</p>
+</blockquote>
+<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Enumeration&lt;String&gt; getParameterNames() &#123;
+ if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
+  initializeMultipart();
+ &#125;
+ if (this.multipartParameterNames.isEmpty()) &#123;
+  return super.getParameterNames();
+ &#125;
+  
+ &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
+ &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
+ Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
+ Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
+ while (paramEnum.hasMoreElements()) &#123;
+  paramNames.add(paramEnum.nextElement());
+ &#125;
+ paramNames.addAll(this.multipartParameterNames);
+ return Collections.enumeration(paramNames);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="修复方法">修复方法</h2>
+<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
+    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
+    this.files.forEach(request::addFile);
+    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
+        request.addPart(part);
+        try &#123;
+            MultipartFile file &#x3D; this.asMultipartFile(part);
+            if (file !&#x3D; null) &#123;
+                request.addFile(file);
+            &#125; else &#123;
+                String value &#x3D; this.toParameterValue(part);
+                if (value !&#x3D; null) &#123;
+                    request.addParameter(part.getName(), this.toParameterValue(part));
+                &#125;
+            &#125;
+        &#125; catch (IOException var5) &#123;
+            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
+        &#125;
+    &#125;);
+    return request;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
+<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
+代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
+    ApplicationPart part &#x3D; new ApplicationPart(item, location);
+    parts.add(part);
+    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
+        String name &#x3D; part.getName();
+        String value &#x3D; null;
+        try &#123;
+            value &#x3D; part.getString(charset.name());
+        &#125; catch (UnsupportedEncodingException uee) &#123;
+            &#x2F;&#x2F; Not possible
+        &#125;
+        if (maxPostSize &gt;&#x3D; 0) &#123;
+            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
+            &#x2F;&#x2F; accurate but close enough.
+            postSize +&#x3D; name.getBytes(charset).length;
+            if (value !&#x3D; null) &#123;
+                &#x2F;&#x2F; Equals sign
+                postSize++;
+                &#x2F;&#x2F; Value length
+                postSize +&#x3D; part.getSize();
+            &#125;
+            &#x2F;&#x2F; Value separator
+            postSize++;
+            if (postSize &gt; maxPostSize) &#123;
+                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
+                throw new IllegalStateException(sm.getString(
+                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
+            &#125;
+        &#125;
+        parameters.addParameter(name, value);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>Spring Test</tag>
+        <tag>Servlet</tag>
+        <tag>Bug</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Prism和Hexo的整合</title>
     <url>/posts/be0090e6.html</url>
     <content><![CDATA[<p>Hexo提供了<code>highlight</code>和<code>prism</code>两种代码高亮插件，本博客在多次尝试对<code>hightlight</code>解析的语法树不太满意，采用Prism的方式实现了代码高亮<br>
@@ -649,191 +835,6 @@ code[class*="language-css"]</span> <span class="token punctuation">&#123;</span>
       </tags>
   </entry>
   <entry>
-    <title>MockMvc对form/multipart支持的问题</title>
-    <url>/posts/ddf27974.html</url>
-    <content><![CDATA[<blockquote>
-<p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
-</blockquote>
-<p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
-这是我当时给github提的issue：<a href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
-<blockquote>
-<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
-</blockquote>
-<span id="more"></span>
-<h2 id="场景">场景</h2>
-<p>Spring文件上传是个很常见的场景，使用Http的<code>multipart/form-data</code>可以上传文件，multipart/form-data在<a href="https://tools.ietf.org/html/rfc2388">rfc2388</a>中定义。multipart/form-data一次可以提交多个<strong>Parts</strong>，每个 Part 可以是一个文件，也可以是一个表单数据。<br>
-复杂文件上传场景，可能提交过来的不止一个文件，还可能包含其他描述字段。现在构造了一个使用场景，form提交了一个文件和这个文件对应的code。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Getter
-@Setter
-@ToString
-public class UploadEntity &#123;
-    private String code;
-    private MultipartFile file;
-&#125;
-@PostMapping(&quot;&#x2F;upload&quot;)
-public String upload(UploadEntity file)&#123;
- return file.toString();
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这段代码使用postman来提交是没有任何问题的。<br>
-<img src="/posts/ddf27974/1.jpg" alt="示例"><br>
-但我们使用MockMvc来写test case呢？</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java"> @Test
-public void test() throws Exception &#123;
-    mockMvc.perform(
-            MockMvcRequestBuilders.multipart(&quot;&#x2F;upload&quot;)
-                    .file(new MockMultipartFile(&quot;file&quot;, &quot;1.txt&quot;, null, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-                    .part(new MockPart(&quot;code&quot;, &quot;123&quot;.getBytes(StandardCharsets.UTF_8)))
-    ).andDo(MockMvcResultHandlers.print());
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从response上看，<strong>code=null</strong>，这说明mockMvc对Part的解析出了问题。</p>
-<pre class="line-numbers language-bash" data-language="bash"><code class="language-bash">MockHttpServletResponse:
-           Status &#x3D; 200
-    Error message &#x3D; null
-          Headers &#x3D; [Content-Type:&quot;text&#x2F;plain;charset&#x3D;UTF-8&quot;, Content-Length:&quot;138&quot;]
-     Content type &#x3D; text&#x2F;plain;charset&#x3D;UTF-8
-             Body &#x3D; UploadEntity(code&#x3D;null, file&#x3D;org.springframework.web.multipart.support.StandardMultipartHttpServletRequest$StandardMultipartFile@46866946)
-    Forwarded URL &#x3D; null
-   Redirected URL &#x3D; null
-          Cookies &#x3D; []<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="分析">分析</h2>
-<p>现在进入代码跟踪环节😄<br>
-从上面日志可以看出，Multipartfile是<code>StandardMultipartFile</code>这个类处理的，查找这个类的引用，可以找到一个方法。这个方法的大致意思是，Http提交的part被分为两个部分了：<code>有filename</code>、<code>没有filename</code>。有filename视为提交文件，没有filename视为<code>RequestParam</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">private void parseRequest(HttpServletRequest request) &#123;
-    try &#123;
-        Collection&lt;Part&gt; parts &#x3D; request.getParts();
-        this.multipartParameterNames &#x3D; new LinkedHashSet&lt;&gt;(parts.size());
-        MultiValueMap&lt;String, MultipartFile&gt; files &#x3D; new LinkedMultiValueMap&lt;&gt;(parts.size());
-        for (Part part : parts) &#123;
-            String headerValue &#x3D; part.getHeader(HttpHeaders.CONTENT_DISPOSITION);
-            ContentDisposition disposition &#x3D; ContentDisposition.parse(headerValue);
-            String filename &#x3D; disposition.getFilename();
-            if (filename !&#x3D; null) &#123;
-                if (filename.startsWith(&quot;&#x3D;?&quot;) &amp;&amp; filename.endsWith(&quot;?&#x3D;&quot;)) &#123;
-                    filename &#x3D; MimeDelegate.decode(filename);
-                &#125;
-                files.add(part.getName(), new StandardMultipartFile(part, filename));
-            &#125;
-            else &#123;
-                this.multipartParameterNames.add(part.getName());
-            &#125;
-        &#125;
-        setMultipartFiles(files);
-    &#125;
-    catch (Throwable ex) &#123;
-        handleParseFailure(ex);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这里需要明确一个概念，Parts是Http定义的标准，但直到<code>Servlet3.0</code>才能直接处理Parts。这点在HttpServletRequest中可以清楚的看到，<code>getParts</code>是Servlet 3.0才提供的方法，这也说明了为什么在Servlet2.5时，我们要使用<code>CommonsMultipartResolver</code>这个类来处理文件上传。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">&#x2F;**
- * Return a collection of all uploaded Parts.
- *
- * @return A collection of all uploaded Parts.
- * @throws IOException
- *             if an I&#x2F;O error occurs
- * @throws IllegalStateException
- *             if size limits are exceeded or no multipart configuration is
- *             provided
- * @throws ServletException
- *             if the request is not multipart&#x2F;form-data
- * @since Servlet 3.0
- *&#x2F;
-public Collection&lt;Part&gt; getParts() throws IOException,
-        ServletException;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>同时Servlet3.0对Parts的处理有额外的要求，<code>getParts</code>里面的string类型（没有filename）的数据，需要能使用<code>getParameter</code>获取到。<br>
-<a href="https://download.oracle.com/otn-pub/jcp/servlet-3.0-fr-eval-oth-JSpec/servlet-3_0-final-spec.pdf">Java™ Servlet Specification Version 3.0</a></p>
-<blockquote>
-<p>For parts with form-data as the Content-Disposition, but without a filename,<br>
-the string value of the part will also be available via the getParameter /<br>
-getParameterValues methods on HttpServletRequest, using the name of the part.</p>
-</blockquote>
-<p>现在接着看<code>StandardMultipartHttpServletRequest</code>，已经重写的<code>getParameterNames</code>方法，该方法已经能获取到了Parts中的对应变量。但问题就在于MockMvc并没有将Parts中非文件的部分注册到parameter中。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public Enumeration&lt;String&gt; getParameterNames() &#123;
- if (this.multipartParameterNames &#x3D;&#x3D; null) &#123;
-  initializeMultipart();
- &#125;
- if (this.multipartParameterNames.isEmpty()) &#123;
-  return super.getParameterNames();
- &#125;
-  
- &#x2F;&#x2F; Servlet 3.0 getParameterNames() not guaranteed to include multipart form items
- &#x2F;&#x2F; (e.g. on WebLogic 12) -&gt; need to merge them here to be on the safe side
- Set&lt;String&gt; paramNames &#x3D; new LinkedHashSet&lt;&gt;();
- Enumeration&lt;String&gt; paramEnum &#x3D; super.getParameterNames();
- while (paramEnum.hasMoreElements()) &#123;
-  paramNames.add(paramEnum.nextElement());
- &#125;
- paramNames.addAll(this.multipartParameterNames);
- return Collections.enumeration(paramNames);
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="修复方法">修复方法</h2>
-<p>其实修复方法很简单，将Parts中非文件部分注册到parameter中就可以了。如果你不方便升级Spring版本，Spring也有一个扩展接口<code>RequestPostProcessor</code>来干这事。</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">protected final MockHttpServletRequest createServletRequest(ServletContext servletContext) &#123;
-    MockMultipartHttpServletRequest request &#x3D; new MockMultipartHttpServletRequest(servletContext);
-    this.files.forEach(request::addFile);
-    this.parts.values().stream().flatMap(Collection::stream).forEach((part) -&gt; &#123;
-        request.addPart(part);
-        try &#123;
-            MultipartFile file &#x3D; this.asMultipartFile(part);
-            if (file !&#x3D; null) &#123;
-                request.addFile(file);
-            &#125; else &#123;
-                String value &#x3D; this.toParameterValue(part);
-                if (value !&#x3D; null) &#123;
-                    request.addParameter(part.getName(), this.toParameterValue(part));
-                &#125;
-            &#125;
-        &#125; catch (IOException var5) &#123;
-            throw new IllegalStateException(&quot;Failed to read content for part &quot; + part.getName(), var5);
-        &#125;
-    &#125;);
-    return request;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="Tomcat对Parts的处理">Tomcat对Parts的处理</h2>
-<p>上面说了这么多，其实就是对协议的处理过程，核心是：对Parts中的非文件部分，需要添加到parameter中，我们来看下Tomcat是怎么处理这部分的。<br>
-代码比较长，取了核心部分。代码在org.apache.catalina.connector.Request#parseParts。这个标准的实现是在2010年<a href="https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0https://github.com/apache/tomcat/commit/17e1a5ae5d8232ed6a838211813f2592d91392bf#diff-9c26b293a31c898f3153e5575a98f8f9b767f55d31b4e3f5d9dd8e047004d3b0">Implement SRV.3.2. Non file parts should be exposed via getParameters()</a></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">for (FileItem item : items) &#123;
-    ApplicationPart part &#x3D; new ApplicationPart(item, location);
-    parts.add(part);
-    if (part.getSubmittedFileName() &#x3D;&#x3D; null) &#123;
-        String name &#x3D; part.getName();
-        String value &#x3D; null;
-        try &#123;
-            value &#x3D; part.getString(charset.name());
-        &#125; catch (UnsupportedEncodingException uee) &#123;
-            &#x2F;&#x2F; Not possible
-        &#125;
-        if (maxPostSize &gt;&#x3D; 0) &#123;
-            &#x2F;&#x2F; Have to calculate equivalent size. Not completely
-            &#x2F;&#x2F; accurate but close enough.
-            postSize +&#x3D; name.getBytes(charset).length;
-            if (value !&#x3D; null) &#123;
-                &#x2F;&#x2F; Equals sign
-                postSize++;
-                &#x2F;&#x2F; Value length
-                postSize +&#x3D; part.getSize();
-            &#125;
-            &#x2F;&#x2F; Value separator
-            postSize++;
-            if (postSize &gt; maxPostSize) &#123;
-                parameters.setParseFailedReason(FailReason.POST_TOO_LARGE);
-                throw new IllegalStateException(sm.getString(
-                        &quot;coyoteRequest.maxPostSizeExceeded&quot;));
-            &#125;
-        &#125;
-        parameters.addParameter(name, value);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>Spring Test</tag>
-        <tag>Servlet3.0</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>RedisDesktopManager编译</title>
     <url>/posts/cfa83ab0.html</url>
     <content><![CDATA[<p><strong>最近重装了系统，重新编译了下2022.5.1，编译过程基本一致，有些许差别</strong></p>
@@ -1034,12 +1035,234 @@ make</p>
       </tags>
   </entry>
   <entry>
+    <title>Redisson Scan Bug</title>
+    <url>/posts/f2e3320d.html</url>
+    <content><![CDATA[<p><a href="https://github.com/redisson/redisson">Redisson - Easy Redis Java client with features of In-Memory Data Grid</a><br>
+一个被广泛使用的，功能强，性能高Redis库，但不得不说，Redisson的Bug挺多的，工作以来陆陆续续遇到了好几个。最近由遇到一个Redisson Scan的问题，正好记录下</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 6.2.9<br>
+redisson: 3.15.6<br>
+redisson-spring-boot-starter: 3.15.6<br>
+spring boot: 2.7.14<br>
+spring boot starter data redis: 2.7.14</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题复现">问题复现</h2>
+<p>为了复现这个问题，笔者在本地搭建了简单的Redis Cluster，三主三从<br>
+<img src="/posts/f2e3320d/clusternodes.png" alt="clusternodes.png"></p>
+<p>然后写入30组数据作为测试数据</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@SpringBootTest
+public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Test
+    public void writeData2Redis() &#123;
+        for (var i &#x3D; 0; i &lt; 30; i++) &#123;
+            var ops &#x3D; redisTemplate.boundValueOps(&quot;redisson_scan_&quot; + i);
+            ops.set(String.valueOf(i));
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>接下来使用RedisTemplate提供的scan来扫描Redis中的数据</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@SpringBootTest
+public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Test
+    public void scanRedis() &#123;
+        List&lt;String&gt; list &#x3D; new ArrayList&lt;&gt;();
+        try (RedisConnection connection &#x3D; getRedisConnection(redisTemplate)) &#123;
+            ScanOptions options &#x3D; ScanOptions.scanOptions().match(&quot;redisson_scan_*&quot;).count(500).build();
+            try (Cursor&lt;byte[]&gt; cursor &#x3D; connection.scan(options)) &#123;
+                while (cursor.hasNext()) &#123;
+                    list.add(new String(cursor.next()));
+                &#125;
+            &#125;
+        &#125;
+        var set &#x3D; new HashSet&lt;&gt;(list);
+        log.info(&quot;list size&#x3D;&#123;&#125;,list&#x3D;&#123;&#125;&quot;, list.size(), list);
+        log.info(&quot;set size&#x3D;&#123;&#125;,set&#x3D;&#123;&#125;&quot;, set.size(), set);
+    &#125;
+
+    public RedisConnection getRedisConnection(StringRedisTemplate redisTemplate) &#123;
+        return Optional.ofNullable(redisTemplate)
+                .map(RedisAccessor::getConnectionFactory)
+                .map(RedisConnectionFactory::getConnection)
+                .orElseThrow(RuntimeException::new);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从日志中可以看出，一共有30个元素，却扫描出来的33个元素，再仔细看下<code>redisson_scan_29</code>，在列表中重复了三次</p>
+<pre class="line-numbers language-none"><code class="language-none">list size&#x3D;33,list&#x3D;[redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>我们再对list做一次去重，可以看出redisTemplat只扫描出来了11个数据，但都重复了三次</p>
+<pre class="line-numbers language-none"><code class="language-none">set size&#x3D;11,set&#x3D;[redisson_scan_19, redisson_scan_6, redisson_scan_2, redisson_scan_25, redisson_scan_24, redisson_scan_21, redisson_scan_20, redisson_scan_29, redisson_scan_28, redisson_scan_15, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>为了证实猜想，查看了部分key对应的slots，redisTemplate扫描出来的key都是在<code>dd9318300d4d6a82b783b760693bc1fbb716c61b</code>这个节点上</p>
+<p><img src="/posts/f2e3320d/slots.png" alt="slots.png"></p>
+<h2 id="问题定位">问题定位</h2>
+<p>最开始同事告诉我，需要使用<code>RedisClusterConnection</code>，采用以下方式才能执行scan。让笔者一度怀疑是我使用方式的问题，但细想：<code>RedisConnection</code>作为最基础的连接类，应该去屏蔽底层不同链接的细节才对</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">try (RedisClusterConnection connection &#x3D; getRedisClusterConnection(redisTemplate)) &#123;
+    ScanOptions options &#x3D; ScanOptions.scanOptions().match(&quot;redisson_scan_*&quot;).count(500).build();
+    for (RedisClusterNode clusterGetNode : connection.clusterGetNodes()) &#123;
+        try (Cursor&lt;byte[]&gt; cursor &#x3D; connection.scan(clusterGetNode, options)) &#123;
+            while (cursor.hasNext()) &#123;
+                list.add(new String(cursor.next()));
+            &#125;
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>通过debug，可以找到RedisTemplate.scan的实现在<code>org.redisson.spring.data.connection.RedissonConnection</code>中，逻辑也不复杂</p>
+<ol>
+<li>获取client和MasterSlaveEntry迭代器</li>
+<li>通过MasterSlaveEntry迭代器中的entry对每一个节点进行scan操作，并保存scan结果</li>
+<li><strong>在整个过程中，除了最开始一次，client的值都不会变</strong></li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Cursor&lt;byte[]&gt; scan(ScanOptions options) &#123;
+    return new ScanCursor&lt;byte[]&gt;(0, options) &#123;
+
+        &#x2F;&#x2F; 注意client，第一次scan的时候client是null
+        private RedisClient client;
+        &#x2F;&#x2F; 获取了redis的所有结点信息
+        private Iterator&lt;MasterSlaveEntry&gt; entries &#x3D; redisson.getConnectionManager().getEntrySet().iterator();
+        &#x2F;&#x2F; 获取第一个节点信息传入了doScan
+        private MasterSlaveEntry entry &#x3D; entries.next();
+        
+        @Override
+        protected ScanIteration&lt;byte[]&gt; doScan(long cursorId, ScanOptions options) &#123;
+            if (isQueueing() || isPipelined()) &#123;
+                throw new UnsupportedOperationException(&quot;&#39;SSCAN&#39; cannot be called in pipeline &#x2F; transaction mode.&quot;);
+            &#125;
+
+            &#x2F;&#x2F; entry循环完毕，迭代器完毕
+            if (entry &#x3D;&#x3D; null) &#123;
+                return null;
+            &#125;
+            
+            List&lt;Object&gt; args &#x3D; new ArrayList&lt;Object&gt;();
+            &#x2F;&#x2F; to avoid negative value
+            cursorId &#x3D; Math.max(cursorId, 0);
+            args.add(cursorId);
+            if (options.getPattern() !&#x3D; null) &#123;
+                args.add(&quot;MATCH&quot;);
+                args.add(options.getPattern());
+            &#125;
+            if (options.getCount() !&#x3D; null) &#123;
+                args.add(&quot;COUNT&quot;);
+                args.add(options.getCount());
+            &#125;
+            
+            &#x2F;&#x2F; 注意这里，执行器中传入了client和entry信息
+            RFuture&lt;ListScanResult&lt;byte[]&gt;&gt; f &#x3D; executorService.readAsync(client, entry, ByteArrayCodec.INSTANCE, RedisCommands.SCAN, args.toArray());
+            ListScanResult&lt;byte[]&gt; res &#x3D; syncFuture(f);
+            long pos &#x3D; res.getPos();
+            &#x2F;&#x2F; 这里有保存scan返回结果的client，意味着在scan整个过程中，除了第一次是null，之后的client是没有变化的
+            client &#x3D; res.getRedisClient();
+            if (pos &#x3D;&#x3D; 0) &#123;
+                if (entries.hasNext()) &#123;
+                    pos &#x3D; -1;
+                    &#x2F;&#x2F; 如果scan完毕，使用下一个entry
+                    entry &#x3D; entries.next();
+                &#125; else &#123;
+                    entry &#x3D; null;
+                &#125;
+            &#125;
+            
+            return new ScanIteration&lt;byte[]&gt;(pos, res.getValues());
+        &#125;
+    &#125;.open();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>继续跟踪到<code>executorService.readAsync</code>，注意这个<code>NodeSource</code>，保存了<code>MasterSlaveEntry</code>和<code>RedisClient</code>信息</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public &lt;T, R&gt; RFuture&lt;R&gt; readAsync(RedisClient client, MasterSlaveEntry entry, Codec codec, RedisCommand&lt;T&gt; command, Object... params) &#123;
+    RPromise&lt;R&gt; mainPromise &#x3D; createPromise();
+    async(true, new NodeSource(entry, client), codec, command, params, mainPromise, false, false);
+    return mainPromise;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>继续往下走，到了获取链接的地方了</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public RFuture&lt;RedisConnection&gt; connectionReadOp(NodeSource source, RedisCommand&lt;?&gt; command) &#123;
+    MasterSlaveEntry entry &#x3D; getEntry(source);
+    if (entry &#x3D;&#x3D; null) &#123;
+        return RedissonPromise.newFailedFuture(createNodeNotFoundException(source));
+    &#125;
+
+    if (source.getRedirect() !&#x3D; null) &#123;
+        return entry.connectionReadOp(command, source.getAddr());
+    &#125;
+    &#x2F;&#x2F; 如果RedisClient不为null，使用RedisClient获取Connection
+    if (source.getRedisClient() !&#x3D; null) &#123;
+        return entry.connectionReadOp(command, source.getRedisClient());
+    &#125;
+    
+    &#x2F;&#x2F; 如果RedisClient为null，使用传入的entry获取Connection
+    return entry.connectionReadOp(command);
+&#125;
+
+private MasterSlaveEntry getEntry(NodeSource source) &#123;
+    if (source.getRedirect() !&#x3D; null) &#123;
+        return getEntry(source.getAddr());
+    &#125;
+
+    MasterSlaveEntry entry &#x3D; source.getEntry();
+    &#x2F;&#x2F; 如果RedisClient不为null，通过RedisClient获取entry
+    if (source.getRedisClient() !&#x3D; null) &#123;
+        entry &#x3D; getEntry(source.getRedisClient());
+    &#125;
+    if (entry &#x3D;&#x3D; null &amp;&amp; source.getSlot() !&#x3D; null) &#123;
+        entry &#x3D; getEntry(source.getSlot());
+    &#125;
+    &#x2F;&#x2F; 如果RedisClient不null，使用传入的entry
+    return entry;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>getEntry中逻辑比较简单</p>
+<ul>
+<li>如果client为空，使用doScan中传入的entry创建connection</li>
+<li>如果client不为空，使用client创建connection</li>
+</ul>
+<p>到这里，整个bug就比较清晰了</p>
+<ol>
+<li>第一次doScan时，client为null，获取connection时选择了一个entry（对应到redis的一个从节点）</li>
+<li>之后doScan时，clent已经赋值了，而且没有切换逻辑，底层每次都会获取到同一个connection</li>
+<li>在三主三从的节点上执行scan，实际时对同一个节点执行了3次scan</li>
+</ol>
+<h2 id="问题解决">问题解决</h2>
+<p>明确了是Redisson的bug了，问题就比较好解决了，去github找Redisson的release note就行了</p>
+<p>在redisson-3.17.1的release中，找到了这样一条fix</p>
+<blockquote>
+<p>Fixed - Spring Data Redis module. Scan In cluster mode, other nodes cannot be scanned</p>
+</blockquote>
+<p>官方修复也很简单，在一个节点scan完毕后，将client设置为null，使下一轮doScan可以切换到不同节点上</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (pos &#x3D;&#x3D; 0) &#123;
+    if (entries.hasNext()) &#123;
+        pos &#x3D; -1;
+        entry &#x3D; entries.next();
+        &#x2F;&#x2F; client设置为null，使其可以切换节点
+        client &#x3D; null;
+    &#125; else &#123;
+        entry &#x3D; null;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>再跑一次scan代码，现在一切正常了</p>
+<pre class="line-numbers language-none"><code class="language-none">ist size&#x3D;30,list&#x3D;[redisson_scan_0, redisson_scan_7, redisson_scan_13, redisson_scan_14, redisson_scan_4, redisson_scan_17, redisson_scan_26, redisson_scan_18, redisson_scan_10, redisson_scan_22, redisson_scan_8, redisson_scan_3, redisson_scan_9, redisson_scan_16, redisson_scan_27, redisson_scan_5, redisson_scan_23, redisson_scan_1, redisson_scan_12, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]
+set size&#x3D;30,set&#x3D;[redisson_scan_0, redisson_scan_1, redisson_scan_18, redisson_scan_17, redisson_scan_19, redisson_scan_8, redisson_scan_9, redisson_scan_6, redisson_scan_7, redisson_scan_4, redisson_scan_5, redisson_scan_2, redisson_scan_3, redisson_scan_25, redisson_scan_24, redisson_scan_27, redisson_scan_26, redisson_scan_21, redisson_scan_20, redisson_scan_23, redisson_scan_22, redisson_scan_29, redisson_scan_28, redisson_scan_14, redisson_scan_13, redisson_scan_16, redisson_scan_15, redisson_scan_10, redisson_scan_12, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>]]></content>
+      <tags>
+        <tag>Bug</tag>
+        <tag>Redisson</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Spring Condition</title>
     <url>/posts/a7ee6b02.html</url>
     <content><![CDATA[<blockquote>
 <p>本文基于<code>Spring Boot 2.7.9</code>与<code>Spring Framework 5.3.25</code></p>
 </blockquote>
-<p>Spring Boot中，一个很方便也是很重要的机制就是<code>spring-boot-starter</code>，只需要在pom中引入组件对于的spring-boot-starter就可以引入并使用该组件。<br>
+<p>Spring Boot中，一个很方便也是很重要的机制就是<code>spring-boot-starter</code>，只需要在pom中引入组件对应的spring-boot-starter就可以引入并使用该组件。<br>
 Spring Boot Starter中，条件加载时很重要的一个特性，本文就看看条件加载在Spring中是怎么发挥作用的。</p>
 <span id="more"></span>
 <h2 id="前言">前言</h2>
