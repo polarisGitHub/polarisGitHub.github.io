@@ -1116,7 +1116,7 @@ public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
         &#125;
     &#125;
 &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>通过debug，可以找到RedisTemplate.scan的实现在<code>org.redisson.spring.data.connection.RedissonConnection</code>中，逻辑也不复杂</p>
+<p>RedisTemplate.scan的实现在<code>org.redisson.spring.data.connection.RedissonConnection</code>中，逻辑也不复杂</p>
 <ol>
 <li>获取client和MasterSlaveEntry迭代器</li>
 <li>通过MasterSlaveEntry迭代器中的entry对每一个节点进行scan操作，并保存scan结果</li>
@@ -1248,12 +1248,398 @@ private MasterSlaveEntry getEntry(NodeSource source) &#123;
         entry &#x3D; null;
     &#125;
 &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>再跑一次scan代码，现在一切正常了</p>
+<p>升级redisson和redisson-spring-boot-starter后，再跑一次scan，现在一切正常了</p>
 <pre class="line-numbers language-none"><code class="language-none">ist size&#x3D;30,list&#x3D;[redisson_scan_0, redisson_scan_7, redisson_scan_13, redisson_scan_14, redisson_scan_4, redisson_scan_17, redisson_scan_26, redisson_scan_18, redisson_scan_10, redisson_scan_22, redisson_scan_8, redisson_scan_3, redisson_scan_9, redisson_scan_16, redisson_scan_27, redisson_scan_5, redisson_scan_23, redisson_scan_1, redisson_scan_12, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]
 set size&#x3D;30,set&#x3D;[redisson_scan_0, redisson_scan_1, redisson_scan_18, redisson_scan_17, redisson_scan_19, redisson_scan_8, redisson_scan_9, redisson_scan_6, redisson_scan_7, redisson_scan_4, redisson_scan_5, redisson_scan_2, redisson_scan_3, redisson_scan_25, redisson_scan_24, redisson_scan_27, redisson_scan_26, redisson_scan_21, redisson_scan_20, redisson_scan_23, redisson_scan_22, redisson_scan_29, redisson_scan_28, redisson_scan_14, redisson_scan_13, redisson_scan_16, redisson_scan_15, redisson_scan_10, redisson_scan_12, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>]]></content>
       <tags>
         <tag>Bug</tag>
         <tag>Redisson</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>dict字典</title>
+    <url>/posts/4fcbe513.html</url>
+    <content><![CDATA[<blockquote>
+<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code>中</p>
+</blockquote>
+<p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典</p>
+<span id="more"></span>
+<h2 id="DICT数据结构">DICT数据结构</h2>
+<h3 id="Hash表节点">Hash表节点</h3>
+<p>dictEntry保存了字典中的节点，数据结构比较简单，记录了key，value和hash冲突后采用<code>链地址法</code>的链表header。</p>
+<ul>
+<li>需要注意的是，value采用了union，主要是字典在redis中被广泛使用了。如：hash指令，记录各个键的TTL等，在不同的场景下会使用不同的成员，如记录TTL时使用了<code>s64</code>。这样设计的原因也是为了节省内存。</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dictEntry &#123;
+    &#x2F;&#x2F; key
+    void *key;
+    &#x2F;&#x2F; value，c语言中的共用体
+    union &#123;
+        void *val;
+        uint64_t u64;
+        int64_t s64;
+        double d;
+    &#125; v;
+    &#x2F;&#x2F; hash冲突后使用单链表存储
+    struct dictEntry *next;
+&#125; dictEntry;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="Hash表">Hash表</h3>
+<p>Hash表主要记录了entry数组等信息。</p>
+<ul>
+<li>table：一维数组，hash后的数据就存在这里，相当于slot的概念</li>
+<li>size：table数组大小，最小4，必须是2^n</li>
+<li>sizemask：固定为size-1，这么做的目的是方便计算元素的索引。
+<ul>
+<li>因为size固定是<code>2^n</code>，如4，8……这样sizemask固定为：3，7……注意到3的二进制是<code>11</code>，7的二进制是<code>111</code>。这样计算<code>index=hash &amp; sizemask</code></li>
+</ul>
+</li>
+<li>used：记录Hash表中保存的数据个数</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* This is our hash table structure. Every dictionary has two of this as we
+ * implement incremental rehashing, for the old to the new table. *&#x2F;
+typedef struct dictht &#123;
+    &#x2F;&#x2F; 二维数组，指向kv对
+    dictEntry **table;   
+    &#x2F;&#x2F; table的大小
+    unsigned long size;  
+    &#x2F;&#x2F; 掩码，table的大小固定为2^n，sizemask为size-1，即2^n-1，这样sizemask的每一位都是1
+    unsigned long sizemask; 
+    &#x2F;&#x2F; 已保存kv对的个数
+    unsigned long used;
+&#125; dictht;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这个地方要注意下**table。菜鸡如我看到**table以为是个二维数组，可以通table[1][1]访问这种。其实不是，table应该理解成一维数组，使用二维指针只是方便<code>dictEntry-&gt;next</code>的访问。<br>
+<img src="/posts/4fcbe513/dictht.svg" alt="dict"></p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictht *ht
+for (i &#x3D; 0; i &lt; ht-&gt;size; i++) &#123;
+ dictEntry *he &#x3D; ht-&gt;table[i];
+ while(he) &#123;
+  chainlen++;
+  he &#x3D; he-&gt;next;
+ &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="Dict字典">Dict字典</h3>
+<p>有了hash table，就可以很容易得到字典数据结构。</p>
+<ul>
+<li>dictType：指向了dictType结构体，该结构体定义了这个dict的一些基本操作函数，如：hash函数</li>
+<li>privdata：该字典的metadata，配合dictType里面的函数使用</li>
+<li>ht[2]：字典最主要的数据结构，hash table
+<ul>
+<li>这里的hash table定义的是大小为2的数组，这样主要是方便rehash。</li>
+<li>平时使用的是ht[0]，rehash时，为了不阻塞操作，会在新建ht[1]，并逐步把数据迁移到ht[1]，迁移完成后ht[1]就变成了ht[0]，等待下一次rehash。这里的思想类似于java gc时的复制算法</li>
+</ul>
+</li>
+<li>rehashidx：rehash时使用，标记rehash到hash table的哪个位置了。这里可以回忆下dictht的结构，里面的table是一个一维数组，这个rehashidx就是标示table的rehash到哪儿的index。如果没有rehash，rehashidx=-1</li>
+<li>iterators：记录迭代器的数量，迭代器参考下文</li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dict &#123;
+    dictType *type;
+    void *privdata;
+    dictht ht[2];
+    long rehashidx; &#x2F;* rehashing not in progress if rehashidx &#x3D;&#x3D; -1 *&#x2F;
+    unsigned long iterators; &#x2F;* number of iterators currently running *&#x2F;
+&#125; dict;
+
+typedef struct dictType &#123;
+    &#x2F;&#x2F; hash函数
+    uint64_t (*hashFunction)(const void *key);
+    &#x2F;&#x2F; key对应的复制函数
+    void *(*keyDup)(void *privdata, const void *key);
+    &#x2F;&#x2F; val对应的复制函数
+    void *(*valDup)(void *privdata, const void *obj);
+    &#x2F;&#x2F; key的compare函数
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
+    &#x2F;&#x2F; key的析构函数
+    void (*keyDestructor)(void *privdata, void *key);
+    &#x2F;&#x2F; val的析构函数
+    void (*valDestructor)(void *privdata, void *obj);
+&#125; dictType;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="DICT基本操作">DICT基本操作</h2>
+<h3 id="创建Dict">创建Dict</h3>
+<p>dict的创建很简单。注意刚创建的dict大小为0，里面的ht.table也都是null，当第一次添加元素时，会在<code>_dictExpandIfNeeded</code>函数中对ht进行初始化</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new hash table *&#x2F;
+dict *dictCreate(dictType *type,
+        void *privDataPtr)
+&#123;
+    dict *d &#x3D; zmalloc(sizeof(*d));
+
+    _dictInit(d,type,privDataPtr);
+    return d;
+&#125;
+&#x2F;* Initialize the hash table *&#x2F;
+int _dictInit(dict *d, dictType *type,
+        void *privDataPtr)
+&#123;
+    _dictReset(&amp;d-&gt;ht[0]);
+    _dictReset(&amp;d-&gt;ht[1]);
+    d-&gt;type &#x3D; type;
+    d-&gt;privdata &#x3D; privDataPtr;
+    d-&gt;rehashidx &#x3D; -1;
+    d-&gt;iterators &#x3D; 0;
+    return DICT_OK;
+&#125;
+&#x2F;* Reset a hash table already initialized with ht_init().
+ * NOTE: This function should only be called by ht_destroy(). *&#x2F;
+static void _dictReset(dictht *ht)
+&#123;
+    ht-&gt;table &#x3D; NULL;
+    ht-&gt;size &#x3D; 0;
+    ht-&gt;sizemask &#x3D; 0;
+    ht-&gt;used &#x3D; 0;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="添加元素">添加元素</h3>
+<p>添加元素基本逻辑很简单</p>
+<ol>
+<li>使用<code>dictAddRaw</code>找到合适的dictEntry</li>
+<li>找到后使用宏<code>dictSetVal</code>吧value放到dictEntry中</li>
+</ol>
+<ul>
+<li>注意宏里面使用了，<code>do&#123;……&#125;while(0)</code>这个技巧。对c不熟悉的会摸不着头脑，其实就是保证宏在任何地方都能以期望的语义展开，可以参考这篇文章<a href="https://www.cnblogs.com/lanxuezaipiao/p/3535626.html">do {…} while (0) 在宏定义中的作用</a></li>
+</ul>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Add an element to the target hash table *&#x2F;
+int dictAdd(dict *d, void *key, void *val)
+&#123;
+    dictEntry *entry &#x3D; dictAddRaw(d,key,NULL);
+
+    if (!entry) return DICT_ERR;
+    dictSetVal(d, entry, val);
+    return DICT_OK;
+&#125;
+
+#define dictSetVal(d, entry, _val_) do &#123; \
+    if ((d)-&gt;type-&gt;valDup) \
+        (entry)-&gt;v.val &#x3D; (d)-&gt;type-&gt;valDup((d)-&gt;privdata, _val_); \
+    else \
+        (entry)-&gt;v.val &#x3D; (_val_); \
+&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从上文中可以看出，<code>dictAddRaw</code>才是正文，我们继续看这个函数。</p>
+<ol>
+<li>先判断是不是在rehash过程中，判断dict.rehashidx是不是-1，如果不是-1。则执行一次rehash step，rehash过程在下文详细说明。</li>
+</ol>
+<blockquote>
+<p><strong>什么是rehash step</strong><br>
+redis执行命令都是单线程操作，很明显在字典rehash的过程中会阻塞操作，为了减少这种阻塞，redis的rehash采用了渐进式的rehash。<br>
+上文提到了，dict中定义了ht数组，平时使用ht[0]，rehash时新建ht[1]，并逐步将ht[0]的数据迁移到ht[1]。没做一次迁移，就是rehash step</p>
+</blockquote>
+<ol start="2">
+<li>根据key计算数据存储所在的index，如果key在dict中已经存在，则<strong>添加错误</strong>。</li>
+<li>是否处于rehash过程中，是的话选择ht[1]，否则选择ht[0]放置数据</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
+&#123;
+    long index;
+    dictEntry *entry;
+    dictht *ht;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+
+    &#x2F;* Get the index of the new element, or -1 if
+     * the element already exists. *&#x2F;
+    &#x2F;&#x2F; #define dictHashKey(d, key) (d)-&gt;type-&gt;hashFunction(key)
+    if ((index &#x3D; _dictKeyIndex(d, key, dictHashKey(d,key), existing)) &#x3D;&#x3D; -1)
+        return NULL;
+
+    &#x2F;* Allocate the memory and store the new entry.
+     * Insert the element in top, with the assumption that in a database
+     * system it is more likely that recently added entries are accessed
+     * more frequently. *&#x2F;
+    ht &#x3D; dictIsRehashing(d) ? &amp;d-&gt;ht[1] : &amp;d-&gt;ht[0];
+    entry &#x3D; zmalloc(sizeof(*entry));
+    &#x2F;&#x2F; 如果hash冲突，放到链表中
+    entry-&gt;next &#x3D; ht-&gt;table[index];
+    ht-&gt;table[index] &#x3D; entry;
+    ht-&gt;used++;
+
+    &#x2F;* Set the hash entry fields. *&#x2F;
+    dictSetKey(d, entry, key);
+    return entry;
+&#125;
+
+#define dictSetKey(d, entry, _key_) do &#123; \
+    if ((d)-&gt;type-&gt;keyDup) \
+        (entry)-&gt;key &#x3D; (d)-&gt;type-&gt;keyDup((d)-&gt;privdata, _key_); \
+    else \
+        (entry)-&gt;key &#x3D; (_key_); \
+&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看完这段代码，我们发现这个的核心优势这么找到key在table中的位置，这个方法就是<code>_dictKeyIndex</code>。</p>
+<ol>
+<li>添加时先判断选是否需要扩容，如果容量不够先扩容。</li>
+<li>根据hash值和sizemask计算出数据应该存放的index。</li>
+<li>根据index，在两个ht中查找key是否存在（包括单链表），如果key已经有了，返回错误。检查完成后返回index作为数据的存放索引</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **existing)
+&#123;
+    unsigned long idx, table;
+    dictEntry *he;
+    if (existing) *existing &#x3D; NULL;
+
+    &#x2F;* Expand the hash table if needed *&#x2F;
+    if (_dictExpandIfNeeded(d) &#x3D;&#x3D; DICT_ERR)
+        return -1;
+    for (table &#x3D; 0; table &lt;&#x3D; 1; table++) &#123;
+        idx &#x3D; hash &amp; d-&gt;ht[table].sizemask;
+        &#x2F;* Search if this slot does not already contain the given key *&#x2F;
+        he &#x3D; d-&gt;ht[table].table[idx];
+        while(he) &#123;
+            if (key&#x3D;&#x3D;he-&gt;key || dictCompareKeys(d, key, he-&gt;key)) &#123;
+                if (existing) *existing &#x3D; he;
+                return -1;
+            &#125;
+            he &#x3D; he-&gt;next;
+        &#125;
+        if (!dictIsRehashing(d)) break;
+    &#125;
+    return idx;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="rehash">rehash</h3>
+<h3 id="扩容">扩容</h3>
+<h3 id="遍历">遍历</h3>
+<h2 id="API列表">API列表</h2>
+<table>
+<thead>
+<tr>
+<th>API</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dict <em>dictCreate(dictType</em>type, void *privDataPtr);</td>
+<td>创建字典</td>
+</tr>
+<tr>
+<td>int dictExpand(dict *d, unsigned long size);</td>
+<td>字典扩容</td>
+</tr>
+<tr>
+<td>int dictAdd(dict <em>d, void</em>key, void *val);</td>
+<td>添加增数据，不能重复添加</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictAddRaw(dict</em>d, void *key, dictEntry **existing);</td>
+<td>添加数据，如果重复添加，放入existing</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictAddOrFind(dict</em>d, void *key);</td>
+<td>添加或查找</td>
+</tr>
+<tr>
+<td>int dictReplace(dict <em>d, void</em>key, void *val);</td>
+<td>添加数据，如果存在就更新，不存在就添加</td>
+</tr>
+<tr>
+<td>int dictDelete(dict <em>d, const void</em>key);</td>
+<td>删除数据</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictUnlink(dict</em>ht, const void *key);</td>
+<td>删除数据（惰性删除）</td>
+</tr>
+<tr>
+<td>void dictFreeUnlinkedEntry(dict <em>d, dictEntry</em>he);</td>
+<td>释放惰性删除没有释放的内存</td>
+</tr>
+<tr>
+<td>void dictRelease(dict *d);</td>
+<td>删除字段并释放内存</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictFind(dict</em>d, const void *key);</td>
+<td>根据key查找entry</td>
+</tr>
+<tr>
+<td>void <em>dictFetchValue(dict</em>d, const void *key);</td>
+<td>根据key查找value</td>
+</tr>
+<tr>
+<td>int dictResize(dict *d);</td>
+<td>调整字典大小，调整后大小为当前数据量的最小值</td>
+</tr>
+<tr>
+<td>dictIterator <em>dictGetIterator(dict</em>d);</td>
+<td>初始化普通迭代器</td>
+</tr>
+<tr>
+<td>dictIterator <em>dictGetSafeIterator(dict</em>d);</td>
+<td>初始化安全迭代器</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictNext(dictIterator</em>iter);</td>
+<td>获取下一个迭代器，iter.next()</td>
+</tr>
+<tr>
+<td>void dictReleaseIterator(dictIterator *iter);</td>
+<td>释放迭代器</td>
+</tr>
+<tr>
+<td>dictEntry <em>dictGetRandomKey(dict</em>d);</td>
+<td>随机获取一个key</td>
+</tr>
+<tr>
+<td>unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);</td>
+<td>随机获取count个可用</td>
+</tr>
+<tr>
+<td>void dictGetStats(char <em>buf, size_t bufsize, dict</em>d);</td>
+<td>获取字典的状态</td>
+</tr>
+<tr>
+<td>uint64_t dictGenHashFunction(const void *key, int len);</td>
+<td>获取hash函数（大小写敏感）</td>
+</tr>
+<tr>
+<td>uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);</td>
+<td>获取hash函数（大小写不敏感）</td>
+</tr>
+<tr>
+<td>void dictEmpty(dict <em>d, void(callback)(void</em>));</td>
+<td>清空字典</td>
+</tr>
+<tr>
+<td>void dictEnableResize(void);</td>
+<td>允许resize</td>
+</tr>
+<tr>
+<td>void dictDisableResize(void);</td>
+<td>不允许resize</td>
+</tr>
+<tr>
+<td>int dictRehash(dict *d, int n);</td>
+<td>渐进式rehash，n为step</td>
+</tr>
+<tr>
+<td>int dictRehashMilliseconds(dict *d, int ms);</td>
+<td>执行若干步rehash，但rehash不能超过固定时长</td>
+</tr>
+<tr>
+<td>void dictSetHashFunctionSeed(uint8_t *seed);</td>
+<td>设置随机种子</td>
+</tr>
+<tr>
+<td>uint8_t *dictGetHashFunctionSeed(void);</td>
+<td>获取随机种子</td>
+</tr>
+<tr>
+<td>unsigned long dictScan(dict <em>d, unsigned long v, dictScanFunction</em>fn, dictScanBucketFunction <em>bucketfn, void</em>privdata);</td>
+<td>扫描字典</td>
+</tr>
+<tr>
+<td>uint64_t dictGetHash(dict <em>d, const void</em>key);</td>
+<td>获取key的hash</td>
+</tr>
+<tr>
+<td>dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);</td>
+<td>通过已经被惰性删除的数据和hash查找entry</td>
+</tr>
+</tbody>
+</table>
+]]></content>
+      <categories>
+        <category>redis</category>
+      </categories>
+      <tags>
+        <tag>redis源码</tag>
+        <tag>redis数据结构</tag>
       </tags>
   </entry>
   <entry>
@@ -2074,392 +2460,6 @@ public class MongoAutoConfiguration &#123;
       </categories>
       <tags>
         <tag>Spring IOC</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>dict字典</title>
-    <url>/posts/4fcbe513.html</url>
-    <content><![CDATA[<blockquote>
-<p><strong>本文源码<a href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code>中</p>
-</blockquote>
-<p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典</p>
-<span id="more"></span>
-<h2 id="DICT数据结构">DICT数据结构</h2>
-<h3 id="Hash表节点">Hash表节点</h3>
-<p>dictEntry保存了字典中的节点，数据结构比较简单，记录了key，value和hash冲突后采用<code>链地址法</code>的链表header。</p>
-<ul>
-<li>需要注意的是，value采用了union，主要是字典在redis中被广泛使用了。如：hash指令，记录各个键的TTL等，在不同的场景下会使用不同的成员，如记录TTL时使用了<code>s64</code>。这样设计的原因也是为了节省内存。</li>
-</ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dictEntry &#123;
-    &#x2F;&#x2F; key
-    void *key;
-    &#x2F;&#x2F; value，c语言中的共用体
-    union &#123;
-        void *val;
-        uint64_t u64;
-        int64_t s64;
-        double d;
-    &#125; v;
-    &#x2F;&#x2F; hash冲突后使用单链表存储
-    struct dictEntry *next;
-&#125; dictEntry;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="Hash表">Hash表</h3>
-<p>Hash表主要记录了entry数组等信息。</p>
-<ul>
-<li>table：一维数组，hash后的数据就存在这里，相当于slot的概念</li>
-<li>size：table数组大小，最小4，必须是2^n</li>
-<li>sizemask：固定为size-1，这么做的目的是方便计算元素的索引。
-<ul>
-<li>因为size固定是<code>2^n</code>，如4，8……这样sizemask固定为：3，7……注意到3的二进制是<code>11</code>，7的二进制是<code>111</code>。这样计算<code>index=hash &amp; sizemask</code></li>
-</ul>
-</li>
-<li>used：记录Hash表中保存的数据个数</li>
-</ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* This is our hash table structure. Every dictionary has two of this as we
- * implement incremental rehashing, for the old to the new table. *&#x2F;
-typedef struct dictht &#123;
-    &#x2F;&#x2F; 二维数组，指向kv对
-    dictEntry **table;   
-    &#x2F;&#x2F; table的大小
-    unsigned long size;  
-    &#x2F;&#x2F; 掩码，table的大小固定为2^n，sizemask为size-1，即2^n-1，这样sizemask的每一位都是1
-    unsigned long sizemask; 
-    &#x2F;&#x2F; 已保存kv对的个数
-    unsigned long used;
-&#125; dictht;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>这个地方要注意下**table。菜鸡如我看到**table以为是个二维数组，可以通table[1][1]访问这种。其实不是，table应该理解成一维数组，使用二维指针只是方便<code>dictEntry-&gt;next</code>的访问。<br>
-<img src="/posts/4fcbe513/dictht.svg" alt="dict"></p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictht *ht
-for (i &#x3D; 0; i &lt; ht-&gt;size; i++) &#123;
- dictEntry *he &#x3D; ht-&gt;table[i];
- while(he) &#123;
-  chainlen++;
-  he &#x3D; he-&gt;next;
- &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="Dict字典">Dict字典</h3>
-<p>有了hash table，就可以很容易得到字典数据结构。</p>
-<ul>
-<li>dictType：指向了dictType结构体，该结构体定义了这个dict的一些基本操作函数，如：hash函数</li>
-<li>privdata：该字典的metadata，配合dictType里面的函数使用</li>
-<li>ht[2]：字典最主要的数据结构，hash table
-<ul>
-<li>这里的hash table定义的是大小为2的数组，这样主要是方便rehash。</li>
-<li>平时使用的是ht[0]，rehash时，为了不阻塞操作，会在新建ht[1]，并逐步把数据迁移到ht[1]，迁移完成后ht[1]就变成了ht[0]，等待下一次rehash。这里的思想类似于java gc时的复制算法</li>
-</ul>
-</li>
-<li>rehashidx：rehash时使用，标记rehash到hash table的哪个位置了。这里可以回忆下dictht的结构，里面的table是一个一维数组，这个rehashidx就是标示table的rehash到哪儿的index。如果没有rehash，rehashidx=-1</li>
-<li>iterators：记录迭代器的数量，迭代器参考下文</li>
-</ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">typedef struct dict &#123;
-    dictType *type;
-    void *privdata;
-    dictht ht[2];
-    long rehashidx; &#x2F;* rehashing not in progress if rehashidx &#x3D;&#x3D; -1 *&#x2F;
-    unsigned long iterators; &#x2F;* number of iterators currently running *&#x2F;
-&#125; dict;
-
-typedef struct dictType &#123;
-    &#x2F;&#x2F; hash函数
-    uint64_t (*hashFunction)(const void *key);
-    &#x2F;&#x2F; key对应的复制函数
-    void *(*keyDup)(void *privdata, const void *key);
-    &#x2F;&#x2F; val对应的复制函数
-    void *(*valDup)(void *privdata, const void *obj);
-    &#x2F;&#x2F; key的compare函数
-    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
-    &#x2F;&#x2F; key的析构函数
-    void (*keyDestructor)(void *privdata, void *key);
-    &#x2F;&#x2F; val的析构函数
-    void (*valDestructor)(void *privdata, void *obj);
-&#125; dictType;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="DICT基本操作">DICT基本操作</h2>
-<h3 id="创建Dict">创建Dict</h3>
-<p>dict的创建很简单。注意刚创建的dict大小为0，里面的ht.table也都是null，当第一次添加元素时，会在<code>_dictExpandIfNeeded</code>函数中对ht进行初始化</p>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Create a new hash table *&#x2F;
-dict *dictCreate(dictType *type,
-        void *privDataPtr)
-&#123;
-    dict *d &#x3D; zmalloc(sizeof(*d));
-
-    _dictInit(d,type,privDataPtr);
-    return d;
-&#125;
-&#x2F;* Initialize the hash table *&#x2F;
-int _dictInit(dict *d, dictType *type,
-        void *privDataPtr)
-&#123;
-    _dictReset(&amp;d-&gt;ht[0]);
-    _dictReset(&amp;d-&gt;ht[1]);
-    d-&gt;type &#x3D; type;
-    d-&gt;privdata &#x3D; privDataPtr;
-    d-&gt;rehashidx &#x3D; -1;
-    d-&gt;iterators &#x3D; 0;
-    return DICT_OK;
-&#125;
-&#x2F;* Reset a hash table already initialized with ht_init().
- * NOTE: This function should only be called by ht_destroy(). *&#x2F;
-static void _dictReset(dictht *ht)
-&#123;
-    ht-&gt;table &#x3D; NULL;
-    ht-&gt;size &#x3D; 0;
-    ht-&gt;sizemask &#x3D; 0;
-    ht-&gt;used &#x3D; 0;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="添加元素">添加元素</h3>
-<p>添加元素基本逻辑很简单</p>
-<ol>
-<li>使用<code>dictAddRaw</code>找到合适的dictEntry</li>
-<li>找到后使用宏<code>dictSetVal</code>吧value放到dictEntry中</li>
-</ol>
-<ul>
-<li>注意宏里面使用了，<code>do&#123;……&#125;while(0)</code>这个技巧。对c不熟悉的会摸不着头脑，其实就是保证宏在任何地方都能以期望的语义展开，可以参考这篇文章<a href="https://www.cnblogs.com/lanxuezaipiao/p/3535626.html">do {…} while (0) 在宏定义中的作用</a></li>
-</ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* Add an element to the target hash table *&#x2F;
-int dictAdd(dict *d, void *key, void *val)
-&#123;
-    dictEntry *entry &#x3D; dictAddRaw(d,key,NULL);
-
-    if (!entry) return DICT_ERR;
-    dictSetVal(d, entry, val);
-    return DICT_OK;
-&#125;
-
-#define dictSetVal(d, entry, _val_) do &#123; \
-    if ((d)-&gt;type-&gt;valDup) \
-        (entry)-&gt;v.val &#x3D; (d)-&gt;type-&gt;valDup((d)-&gt;privdata, _val_); \
-    else \
-        (entry)-&gt;v.val &#x3D; (_val_); \
-&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从上文中可以看出，<code>dictAddRaw</code>才是正文，我们继续看这个函数。</p>
-<ol>
-<li>先判断是不是在rehash过程中，判断dict.rehashidx是不是-1，如果不是-1。则执行一次rehash step，rehash过程在下文详细说明。</li>
-</ol>
-<blockquote>
-<p><strong>什么是rehash step</strong><br>
-redis执行命令都是单线程操作，很明显在字典rehash的过程中会阻塞操作，为了减少这种阻塞，redis的rehash采用了渐进式的rehash。<br>
-上文提到了，dict中定义了ht数组，平时使用ht[0]，rehash时新建ht[1]，并逐步将ht[0]的数据迁移到ht[1]。没做一次迁移，就是rehash step</p>
-</blockquote>
-<ol start="2">
-<li>根据key计算数据存储所在的index，如果key在dict中已经存在，则<strong>添加错误</strong>。</li>
-<li>是否处于rehash过程中，是的话选择ht[1]，否则选择ht[0]放置数据</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
-&#123;
-    long index;
-    dictEntry *entry;
-    dictht *ht;
-
-    if (dictIsRehashing(d)) _dictRehashStep(d);
-
-    &#x2F;* Get the index of the new element, or -1 if
-     * the element already exists. *&#x2F;
-    &#x2F;&#x2F; #define dictHashKey(d, key) (d)-&gt;type-&gt;hashFunction(key)
-    if ((index &#x3D; _dictKeyIndex(d, key, dictHashKey(d,key), existing)) &#x3D;&#x3D; -1)
-        return NULL;
-
-    &#x2F;* Allocate the memory and store the new entry.
-     * Insert the element in top, with the assumption that in a database
-     * system it is more likely that recently added entries are accessed
-     * more frequently. *&#x2F;
-    ht &#x3D; dictIsRehashing(d) ? &amp;d-&gt;ht[1] : &amp;d-&gt;ht[0];
-    entry &#x3D; zmalloc(sizeof(*entry));
-    &#x2F;&#x2F; 如果hash冲突，放到链表中
-    entry-&gt;next &#x3D; ht-&gt;table[index];
-    ht-&gt;table[index] &#x3D; entry;
-    ht-&gt;used++;
-
-    &#x2F;* Set the hash entry fields. *&#x2F;
-    dictSetKey(d, entry, key);
-    return entry;
-&#125;
-
-#define dictSetKey(d, entry, _key_) do &#123; \
-    if ((d)-&gt;type-&gt;keyDup) \
-        (entry)-&gt;key &#x3D; (d)-&gt;type-&gt;keyDup((d)-&gt;privdata, _key_); \
-    else \
-        (entry)-&gt;key &#x3D; (_key_); \
-&#125; while(0)<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>看完这段代码，我们发现这个的核心优势这么找到key在table中的位置，这个方法就是<code>_dictKeyIndex</code>。</p>
-<ol>
-<li>添加时先判断选是否需要扩容，如果容量不够先扩容。</li>
-<li>根据hash值和sizemask计算出数据应该存放的index。</li>
-<li>根据index，在两个ht中查找key是否存在（包括单链表），如果key已经有了，返回错误。检查完成后返回index作为数据的存放索引</li>
-</ol>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **existing)
-&#123;
-    unsigned long idx, table;
-    dictEntry *he;
-    if (existing) *existing &#x3D; NULL;
-
-    &#x2F;* Expand the hash table if needed *&#x2F;
-    if (_dictExpandIfNeeded(d) &#x3D;&#x3D; DICT_ERR)
-        return -1;
-    for (table &#x3D; 0; table &lt;&#x3D; 1; table++) &#123;
-        idx &#x3D; hash &amp; d-&gt;ht[table].sizemask;
-        &#x2F;* Search if this slot does not already contain the given key *&#x2F;
-        he &#x3D; d-&gt;ht[table].table[idx];
-        while(he) &#123;
-            if (key&#x3D;&#x3D;he-&gt;key || dictCompareKeys(d, key, he-&gt;key)) &#123;
-                if (existing) *existing &#x3D; he;
-                return -1;
-            &#125;
-            he &#x3D; he-&gt;next;
-        &#125;
-        if (!dictIsRehashing(d)) break;
-    &#125;
-    return idx;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="rehash">rehash</h3>
-<h3 id="扩容">扩容</h3>
-<h3 id="遍历">遍历</h3>
-<h2 id="API列表">API列表</h2>
-<table>
-<thead>
-<tr>
-<th>API</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>dict <em>dictCreate(dictType</em>type, void *privDataPtr);</td>
-<td>创建字典</td>
-</tr>
-<tr>
-<td>int dictExpand(dict *d, unsigned long size);</td>
-<td>字典扩容</td>
-</tr>
-<tr>
-<td>int dictAdd(dict <em>d, void</em>key, void *val);</td>
-<td>添加增数据，不能重复添加</td>
-</tr>
-<tr>
-<td>dictEntry <em>dictAddRaw(dict</em>d, void *key, dictEntry **existing);</td>
-<td>添加数据，如果重复添加，放入existing</td>
-</tr>
-<tr>
-<td>dictEntry <em>dictAddOrFind(dict</em>d, void *key);</td>
-<td>添加或查找</td>
-</tr>
-<tr>
-<td>int dictReplace(dict <em>d, void</em>key, void *val);</td>
-<td>添加数据，如果存在就更新，不存在就添加</td>
-</tr>
-<tr>
-<td>int dictDelete(dict <em>d, const void</em>key);</td>
-<td>删除数据</td>
-</tr>
-<tr>
-<td>dictEntry <em>dictUnlink(dict</em>ht, const void *key);</td>
-<td>删除数据（惰性删除）</td>
-</tr>
-<tr>
-<td>void dictFreeUnlinkedEntry(dict <em>d, dictEntry</em>he);</td>
-<td>释放惰性删除没有释放的内存</td>
-</tr>
-<tr>
-<td>void dictRelease(dict *d);</td>
-<td>删除字段并释放内存</td>
-</tr>
-<tr>
-<td>dictEntry <em>dictFind(dict</em>d, const void *key);</td>
-<td>根据key查找entry</td>
-</tr>
-<tr>
-<td>void <em>dictFetchValue(dict</em>d, const void *key);</td>
-<td>根据key查找value</td>
-</tr>
-<tr>
-<td>int dictResize(dict *d);</td>
-<td>调整字典大小，调整后大小为当前数据量的最小值</td>
-</tr>
-<tr>
-<td>dictIterator <em>dictGetIterator(dict</em>d);</td>
-<td>初始化普通迭代器</td>
-</tr>
-<tr>
-<td>dictIterator <em>dictGetSafeIterator(dict</em>d);</td>
-<td>初始化安全迭代器</td>
-</tr>
-<tr>
-<td>dictEntry <em>dictNext(dictIterator</em>iter);</td>
-<td>获取下一个迭代器，iter.next()</td>
-</tr>
-<tr>
-<td>void dictReleaseIterator(dictIterator *iter);</td>
-<td>释放迭代器</td>
-</tr>
-<tr>
-<td>dictEntry <em>dictGetRandomKey(dict</em>d);</td>
-<td>随机获取一个key</td>
-</tr>
-<tr>
-<td>unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count);</td>
-<td>随机获取count个可用</td>
-</tr>
-<tr>
-<td>void dictGetStats(char <em>buf, size_t bufsize, dict</em>d);</td>
-<td>获取字典的状态</td>
-</tr>
-<tr>
-<td>uint64_t dictGenHashFunction(const void *key, int len);</td>
-<td>获取hash函数（大小写敏感）</td>
-</tr>
-<tr>
-<td>uint64_t dictGenCaseHashFunction(const unsigned char *buf, int len);</td>
-<td>获取hash函数（大小写不敏感）</td>
-</tr>
-<tr>
-<td>void dictEmpty(dict <em>d, void(callback)(void</em>));</td>
-<td>清空字典</td>
-</tr>
-<tr>
-<td>void dictEnableResize(void);</td>
-<td>允许resize</td>
-</tr>
-<tr>
-<td>void dictDisableResize(void);</td>
-<td>不允许resize</td>
-</tr>
-<tr>
-<td>int dictRehash(dict *d, int n);</td>
-<td>渐进式rehash，n为step</td>
-</tr>
-<tr>
-<td>int dictRehashMilliseconds(dict *d, int ms);</td>
-<td>执行若干步rehash，但rehash不能超过固定时长</td>
-</tr>
-<tr>
-<td>void dictSetHashFunctionSeed(uint8_t *seed);</td>
-<td>设置随机种子</td>
-</tr>
-<tr>
-<td>uint8_t *dictGetHashFunctionSeed(void);</td>
-<td>获取随机种子</td>
-</tr>
-<tr>
-<td>unsigned long dictScan(dict <em>d, unsigned long v, dictScanFunction</em>fn, dictScanBucketFunction <em>bucketfn, void</em>privdata);</td>
-<td>扫描字典</td>
-</tr>
-<tr>
-<td>uint64_t dictGetHash(dict <em>d, const void</em>key);</td>
-<td>获取key的hash</td>
-</tr>
-<tr>
-<td>dictEntry **dictFindEntryRefByPtrAndHash(dict *d, const void *oldptr, uint64_t hash);</td>
-<td>通过已经被惰性删除的数据和hash查找entry</td>
-</tr>
-</tbody>
-</table>
-]]></content>
-      <categories>
-        <category>redis</category>
-      </categories>
-      <tags>
-        <tag>redis源码</tag>
-        <tag>redis数据结构</tag>
       </tags>
   </entry>
   <entry>
