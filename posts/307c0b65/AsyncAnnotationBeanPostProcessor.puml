@@ -1,0 +1,26 @@
+@startuml
+class AsyncAnnotationBeanPostProcessor
+abstract class  AbstractBeanFactoryAwareAdvisingPostProcessor
+class AbstractAdvisingBeanPostProcessor
+class ProxyProcessorSupport
+class ProxyConfig
+
+interface BeanFactoryAware
+interface BeanPostProcessor
+interface Ordered
+interface BeanClassLoaderAware
+interface AopInfrastructureBean
+
+AsyncAnnotationBeanPostProcessor --|> AbstractBeanFactoryAwareAdvisingPostProcessor
+
+AbstractBeanFactoryAwareAdvisingPostProcessor --|> AbstractAdvisingBeanPostProcessor
+AbstractBeanFactoryAwareAdvisingPostProcessor --|> BeanFactoryAware
+
+AbstractAdvisingBeanPostProcessor --|> ProxyProcessorSupport
+AbstractAdvisingBeanPostProcessor --|> BeanPostProcessor
+
+ProxyProcessorSupport --|> ProxyConfig
+ProxyProcessorSupport --|> Ordered
+ProxyProcessorSupport --|> BeanClassLoaderAware
+ProxyProcessorSupport --|> AopInfrastructureBean
+@enduml

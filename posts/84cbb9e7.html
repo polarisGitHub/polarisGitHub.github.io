@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 7.1.1">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+<link rel="stylesheet" href="/css/prism/prism.css">
+<link rel="stylesheet" href="">
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha256-yIDrPSXHZdOZhAqiBP7CKzIwMQmRCJ8UeB8Jo17YC4o=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"polarisgithub.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":false,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。 本文涉及依赖如下  redis: 5.0.12 redisson: 3.15.6">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Redisson Cluster连接池Bug">
+<meta property="og:url" content="https://polarisgithub.github.io/posts/84cbb9e7.html">
+<meta property="og:site_name" content="polaris_he">
+<meta property="og:description" content="Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。 本文涉及依赖如下  redis: 5.0.12 redisson: 3.15.6">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/redis-failover-timeline.svg">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/application-timeline.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/trace.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/command.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/slave.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/fix.png">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/84cbb9e7/release.png">
+<meta property="article:published_time" content="2024-02-03T14:41:42.035Z">
+<meta property="article:modified_time" content="2024-02-03T14:48:33.954Z">
+<meta property="article:author" content="polaris_he">
+<meta property="article:tag" content="Bug">
+<meta property="article:tag" content="Redisson">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://polarisgithub.github.io/posts/84cbb9e7/redis-failover-timeline.svg">
+
+
+<link rel="canonical" href="https://polarisgithub.github.io/posts/84cbb9e7.html">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://polarisgithub.github.io/posts/84cbb9e7.html","path":"posts/84cbb9e7.html","title":"Redisson Cluster连接池Bug"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Redisson Cluster连接池Bug | polaris_he</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<style>.darkmode--activated{--body-bg-color:#282828;--content-bg-color:#333;--card-bg-color:#555;--text-color:#ccc;--blockquote-color:#bbb;--link-color:#ccc;--link-hover-color:#eee;--brand-color:#ddd;--brand-hover-color:#ddd;--table-row-odd-bg-color:#282828;--table-row-hover-bg-color:#363636;--menu-item-bg-color:#555;--btn-default-bg:#222;--btn-default-color:#ccc;--btn-default-border-color:#555;--btn-default-hover-bg:#666;--btn-default-hover-color:#ccc;--btn-default-hover-border-color:#666;--highlight-background:#282b2e;--highlight-foreground:#a9b7c6;--highlight-gutter-background:#34393d;--highlight-gutter-foreground:#9ca9b6}.darkmode--activated img{opacity:.75}.darkmode--activated img:hover{opacity:.9}.darkmode--activated code{color:#69dbdc;background:0 0}button.darkmode-toggle{z-index:9999}.darkmode-ignore,img{display:flex!important}.beian img{display:inline-block!important}</style></head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">polaris_he</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">随便写写</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索 | search" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">13</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索 | search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0"><span class="nav-number">1.</span> <span class="nav-text">问题描述</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%88%86%E6%9E%90"><span class="nav-number">2.</span> <span class="nav-text">问题分析</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%B6%E9%97%B4%E7%BA%BF"><span class="nav-number">2.1.</span> <span class="nav-text">时间线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%B0%83%E7%94%A8%E9%93%BE"><span class="nav-number">2.2.</span> <span class="nav-text">调用链</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%A4%8D%E7%8E%B0"><span class="nav-number">3.</span> <span class="nav-text">问题复现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5"><span class="nav-number">4.</span> <span class="nav-text">问题排查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E8%A7%A3%E5%86%B3"><span class="nav-number">5.</span> <span class="nav-text">问题解决</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">15</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://polarisgithub.github.io/posts/84cbb9e7.html">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Redisson Cluster连接池Bug | polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Redisson Cluster连接池Bug
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2024-02-03 22:41:42 / 修改时间：22:48:33" itemprop="dateCreated datePublished" datetime="2024-02-03T22:41:42+08:00">2024-02-03</time>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>4 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 5.0.12<br>
+redisson: 3.15.6</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题描述">问题描述</h2>
+<p>笔者所在应用的redis cluster一直有个问题，在redis拓扑有变动后就会慢，重启后解决，表现为</p>
+<ul>
+<li>redis水平扩容后变慢</li>
+<li>redis主从切换后变慢</li>
+</ul>
+<p>最近连续出现了几次宿主机问题，不停的重启应用，就沉下心来仔细研究了这个问题</p>
+<h2 id="问题分析">问题分析</h2>
+<h3 id="时间线">时间线</h3>
+<p><img src="/posts/84cbb9e7/redis-failover-timeline.svg" alt="redis-failover-timeline"></p>
+<p>Redis failover时间线：</p>
+<ol>
+<li>T0：出问题前，redis每个节点为一主一从配置</li>
+<li>T1：redis某个master节点出现宕机</li>
+<li>T2：一分钟内，redis重新选主，对应从节点晋升为主节点</li>
+<li>T3：人工添加一个从节点，redis集群恢复健康</li>
+</ol>
+<p>应用调用链时间线：<br>
+<img src="/posts/84cbb9e7/application-timeline.png" alt="application-timeline"></p>
+<ol>
+<li>T0：出问题前，耗时极低</li>
+<li>T1：有大量连接broken pipeline的日志，但耗时正常</li>
+<li>T2：应用发现新master节点，拓扑更新，耗时正常</li>
+<li>T3：添加从节点，应用发现新slave节点，拓扑更新，耗时飙高</li>
+<li>T4：重启应用，耗时恢复正常</li>
+</ol>
+<p>看完这个时间线，明显不再是<code>主从切换导致拓扑刷新失败</code>的锅了</p>
+<h3 id="调用链">调用链</h3>
+<p><img src="/posts/84cbb9e7/trace.png" alt="trace"></p>
+<p>调用链上看，又有一个很奇怪的问题，让人摸不着头脑</p>
+<ul>
+<li>lock和unlock耗时极高，均在1s以上</li>
+<li>redis其他操作耗时正常</li>
+</ul>
+<h2 id="问题复现">问题复现</h2>
+<p>问题比较诡异，redis集群恢复正常了，但redisson却不正常了，而且只有lock和unlock出问题。笔者先查了半天没看出哪里有问题，只好先想办法复现这个问题</p>
+<p>复现代码如下</p>
+<ol>
+<li>先使用<code>insert</code>接口往redis中塞入了几千万个key</li>
+<li>不停触发接口<code>/lock/get/60</code>，让redisson不停的lock和unlock</li>
+<li>操作redis，操作节哪个点可以通过<code>CRC16.crc16(key.getBytes(&quot;UTF-8&quot;)) % 16438</code>计算出<br>
+3.1. 停止master<br>
+3.2. 等待主从切换<br>
+3.3. 添加从节点</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@RestController
+@RequestMapping(&quot;&#x2F;redisson&quot;)
+public class RedissonController &#123;
+
+    @Setter(onMethod_ &#x3D; @Resource)
+    private RedissonClient redissonClient;
+
+    private final ExecutorService EXECUTOR &#x3D; Executors.newFixedThreadPool(5);
+
+    @GetMapping(&quot;&#x2F;insert&#x2F;&#123;count&#125;&quot;)
+    public String batchInsert(@PathVariable(&quot;count&quot;) int count) &#123;
+        for (int i &#x3D; 0; i &lt; count &#x2F; 200; i++) &#123;
+            RBatch batch &#x3D; redissonClient.createBatch();
+            for (int j &#x3D; 0; j &lt; 200; j++) &#123;
+                batch.getBucket(UUID.randomUUID().toString()).setAsync(UUID.randomUUID().toString());
+            &#125;
+            log.info(&quot;&#123;&#125;&quot;, i);
+            batch.execute();
+        &#125;
+        return &quot;ok&quot;;
+    &#125;
+
+    @GetMapping(&quot;&#x2F;lock&#x2F;get&#x2F;&#123;count&#125;&quot;)
+    public String redisson(@PathVariable(&quot;count&quot;) int count) throws InterruptedException &#123;
+        long time &#x3D; System.currentTimeMillis();
+        redissonClient.getBucket(&quot;123&quot;).set(&quot;abc&quot;);
+        CountDownLatch latch &#x3D; new CountDownLatch(2 * count);
+        for (int i &#x3D; 0; i &lt; count; i++) &#123;
+            EXECUTOR.execute(() -&gt; process(latch));
+            EXECUTOR.execute(() -&gt; process(latch));
+            Thread.sleep(100);
+        &#125;
+        latch.await();
+        log.info(&quot;done&quot;);
+        return String.valueOf((System.currentTimeMillis() - time) &#x2F; count);
+    &#125;
+
+    private void process(CountDownLatch latch) &#123;
+        try &#123;
+            RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
+            long start &#x3D; System.currentTimeMillis();
+            lock.lock();
+            log.info(&quot;lock time:&#123;&#125;&quot;, System.currentTimeMillis() - start);
+            redissonClient.getBucket(&quot;123&quot;).get();
+            if (lock.isHeldByCurrentThread()) &#123;
+                lock.unlock();
+            &#125;
+        &#125; catch (Exception e) &#123;
+            log.error(&quot;&quot;, e);
+        &#125; finally &#123;
+            latch.countDown();
+        &#125;
+    &#125;
+
+    @GetMapping(&quot;&#x2F;lock&#x2F;get&quot;)
+    public String redissonSingle() throws InterruptedException &#123;
+        RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
+        long start &#x3D; System.currentTimeMillis();
+        lock.lock();
+        long cost &#x3D; System.currentTimeMillis() - start;
+        redissonClient.getBucket(&quot;123&quot;).get();
+        if (lock.isHeldByCurrentThread()) &#123;
+            lock.unlock();
+        &#125;
+        return String.valueOf(cost);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>按以上方式操作，问题复现了，<code>lock.lock();</code>耗时超过1s，而正常情况下耗时应该在10ms左右</p>
+<h2 id="问题排查">问题排查</h2>
+<p>问题复现之后，简单debug了一下，也没找到问题，只有开trace日志了</p>
+<p><img src="/posts/84cbb9e7/command.png" alt="command"></p>
+<p>打开trace日志后确实发现了一个可疑点，redisson的lock执行了两个指令</p>
+<ol>
+<li>eval执行lua脚本</li>
+<li>wait 4 1000</li>
+</ol>
+<blockquote>
+<p>Redis WAIT 命令用来阻塞当前客户端，直到所有先前的写入命令成功传输并且至少由指定数量的从节点复制完成。如果执行超过超时时间（以毫秒为单位），则即使尚未完成指定数量的从结点复制，该命令也会返回。</p>
+</blockquote>
+<p>从官方的解释上看，wait执行后会<code>阻塞</code>等待n个从节点复制完毕。trace日志中显示：需要等待4个从节点1s，可我只有1个从节点。</p>
+<p>接着找wait指令执行的地方，<code>CommandBatchService</code>中找到了这样一段代码</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (this.options.getSyncSlaves() &gt; 0) &#123;
+    for (Entry entry : commands.values()) &#123;
+        BatchCommandData&lt;?, ?&gt; waitCommand &#x3D; new BatchCommandData(RedisCommands.WAIT, 
+                            new Object[] &#123; this.options.getSyncSlaves(), this.options.getSyncTimeout() &#125;, index.incrementAndGet());
+        entry.getCommands().add(waitCommand);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>往上找在<code>RedissonBaseLock</code>中找到options，wait的数量来源于<code>availableSlaves</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">BatchOptions options &#x3D; BatchOptions.defaults()
+                        .syncSlaves(entry.getAvailableSlaves(), 1, TimeUnit.SECONDS);<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<p>打个断点看下，卧槽牛逼，一个节点被添加了4次。这也解释了为啥只有lock慢，因为lock需要wait，其他命令随便拿都是指向从节点的链接。</p>
+<p><img src="/posts/84cbb9e7/slave.png" alt="slave"></p>
+<p>既然问题都找到这里了，接着往上在<code>ClusterConnectionManager</code>中找添加slave的地方</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private Set&lt;RedisURI&gt; addRemoveSlaves(MasterSlaveEntry entry, ClusterPartition currentPart, ClusterPartition newPart) &#123;
+
+    &#x2F;&#x2F; 以上省略
+    for (RedisURI uri : addedSlaves) &#123;
+        &#x2F;&#x2F; 这里添加是来着不拒，想添加就添加
+        RFuture&lt;Void&gt; future &#x3D; entry.addSlave(uri);
+        &#x2F;&#x2F; 以下省略
+    &#125;
+    return addedSlaves;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="问题解决">问题解决</h2>
+<p>既然都定位到代码哪一行了，笔者<code>git clone https://github.com/redisson/redisson.git</code>，找到了作者修复方案</p>
+<p><img src="/posts/84cbb9e7/fix.png" alt="fix"></p>
+<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了并发的概率。</p>
+<p><img src="/posts/84cbb9e7/release.png" alt="release"></p>
+<p>不得不说，redisson功能很强，但这release note满满的fixed是真让人愁。这是笔者遇到redisson的第三个bug了，bug爆率是真的高。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Bug/" rel="tag"># Bug</a>
+              <a href="/tags/Redisson/" rel="tag"># Redisson</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/f2e3320d.html" rel="prev" title="Redisson Scan Bug">
+                  <i class="fa fa-angle-left"></i> Redisson Scan Bug
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/posts/307c0b65.html" rel="next" title="Spring AOP初见">
+                  Spring AOP初见 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2024</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">polaris_he</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+    <span title="站点总字数">25k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">1:23</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/prism/prism.js"></script><script src="/js/utils.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+
+</body>
+</html>

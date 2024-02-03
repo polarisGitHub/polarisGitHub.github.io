@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width">
-<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 7.1.1">
 
   <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
@@ -15,9 +15,9 @@
 <link rel="stylesheet" href="">
 
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha256-HtsXJanqjKTc8vVQjO4YMhiqFoXkfBsjBWcX91T1jr8=" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha256-yIDrPSXHZdOZhAqiBP7CKzIwMQmRCJ8UeB8Jo17YC4o=" crossorigin="anonymous">
 
-<script class="next-config" data-name="main" type="application/json">{"hostname":"polarisgithub.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.17.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":false,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+<script class="next-config" data-name="main" type="application/json">{"hostname":"polarisgithub.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":false,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
 
     <meta name="description" content="Hexo提供了highlight和prism两种代码高亮插件，本博客在多次尝试对hightlight解析的语法树不太满意，采用Prism的方式实现了代码高亮 本博客采用主要的依赖如下。  Hexo  6.3.0 NexT  8.17.1 hexo-asset-image 1.0.0  注意hexo-asset-image，这个和引入js文件有一定冲突，需要做修改">
 <meta property="og:type" content="article">
@@ -29,7 +29,7 @@
 <meta property="og:image" content="https://polarisgithub.github.io/posts/be0090e6/prismjs.jpg">
 <meta property="og:image" content="https://polarisgithub.github.io/posts/be0090e6/download.jpg">
 <meta property="article:published_time" content="2023-07-28T12:14:07.056Z">
-<meta property="article:modified_time" content="2023-07-28T13:25:09.798Z">
+<meta property="article:modified_time" content="2024-02-03T15:06:07.464Z">
 <meta property="article:author" content="polaris_he">
 <meta property="article:tag" content="NexT">
 <meta property="article:tag" content="Hexo">
@@ -144,7 +144,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Hexo%E9%85%8D%E7%BD%AE"><span class="nav-number">1.</span> <span class="nav-text">Hexo配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Prism%E9%85%8D%E7%BD%AE"><span class="nav-number">2.</span> <span class="nav-text">Prism配置</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Prism%E6%96%87%E4%BB%B6%E5%87%86%E5%A4%87"><span class="nav-number">2.1.</span> <span class="nav-text">Prism文件准备</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#NexT%E4%BF%AE%E6%94%B9"><span class="nav-number">2.2.</span> <span class="nav-text">NexT修改</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%BC%95%E5%85%A5js"><span class="nav-number">2.2.1.</span> <span class="nav-text">引入js</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%98%A0%E5%85%A5css"><span class="nav-number">2.2.2.</span> <span class="nav-text">映入css</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#hexo-asset-image%E4%BF%AE%E6%94%B9"><span class="nav-number">2.3.</span> <span class="nav-text">hexo-asset-image修改</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%84"><span class="nav-number">3.</span> <span class="nav-text">附</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89css%E6%A0%B7%E5%BC%8F"><span class="nav-number">3.1.</span> <span class="nav-text">自定义css样式</span></a></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#breaking-change"><span class="nav-number">1.</span> <span class="nav-text">breaking change</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#v7-0-0"><span class="nav-number">1.1.</span> <span class="nav-text">v7.0.0</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Hexo%E9%85%8D%E7%BD%AE"><span class="nav-number">2.</span> <span class="nav-text">Hexo配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Prism%E9%85%8D%E7%BD%AE"><span class="nav-number">3.</span> <span class="nav-text">Prism配置</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Prism%E6%96%87%E4%BB%B6%E5%87%86%E5%A4%87"><span class="nav-number">3.1.</span> <span class="nav-text">Prism文件准备</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#NexT%E4%BF%AE%E6%94%B9"><span class="nav-number">3.2.</span> <span class="nav-text">NexT修改</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%BC%95%E5%85%A5js"><span class="nav-number">3.2.1.</span> <span class="nav-text">引入js</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%98%A0%E5%85%A5css"><span class="nav-number">3.2.2.</span> <span class="nav-text">映入css</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#hexo-asset-image%E4%BF%AE%E6%94%B9"><span class="nav-number">3.3.</span> <span class="nav-text">hexo-asset-image修改</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%84"><span class="nav-number">4.</span> <span class="nav-text">附</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%87%AA%E5%AE%9A%E4%B9%89css%E6%A0%B7%E5%BC%8F"><span class="nav-number">4.1.</span> <span class="nav-text">自定义css样式</span></a></li></ol></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -159,7 +159,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">13</span>
+          <span class="site-state-item-count">15</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -233,9 +233,15 @@
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">发表于</span>
-      
 
-      <time title="创建时间：2023-07-28 20:14:07 / 修改时间：21:25:09" itemprop="dateCreated datePublished" datetime="2023-07-28T20:14:07+08:00">2023-07-28</time>
+      <time title="创建时间：2023-07-28 20:14:07" itemprop="dateCreated datePublished" datetime="2023-07-28T20:14:07+08:00">2023-07-28</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2024-02-03 23:06:07" itemprop="dateModified" datetime="2024-02-03T23:06:07+08:00">2024-02-03</time>
     </span>
 
   
@@ -252,7 +258,7 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>1.1k</span>
+      <span>1.2k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
@@ -278,6 +284,15 @@ hexo-asset-image 1.0.0</p>
 </blockquote>
 <p>注意<code>hexo-asset-image</code>，这个和引入js文件有一定冲突，需要做修改</p>
 <span id="more"></span>
+<h2 id="breaking-change">breaking change</h2>
+<h3 id="v7-0-0">v7.0.0</h3>
+<p>7.0.0中，代码高亮插件配置方式发生了变化</p>
+<blockquote>
+<p>WARNING<br>
+Syntax highlighting is refactored and controlled by the following settings. See Syntax Highlighting for more details.</p>
+</blockquote>
+<p>_config.yml中添加以下配置</p>
+<pre class="line-numbers language-yaml" data-language="yaml"><code class="language-yaml">syntax_highlighter: prismjs<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
 <h2 id="Hexo配置">Hexo配置</h2>
 <p>由于对Hexo自带的代码高亮功能不太满意，本方案直接将Hexo自动的代码高亮功能全部关闭了<br>
 在<code>_config.yml</code>中，将<code>hightlight.enable</code>设置为false</p>
@@ -638,7 +653,7 @@ code[class*="language-css"]</span> <span class="token punctuation">&#123;</span>
 
   <div class="copyright">
     &copy; 
-    <span itemprop="copyrightYear">2023</span>
+    <span itemprop="copyrightYear">2024</span>
     <span class="with-love">
       <i class="fa fa-heart"></i>
     </span>
@@ -649,13 +664,13 @@ code[class*="language-css"]</span> <span class="token punctuation">&#123;</span>
     <span class="post-meta-item-icon">
       <i class="fa fa-chart-line"></i>
     </span>
-    <span title="站点总字数">23k</span>
+    <span title="站点总字数">25k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">1:16</span>
+    <span title="站点阅读时长">1:23</span>
   </span>
 </div>
 <div class="busuanzi-count">
