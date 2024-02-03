@@ -1428,7 +1428,7 @@ public class RedissonController &#123;
 <h2 id="问题解决">问题解决</h2>
 <p>既然都定位到代码哪一行了，笔者<code>git clone https://github.com/redisson/redisson.git</code>，找到了作者修复方案</p>
 <p><img src="/posts/84cbb9e7/fix.png" alt="fix"></p>
-<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了并发的概率。</p>
+<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了问题出现的概率。</p>
 <p><img src="/posts/84cbb9e7/release.png" alt="release"></p>
 <p>不得不说，redisson功能很强，但这release note满满的fixed是真让人愁。这是笔者遇到redisson的第三个bug了，bug爆率是真的高。</p>
 ]]></content>
