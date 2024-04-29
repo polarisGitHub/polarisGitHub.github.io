@@ -315,6 +315,572 @@ isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-ro
       </tags>
   </entry>
   <entry>
+    <title>Bug系列 Redisson Cluster连接池</title>
+    <url>/posts/84cbb9e7.html</url>
+    <content><![CDATA[<p>Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 5.0.12<br>
+redisson: 3.15.6</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题描述">问题描述</h2>
+<p>笔者所在应用的redis cluster一直有个问题，在redis拓扑有变动后就会慢，重启后解决，表现为</p>
+<ul>
+<li>redis水平扩容后变慢</li>
+<li>redis主从切换后变慢</li>
+</ul>
+<p>最近连续出现了几次宿主机问题，不停的重启应用，就沉下心来仔细研究了这个问题</p>
+<h2 id="问题分析">问题分析</h2>
+<h3 id="时间线">时间线</h3>
+<p><img src="/posts/84cbb9e7/redis-failover-timeline.svg" alt="redis-failover-timeline"></p>
+<p>Redis failover时间线：</p>
+<ol>
+<li>T0：出问题前，redis每个节点为一主一从配置</li>
+<li>T1：redis某个master节点出现宕机</li>
+<li>T2：一分钟内，redis重新选主，对应从节点晋升为主节点</li>
+<li>T3：人工添加一个从节点，redis集群恢复健康</li>
+</ol>
+<p>应用调用链时间线：<br>
+<img src="/posts/84cbb9e7/application-timeline.png" alt="application-timeline"></p>
+<ol>
+<li>T0：出问题前，耗时极低</li>
+<li>T1：有大量连接broken pipeline的日志，但耗时正常</li>
+<li>T2：应用发现新master节点，拓扑更新，耗时正常</li>
+<li>T3：添加从节点，应用发现新slave节点，拓扑更新，耗时飙高</li>
+<li>T4：重启应用，耗时恢复正常</li>
+</ol>
+<p>看完这个时间线，明显不再是<code>主从切换导致拓扑刷新失败</code>的锅了</p>
+<h3 id="调用链">调用链</h3>
+<p><img src="/posts/84cbb9e7/trace.png" alt="trace"></p>
+<p>调用链上看，又有一个很奇怪的问题，让人摸不着头脑</p>
+<ul>
+<li>lock和unlock耗时极高，均在1s以上</li>
+<li>redis其他操作耗时正常</li>
+</ul>
+<h2 id="问题复现">问题复现</h2>
+<p>问题比较诡异，redis集群恢复正常了，但redisson却不正常了，而且只有lock和unlock出问题。笔者先查了半天没看出哪里有问题，只好先想办法复现这个问题</p>
+<p>复现代码如下</p>
+<ol>
+<li>先使用<code>insert</code>接口往redis中塞入了几千万个key</li>
+<li>不停触发接口<code>/lock/get/60</code>，让redisson不停的lock和unlock</li>
+<li>操作redis，操作节哪个点可以通过<code>CRC16.crc16(key.getBytes(&quot;UTF-8&quot;)) % 16438</code>计算出<br>
+3.1. 停止master<br>
+3.2. 等待主从切换<br>
+3.3. 添加从节点</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@RestController
+@RequestMapping(&quot;&#x2F;redisson&quot;)
+public class RedissonController &#123;
+
+    @Setter(onMethod_ &#x3D; @Resource)
+    private RedissonClient redissonClient;
+
+    private final ExecutorService EXECUTOR &#x3D; Executors.newFixedThreadPool(5);
+
+    @GetMapping(&quot;&#x2F;insert&#x2F;&#123;count&#125;&quot;)
+    public String batchInsert(@PathVariable(&quot;count&quot;) int count) &#123;
+        for (int i &#x3D; 0; i &lt; count &#x2F; 200; i++) &#123;
+            RBatch batch &#x3D; redissonClient.createBatch();
+            for (int j &#x3D; 0; j &lt; 200; j++) &#123;
+                batch.getBucket(UUID.randomUUID().toString()).setAsync(UUID.randomUUID().toString());
+            &#125;
+            log.info(&quot;&#123;&#125;&quot;, i);
+            batch.execute();
+        &#125;
+        return &quot;ok&quot;;
+    &#125;
+
+    @GetMapping(&quot;&#x2F;lock&#x2F;get&#x2F;&#123;count&#125;&quot;)
+    public String redisson(@PathVariable(&quot;count&quot;) int count) throws InterruptedException &#123;
+        long time &#x3D; System.currentTimeMillis();
+        redissonClient.getBucket(&quot;123&quot;).set(&quot;abc&quot;);
+        CountDownLatch latch &#x3D; new CountDownLatch(2 * count);
+        for (int i &#x3D; 0; i &lt; count; i++) &#123;
+            EXECUTOR.execute(() -&gt; process(latch));
+            EXECUTOR.execute(() -&gt; process(latch));
+            Thread.sleep(100);
+        &#125;
+        latch.await();
+        log.info(&quot;done&quot;);
+        return String.valueOf((System.currentTimeMillis() - time) &#x2F; count);
+    &#125;
+
+    private void process(CountDownLatch latch) &#123;
+        try &#123;
+            RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
+            long start &#x3D; System.currentTimeMillis();
+            lock.lock();
+            log.info(&quot;lock time:&#123;&#125;&quot;, System.currentTimeMillis() - start);
+            redissonClient.getBucket(&quot;123&quot;).get();
+            if (lock.isHeldByCurrentThread()) &#123;
+                lock.unlock();
+            &#125;
+        &#125; catch (Exception e) &#123;
+            log.error(&quot;&quot;, e);
+        &#125; finally &#123;
+            latch.countDown();
+        &#125;
+    &#125;
+
+    @GetMapping(&quot;&#x2F;lock&#x2F;get&quot;)
+    public String redissonSingle() throws InterruptedException &#123;
+        RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
+        long start &#x3D; System.currentTimeMillis();
+        lock.lock();
+        long cost &#x3D; System.currentTimeMillis() - start;
+        redissonClient.getBucket(&quot;123&quot;).get();
+        if (lock.isHeldByCurrentThread()) &#123;
+            lock.unlock();
+        &#125;
+        return String.valueOf(cost);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>按以上方式操作，问题复现了，<code>lock.lock();</code>耗时超过1s，而正常情况下耗时应该在10ms左右</p>
+<h2 id="问题排查">问题排查</h2>
+<p>问题复现之后，简单debug了一下，也没找到问题，只有开trace日志了</p>
+<p><img src="/posts/84cbb9e7/command.png" alt="command"></p>
+<p>打开trace日志后确实发现了一个可疑点，redisson的lock执行了两个指令</p>
+<ol>
+<li>eval执行lua脚本</li>
+<li>wait 4 1000</li>
+</ol>
+<blockquote>
+<p>Redis WAIT 命令用来阻塞当前客户端，直到所有先前的写入命令成功传输并且至少由指定数量的从节点复制完成。如果执行超过超时时间（以毫秒为单位），则即使尚未完成指定数量的从结点复制，该命令也会返回。</p>
+</blockquote>
+<p>从官方的解释上看，wait执行后会<code>阻塞</code>等待n个从节点复制完毕。trace日志中显示：需要等待4个从节点1s，可我只有1个从节点。</p>
+<p>接着找wait指令执行的地方，<code>CommandBatchService</code>中找到了这样一段代码</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (this.options.getSyncSlaves() &gt; 0) &#123;
+    for (Entry entry : commands.values()) &#123;
+        BatchCommandData&lt;?, ?&gt; waitCommand &#x3D; new BatchCommandData(RedisCommands.WAIT, 
+                            new Object[] &#123; this.options.getSyncSlaves(), this.options.getSyncTimeout() &#125;, index.incrementAndGet());
+        entry.getCommands().add(waitCommand);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>往上找在<code>RedissonBaseLock</code>中找到options，wait的数量来源于<code>availableSlaves</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">BatchOptions options &#x3D; BatchOptions.defaults()
+                        .syncSlaves(entry.getAvailableSlaves(), 1, TimeUnit.SECONDS);<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<p>打个断点看下，卧槽牛逼，一个节点被添加了4次。这也解释了为啥只有lock慢，因为lock需要wait，其他命令随便拿都是指向从节点的链接。</p>
+<p><img src="/posts/84cbb9e7/slave.png" alt="slave"></p>
+<p>既然问题都找到这里了，接着往上在<code>ClusterConnectionManager</code>中找添加slave的地方</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private Set&lt;RedisURI&gt; addRemoveSlaves(MasterSlaveEntry entry, ClusterPartition currentPart, ClusterPartition newPart) &#123;
+
+    &#x2F;&#x2F; 以上省略
+    for (RedisURI uri : addedSlaves) &#123;
+        &#x2F;&#x2F; 这里添加是来着不拒，想添加就添加
+        RFuture&lt;Void&gt; future &#x3D; entry.addSlave(uri);
+        &#x2F;&#x2F; 以下省略
+    &#125;
+    return addedSlaves;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="问题解决">问题解决</h2>
+<p>既然都定位到代码哪一行了，笔者<code>git clone https://github.com/redisson/redisson.git</code>，找到了作者修复方案</p>
+<p><img src="/posts/84cbb9e7/fix.png" alt="fix"></p>
+<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了问题出现的概率。</p>
+<p><img src="/posts/84cbb9e7/release.png" alt="release"></p>
+<p>不得不说，redisson功能很强，但这release note满满的fixed是真让人愁。这是笔者遇到redisson的第三个bug了，bug爆率是真的高。</p>
+]]></content>
+      <tags>
+        <tag>Redisson</tag>
+        <tag>Bug</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Bug系列 Redisson Scan</title>
+    <url>/posts/f2e3320d.html</url>
+    <content><![CDATA[<p><a href="https://github.com/redisson/redisson">Redisson - Easy Redis Java client with features of In-Memory Data Grid</a><br>
+一个被广泛使用的，功能强，性能高Redis库，但不得不说，Redisson的Bug挺多的，工作以来陆陆续续遇到了好几个。最近由遇到一个Redisson Scan的问题，正好记录下</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 6.2.9<br>
+redisson: 3.15.6<br>
+redisson-spring-boot-starter: 3.15.6<br>
+spring boot: 2.7.14<br>
+spring boot starter data redis: 2.7.14</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题复现">问题复现</h2>
+<p>为了复现这个问题，笔者在本地搭建了简单的Redis Cluster，三主三从<br>
+<img src="/posts/f2e3320d/clusternodes.png" alt="clusternodes.png"></p>
+<p>然后写入30组数据作为测试数据</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@SpringBootTest
+public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Test
+    public void writeData2Redis() &#123;
+        for (var i &#x3D; 0; i &lt; 30; i++) &#123;
+            var ops &#x3D; redisTemplate.boundValueOps(&quot;redisson_scan_&quot; + i);
+            ops.set(String.valueOf(i));
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>接下来使用RedisTemplate提供的scan来扫描Redis中的数据</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@SpringBootTest
+public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @Test
+    public void scanRedis() &#123;
+        List&lt;String&gt; list &#x3D; new ArrayList&lt;&gt;();
+        try (RedisConnection connection &#x3D; getRedisConnection(redisTemplate)) &#123;
+            ScanOptions options &#x3D; ScanOptions.scanOptions().match(&quot;redisson_scan_*&quot;).count(500).build();
+            try (Cursor&lt;byte[]&gt; cursor &#x3D; connection.scan(options)) &#123;
+                while (cursor.hasNext()) &#123;
+                    list.add(new String(cursor.next()));
+                &#125;
+            &#125;
+        &#125;
+        var set &#x3D; new HashSet&lt;&gt;(list);
+        log.info(&quot;list size&#x3D;&#123;&#125;,list&#x3D;&#123;&#125;&quot;, list.size(), list);
+        log.info(&quot;set size&#x3D;&#123;&#125;,set&#x3D;&#123;&#125;&quot;, set.size(), set);
+    &#125;
+
+    public RedisConnection getRedisConnection(StringRedisTemplate redisTemplate) &#123;
+        return Optional.ofNullable(redisTemplate)
+                .map(RedisAccessor::getConnectionFactory)
+                .map(RedisConnectionFactory::getConnection)
+                .orElseThrow(RuntimeException::new);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从日志中可以看出，一共有30个元素，却扫描出来的33个元素，再仔细看下<code>redisson_scan_29</code>，在列表中重复了三次</p>
+<pre class="line-numbers language-none"><code class="language-none">list size&#x3D;33,list&#x3D;[redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>我们再对list做一次去重，可以看出redisTemplat只扫描出来了11个数据，但都重复了三次</p>
+<pre class="line-numbers language-none"><code class="language-none">set size&#x3D;11,set&#x3D;[redisson_scan_19, redisson_scan_6, redisson_scan_2, redisson_scan_25, redisson_scan_24, redisson_scan_21, redisson_scan_20, redisson_scan_29, redisson_scan_28, redisson_scan_15, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+<p>为了证实猜想，查看了部分key对应的slots，redisTemplate扫描出来的key都是在<code>dd9318300d4d6a82b783b760693bc1fbb716c61b</code>这个节点上</p>
+<p><img src="/posts/f2e3320d/slots.png" alt="slots.png"></p>
+<h2 id="问题定位">问题定位</h2>
+<p>最开始同事告诉我，需要使用<code>RedisClusterConnection</code>，采用以下方式才能执行scan。让笔者一度怀疑是我使用方式的问题，但细想：<code>RedisConnection</code>作为最基础的连接类，应该去屏蔽底层不同链接的细节才对</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">try (RedisClusterConnection connection &#x3D; getRedisClusterConnection(redisTemplate)) &#123;
+    ScanOptions options &#x3D; ScanOptions.scanOptions().match(&quot;redisson_scan_*&quot;).count(500).build();
+    for (RedisClusterNode clusterGetNode : connection.clusterGetNodes()) &#123;
+        try (Cursor&lt;byte[]&gt; cursor &#x3D; connection.scan(clusterGetNode, options)) &#123;
+            while (cursor.hasNext()) &#123;
+                list.add(new String(cursor.next()));
+            &#125;
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>RedisTemplate.scan的实现在<code>org.redisson.spring.data.connection.RedissonConnection</code>中，逻辑也不复杂</p>
+<ol>
+<li>获取client和MasterSlaveEntry迭代器</li>
+<li>通过MasterSlaveEntry迭代器中的entry对每一个节点进行scan操作，并保存scan结果</li>
+<li><strong>在整个过程中，除了最开始一次，client的值都不会变</strong></li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public Cursor&lt;byte[]&gt; scan(ScanOptions options) &#123;
+    return new ScanCursor&lt;byte[]&gt;(0, options) &#123;
+
+        &#x2F;&#x2F; 注意client，第一次scan的时候client是null
+        private RedisClient client;
+        &#x2F;&#x2F; 获取了redis的所有结点信息
+        private Iterator&lt;MasterSlaveEntry&gt; entries &#x3D; redisson.getConnectionManager().getEntrySet().iterator();
+        &#x2F;&#x2F; 获取第一个节点信息传入了doScan
+        private MasterSlaveEntry entry &#x3D; entries.next();
+        
+        @Override
+        protected ScanIteration&lt;byte[]&gt; doScan(long cursorId, ScanOptions options) &#123;
+            if (isQueueing() || isPipelined()) &#123;
+                throw new UnsupportedOperationException(&quot;&#39;SSCAN&#39; cannot be called in pipeline &#x2F; transaction mode.&quot;);
+            &#125;
+
+            &#x2F;&#x2F; entry循环完毕，迭代器完毕
+            if (entry &#x3D;&#x3D; null) &#123;
+                return null;
+            &#125;
+            
+            List&lt;Object&gt; args &#x3D; new ArrayList&lt;Object&gt;();
+            &#x2F;&#x2F; to avoid negative value
+            cursorId &#x3D; Math.max(cursorId, 0);
+            args.add(cursorId);
+            if (options.getPattern() !&#x3D; null) &#123;
+                args.add(&quot;MATCH&quot;);
+                args.add(options.getPattern());
+            &#125;
+            if (options.getCount() !&#x3D; null) &#123;
+                args.add(&quot;COUNT&quot;);
+                args.add(options.getCount());
+            &#125;
+            
+            &#x2F;&#x2F; 注意这里，执行器中传入了client和entry信息
+            RFuture&lt;ListScanResult&lt;byte[]&gt;&gt; f &#x3D; executorService.readAsync(client, entry, ByteArrayCodec.INSTANCE, RedisCommands.SCAN, args.toArray());
+            ListScanResult&lt;byte[]&gt; res &#x3D; syncFuture(f);
+            long pos &#x3D; res.getPos();
+            &#x2F;&#x2F; 这里有保存scan返回结果的client，意味着在scan整个过程中，除了第一次是null，之后的client是没有变化的
+            client &#x3D; res.getRedisClient();
+            if (pos &#x3D;&#x3D; 0) &#123;
+                if (entries.hasNext()) &#123;
+                    pos &#x3D; -1;
+                    &#x2F;&#x2F; 如果scan完毕，使用下一个entry
+                    entry &#x3D; entries.next();
+                &#125; else &#123;
+                    entry &#x3D; null;
+                &#125;
+            &#125;
+            
+            return new ScanIteration&lt;byte[]&gt;(pos, res.getValues());
+        &#125;
+    &#125;.open();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>继续跟踪到<code>executorService.readAsync</code>，注意这个<code>NodeSource</code>，保存了<code>MasterSlaveEntry</code>和<code>RedisClient</code>信息</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public &lt;T, R&gt; RFuture&lt;R&gt; readAsync(RedisClient client, MasterSlaveEntry entry, Codec codec, RedisCommand&lt;T&gt; command, Object... params) &#123;
+    RPromise&lt;R&gt; mainPromise &#x3D; createPromise();
+    async(true, new NodeSource(entry, client), codec, command, params, mainPromise, false, false);
+    return mainPromise;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>继续往下走，到了获取链接的地方了</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public RFuture&lt;RedisConnection&gt; connectionReadOp(NodeSource source, RedisCommand&lt;?&gt; command) &#123;
+    MasterSlaveEntry entry &#x3D; getEntry(source);
+    if (entry &#x3D;&#x3D; null) &#123;
+        return RedissonPromise.newFailedFuture(createNodeNotFoundException(source));
+    &#125;
+
+    if (source.getRedirect() !&#x3D; null) &#123;
+        return entry.connectionReadOp(command, source.getAddr());
+    &#125;
+    &#x2F;&#x2F; 如果RedisClient不为null，使用RedisClient获取Connection
+    if (source.getRedisClient() !&#x3D; null) &#123;
+        return entry.connectionReadOp(command, source.getRedisClient());
+    &#125;
+    
+    &#x2F;&#x2F; 如果RedisClient为null，使用传入的entry获取Connection
+    return entry.connectionReadOp(command);
+&#125;
+
+private MasterSlaveEntry getEntry(NodeSource source) &#123;
+    if (source.getRedirect() !&#x3D; null) &#123;
+        return getEntry(source.getAddr());
+    &#125;
+
+    MasterSlaveEntry entry &#x3D; source.getEntry();
+    &#x2F;&#x2F; 如果RedisClient不为null，通过RedisClient获取entry
+    if (source.getRedisClient() !&#x3D; null) &#123;
+        entry &#x3D; getEntry(source.getRedisClient());
+    &#125;
+    if (entry &#x3D;&#x3D; null &amp;&amp; source.getSlot() !&#x3D; null) &#123;
+        entry &#x3D; getEntry(source.getSlot());
+    &#125;
+    &#x2F;&#x2F; 如果RedisClient不null，使用传入的entry
+    return entry;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>getEntry中逻辑比较简单</p>
+<ul>
+<li>如果client为空，使用doScan中传入的entry创建connection</li>
+<li>如果client不为空，使用client创建connection</li>
+</ul>
+<p>到这里，整个bug就比较清晰了</p>
+<ol>
+<li>第一次doScan时，client为null，获取connection时选择了一个entry（对应到redis的一个从节点）</li>
+<li>之后doScan时，clent已经赋值了，而且没有切换逻辑，底层每次都会获取到同一个connection</li>
+<li>在三主三从的节点上执行scan，实际时对同一个节点执行了3次scan</li>
+</ol>
+<h2 id="问题解决">问题解决</h2>
+<p>明确了是Redisson的bug了，问题就比较好解决了，去github找Redisson的release note就行了</p>
+<p>在redisson-3.17.1的release中，找到了这样一条fix</p>
+<blockquote>
+<p>Fixed - Spring Data Redis module. Scan In cluster mode, other nodes cannot be scanned</p>
+</blockquote>
+<p>官方修复也很简单，在一个节点scan完毕后，将client设置为null，使下一轮doScan可以切换到不同节点上</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (pos &#x3D;&#x3D; 0) &#123;
+    if (entries.hasNext()) &#123;
+        pos &#x3D; -1;
+        entry &#x3D; entries.next();
+        &#x2F;&#x2F; client设置为null，使其可以切换节点
+        client &#x3D; null;
+    &#125; else &#123;
+        entry &#x3D; null;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>升级redisson和redisson-spring-boot-starter后，再跑一次scan，现在一切正常了</p>
+<pre class="line-numbers language-none"><code class="language-none">ist size&#x3D;30,list&#x3D;[redisson_scan_0, redisson_scan_7, redisson_scan_13, redisson_scan_14, redisson_scan_4, redisson_scan_17, redisson_scan_26, redisson_scan_18, redisson_scan_10, redisson_scan_22, redisson_scan_8, redisson_scan_3, redisson_scan_9, redisson_scan_16, redisson_scan_27, redisson_scan_5, redisson_scan_23, redisson_scan_1, redisson_scan_12, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]
+set size&#x3D;30,set&#x3D;[redisson_scan_0, redisson_scan_1, redisson_scan_18, redisson_scan_17, redisson_scan_19, redisson_scan_8, redisson_scan_9, redisson_scan_6, redisson_scan_7, redisson_scan_4, redisson_scan_5, redisson_scan_2, redisson_scan_3, redisson_scan_25, redisson_scan_24, redisson_scan_27, redisson_scan_26, redisson_scan_21, redisson_scan_20, redisson_scan_23, redisson_scan_22, redisson_scan_29, redisson_scan_28, redisson_scan_14, redisson_scan_13, redisson_scan_16, redisson_scan_15, redisson_scan_10, redisson_scan_12, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>]]></content>
+      <tags>
+        <tag>Redisson</tag>
+        <tag>Bug</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Bug系列 redis exists</title>
+    <url>/posts/3b1200db.html</url>
+    <content><![CDATA[<p>最近同事反馈了一个偶现的问题，最终定位到了以下代码。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">RBucket&lt;String&gt; bucket &#x3D; redissonClient.getBucket(&quot;123&quot;);
+if(bucket.isExists()) &#123;
+    cache &#x3D; bucket.get();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>代码看上去没有问题，但会出现<code>bucket.get()</code>获取的数据是空。之前一直以为是并发问题，exists判断完后数据正好过期。最近仔细分析了这个问题，不是并发导致的，是isExists方法对过期key返回了true。<br>
+在网上查询了一下，没有多少人讨论这个问题，有零星讨论给出的结论是<code>exists命令不能惰性删除</code>。这个结论是不正确的，本文就从redis源码层面分析下这个问题</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 3.2.3</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题">问题</h2>
+<p>在低版本redis中，对过期key使用exists，在主库执行的exists命令是没问题的，返回0（不存在）；但在从库执行，redis会返回1（存在）</p>
+<blockquote>
+<p>这个bug在redis 4.0.11修复<br>
+<img src="/posts/3b1200db/1.jpg" alt="redis 4.0.11 release notes"></p>
+</blockquote>
+<h2 id="源码分析">源码分析</h2>
+<p>公司redis集群比较古老，用的是3.2.3，直接去找对应源码<a href="https://github.com/redis/redis/tree/3.2.3">redis 3.2.3</a></p>
+<p>经常读redis源码的都知道，要找redis对应的命令，直接去<code>server.c</code>找</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct redisCommand redisCommandTable[] &#x3D; &#123;
+    &#x2F;&#x2F; …… 
+    &#123;&quot;exists&quot;,existsCommand,-2,&quot;rF&quot;,0,NULL,1,-1,1,0,0&#125;,
+    &#x2F;&#x2F; ……
+&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>找到exists对应的是existsCommand，进一步查找到<code>db.c</code>中</p>
+<p>翻开existsCommand，逻辑很简单</p>
+<ol>
+<li>判断key是否过期</li>
+<li>判断key是否存在</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">void existsCommand(client *c) &#123;
+    long long count &#x3D; 0;
+    int j;
+
+    for (j &#x3D; 1; j &lt; c-&gt;argc; j++) &#123;
+        expireIfNeeded(c-&gt;db,c-&gt;argv[j]);
+        if (dbExists(c-&gt;db,c-&gt;argv[j])) count++;
+    &#125;
+    addReplyLongLong(c,count);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从顶层代码看，redis是有对过期key处理的逻辑的，我们进一步看代码</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">int expireIfNeeded(redisDb *db, robj *key) &#123;
+    &#x2F;&#x2F; 获取key过期的时间
+    mstime_t when &#x3D; getExpire(db,key);
+    mstime_t now;
+
+    &#x2F;&#x2F; 一个不过期的key
+    if (when &lt; 0) return 0;
+
+    &#x2F;&#x2F; 服务在启动中就不要搞key过期的事了
+    if (server.loading) return 0;
+
+    &#x2F;&#x2F; 获取当前时间
+    now &#x3D; server.lua_caller ? server.lua_time_start : mstime();
+
+    &#x2F;&#x2F; 从库，判断是否过期就返回了
+    &#x2F;&#x2F; 注意下面主库还有delete key的逻辑
+    if (server.masterhost !&#x3D; NULL) return now &gt; when;
+
+    &#x2F;&#x2F; 没有过期，直接返回了
+    if (now &lt;&#x3D; when) return 0;
+
+    &#x2F;&#x2F; 主库，而且key过期，发布事件并删除key
+    server.stat_expiredkeys++;
+    propagateExpire(db,key);
+    notifyKeyspaceEvent(NOTIFY_EXPIRED,
+        &quot;expired&quot;,key,db-&gt;id);
+    return dbDelete(db,key);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">int dbExists(redisDb *db, robj *key) &#123;
+    &#x2F;&#x2F; 判断key是否存在
+    return dictFind(db-&gt;dict,key-&gt;ptr) !&#x3D; NULL;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看完这两段代码，心里草泥马呼啸而过</p>
+<ol>
+<li>对过期key执行exists时，如果是主库，会同步删除key；如果是从库，什么都不做</li>
+<li>在判断key是否存在，注意这里只使用了<code>db-&gt;dict</code>这个结构，经常读redis源码的都知道，redis过期时间存放在db-&gt;expires中，所有<code>dbExists</code>这个函数的判断时完全忽略过期时间的。</li>
+</ol>
+<h2 id="问题修复">问题修复</h2>
+<p>直接找问题修复的commit:<a href="https://github.com/redis/redis/commit/5f1fcc599ac1d36f7d6be1f13696fc9c884302a8">fix exists command on slave</a></p>
+<blockquote>
+<p><img src="/posts/3b1200db/2.jpg" alt="fix exists command on slave"></p>
+</blockquote>
+<p>修复不复杂，直接使用<code>lookupKeyRead</code>就行了</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">robj *lookupKeyRead(redisDb *db, robj *key) &#123;
+    return lookupKeyReadWithFlags(db,key,LOOKUP_NONE);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) &#123;
+    robj *val;
+
+    if (expireIfNeeded(db,key) &#x3D;&#x3D; 1) &#123;
+        &#x2F;* Key expired. If we are in the context of a master, expireIfNeeded()
+         * returns 0 only when the key does not exist at all, so it&#39;s safe
+         * to return NULL ASAP. *&#x2F;
+        if (server.masterhost &#x3D;&#x3D; NULL) return NULL;
+
+        &#x2F;* However if we are in the context of a slave, expireIfNeeded() will
+         * not really try to expire the key, it only returns information
+         * about the &quot;logical&quot; status of the key: key expiring is up to the
+         * master in order to have a consistent view of master&#39;s data set.
+         *
+         * However, if the command caller is not the master, and as additional
+         * safety measure, the command invoked is a read-only command, we can
+         * safely return NULL here, and provide a more consistent behavior
+         * to clients accessign expired values in a read-only fashion, that
+         * will say the key as non exisitng.
+         *
+         * Notably this covers GETs when slaves are used to scale reads. *&#x2F;
+        if (server.current_client &amp;&amp;
+            server.current_client !&#x3D; server.master &amp;&amp;
+            server.current_client-&gt;cmd &amp;&amp;
+            server.current_client-&gt;cmd-&gt;flags &amp; CMD_READONLY)
+        &#123;
+            return NULL;
+        &#125;
+    &#125;
+    val &#x3D; lookupKey(db,key,flags);
+    if (val &#x3D;&#x3D; NULL)
+        server.stat_keyspace_misses++;
+    else
+        server.stat_keyspace_hits++;
+    return val;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">int expireIfNeeded(redisDb *db, robj *key) &#123;
+    mstime_t when &#x3D; getExpire(db,key);
+    mstime_t now;
+
+    if (when &lt; 0) return 0; &#x2F;* No expire for this key *&#x2F;
+
+    &#x2F;* Don&#39;t expire anything while loading. It will be done later. *&#x2F;
+    if (server.loading) return 0;
+
+    &#x2F;* If we are in the context of a Lua script, we pretend that time is
+     * blocked to when the Lua script started. This way a key can expire
+     * only the first time it is accessed and not in the middle of the
+     * script execution, making propagation to slaves &#x2F; AOF consistent.
+     * See issue #1525 on Github for more information. *&#x2F;
+    now &#x3D; server.lua_caller ? server.lua_time_start : mstime();
+
+    &#x2F;* If we are running in the context of a slave, return ASAP:
+     * the slave key expiration is controlled by the master that will
+     * send us synthesized DEL operations for expired keys.
+     *
+     * Still we try to return the right information to the caller,
+     * that is, 0 if we think the key should be still valid, 1 if
+     * we think the key is expired at this time. *&#x2F;
+    if (server.masterhost !&#x3D; NULL) return now &gt; when;
+
+    &#x2F;* Return when this key has not expired *&#x2F;
+    if (now &lt;&#x3D; when) return 0;
+
+    &#x2F;* Delete the key *&#x2F;
+    server.stat_expiredkeys++;
+    propagateExpire(db,key,server.lazyfree_lazy_expire);
+    notifyKeyspaceEvent(NOTIFY_EXPIRED,
+        &quot;expired&quot;,key,db-&gt;id);
+    return server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
+                                         dbSyncDelete(db,key);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从这里看出，无论是主库还是从库，exists都正确处理了过期key<br>
+同时，如果设置了<code>lazyfree_lazy_expire</code>，exists还可以异步删除过期key</p>
+]]></content>
+      <tags>
+        <tag>Bug</tag>
+        <tag>Redis</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>MockMvc对form/multipart支持的问题</title>
     <url>/posts/ddf27974.html</url>
     <content><![CDATA[<blockquote>
@@ -495,9 +1061,9 @@ public Enumeration&lt;String&gt; getParameterNames() &#123;
         <category>Spring</category>
       </categories>
       <tags>
+        <tag>Bug</tag>
         <tag>Spring Test</tag>
         <tag>Servlet</tag>
-        <tag>Bug</tag>
       </tags>
   </entry>
   <entry>
@@ -1041,400 +1607,6 @@ make</p>
       <tags>
         <tag>redis</tag>
         <tag>RDM</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Redisson Scan Bug</title>
-    <url>/posts/f2e3320d.html</url>
-    <content><![CDATA[<p><a href="https://github.com/redisson/redisson">Redisson - Easy Redis Java client with features of In-Memory Data Grid</a><br>
-一个被广泛使用的，功能强，性能高Redis库，但不得不说，Redisson的Bug挺多的，工作以来陆陆续续遇到了好几个。最近由遇到一个Redisson Scan的问题，正好记录下</p>
-<p>本文涉及依赖如下</p>
-<blockquote>
-<p>redis: 6.2.9<br>
-redisson: 3.15.6<br>
-redisson-spring-boot-starter: 3.15.6<br>
-spring boot: 2.7.14<br>
-spring boot starter data redis: 2.7.14</p>
-</blockquote>
-<span id="more"></span>
-<h2 id="问题复现">问题复现</h2>
-<p>为了复现这个问题，笔者在本地搭建了简单的Redis Cluster，三主三从<br>
-<img src="/posts/f2e3320d/clusternodes.png" alt="clusternodes.png"></p>
-<p>然后写入30组数据作为测试数据</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
-@SpringBootTest
-public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
-    @Test
-    public void writeData2Redis() &#123;
-        for (var i &#x3D; 0; i &lt; 30; i++) &#123;
-            var ops &#x3D; redisTemplate.boundValueOps(&quot;redisson_scan_&quot; + i);
-            ops.set(String.valueOf(i));
-        &#125;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>接下来使用RedisTemplate提供的scan来扫描Redis中的数据</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
-@SpringBootTest
-public class RedisScanTest extends AbstractTestNGSpringContextTests &#123;
-
-    @Autowired
-    private StringRedisTemplate redisTemplate;
-
-    @Test
-    public void scanRedis() &#123;
-        List&lt;String&gt; list &#x3D; new ArrayList&lt;&gt;();
-        try (RedisConnection connection &#x3D; getRedisConnection(redisTemplate)) &#123;
-            ScanOptions options &#x3D; ScanOptions.scanOptions().match(&quot;redisson_scan_*&quot;).count(500).build();
-            try (Cursor&lt;byte[]&gt; cursor &#x3D; connection.scan(options)) &#123;
-                while (cursor.hasNext()) &#123;
-                    list.add(new String(cursor.next()));
-                &#125;
-            &#125;
-        &#125;
-        var set &#x3D; new HashSet&lt;&gt;(list);
-        log.info(&quot;list size&#x3D;&#123;&#125;,list&#x3D;&#123;&#125;&quot;, list.size(), list);
-        log.info(&quot;set size&#x3D;&#123;&#125;,set&#x3D;&#123;&#125;&quot;, set.size(), set);
-    &#125;
-
-    public RedisConnection getRedisConnection(StringRedisTemplate redisTemplate) &#123;
-        return Optional.ofNullable(redisTemplate)
-                .map(RedisAccessor::getConnectionFactory)
-                .map(RedisConnectionFactory::getConnection)
-                .orElseThrow(RuntimeException::new);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>从日志中可以看出，一共有30个元素，却扫描出来的33个元素，再仔细看下<code>redisson_scan_29</code>，在列表中重复了三次</p>
-<pre class="line-numbers language-none"><code class="language-none">list size&#x3D;33,list&#x3D;[redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<p>我们再对list做一次去重，可以看出redisTemplat只扫描出来了11个数据，但都重复了三次</p>
-<pre class="line-numbers language-none"><code class="language-none">set size&#x3D;11,set&#x3D;[redisson_scan_19, redisson_scan_6, redisson_scan_2, redisson_scan_25, redisson_scan_24, redisson_scan_21, redisson_scan_20, redisson_scan_29, redisson_scan_28, redisson_scan_15, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
-<p>为了证实猜想，查看了部分key对应的slots，redisTemplate扫描出来的key都是在<code>dd9318300d4d6a82b783b760693bc1fbb716c61b</code>这个节点上</p>
-<p><img src="/posts/f2e3320d/slots.png" alt="slots.png"></p>
-<h2 id="问题定位">问题定位</h2>
-<p>最开始同事告诉我，需要使用<code>RedisClusterConnection</code>，采用以下方式才能执行scan。让笔者一度怀疑是我使用方式的问题，但细想：<code>RedisConnection</code>作为最基础的连接类，应该去屏蔽底层不同链接的细节才对</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">try (RedisClusterConnection connection &#x3D; getRedisClusterConnection(redisTemplate)) &#123;
-    ScanOptions options &#x3D; ScanOptions.scanOptions().match(&quot;redisson_scan_*&quot;).count(500).build();
-    for (RedisClusterNode clusterGetNode : connection.clusterGetNodes()) &#123;
-        try (Cursor&lt;byte[]&gt; cursor &#x3D; connection.scan(clusterGetNode, options)) &#123;
-            while (cursor.hasNext()) &#123;
-                list.add(new String(cursor.next()));
-            &#125;
-        &#125;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>RedisTemplate.scan的实现在<code>org.redisson.spring.data.connection.RedissonConnection</code>中，逻辑也不复杂</p>
-<ol>
-<li>获取client和MasterSlaveEntry迭代器</li>
-<li>通过MasterSlaveEntry迭代器中的entry对每一个节点进行scan操作，并保存scan结果</li>
-<li><strong>在整个过程中，除了最开始一次，client的值都不会变</strong></li>
-</ol>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public Cursor&lt;byte[]&gt; scan(ScanOptions options) &#123;
-    return new ScanCursor&lt;byte[]&gt;(0, options) &#123;
-
-        &#x2F;&#x2F; 注意client，第一次scan的时候client是null
-        private RedisClient client;
-        &#x2F;&#x2F; 获取了redis的所有结点信息
-        private Iterator&lt;MasterSlaveEntry&gt; entries &#x3D; redisson.getConnectionManager().getEntrySet().iterator();
-        &#x2F;&#x2F; 获取第一个节点信息传入了doScan
-        private MasterSlaveEntry entry &#x3D; entries.next();
-        
-        @Override
-        protected ScanIteration&lt;byte[]&gt; doScan(long cursorId, ScanOptions options) &#123;
-            if (isQueueing() || isPipelined()) &#123;
-                throw new UnsupportedOperationException(&quot;&#39;SSCAN&#39; cannot be called in pipeline &#x2F; transaction mode.&quot;);
-            &#125;
-
-            &#x2F;&#x2F; entry循环完毕，迭代器完毕
-            if (entry &#x3D;&#x3D; null) &#123;
-                return null;
-            &#125;
-            
-            List&lt;Object&gt; args &#x3D; new ArrayList&lt;Object&gt;();
-            &#x2F;&#x2F; to avoid negative value
-            cursorId &#x3D; Math.max(cursorId, 0);
-            args.add(cursorId);
-            if (options.getPattern() !&#x3D; null) &#123;
-                args.add(&quot;MATCH&quot;);
-                args.add(options.getPattern());
-            &#125;
-            if (options.getCount() !&#x3D; null) &#123;
-                args.add(&quot;COUNT&quot;);
-                args.add(options.getCount());
-            &#125;
-            
-            &#x2F;&#x2F; 注意这里，执行器中传入了client和entry信息
-            RFuture&lt;ListScanResult&lt;byte[]&gt;&gt; f &#x3D; executorService.readAsync(client, entry, ByteArrayCodec.INSTANCE, RedisCommands.SCAN, args.toArray());
-            ListScanResult&lt;byte[]&gt; res &#x3D; syncFuture(f);
-            long pos &#x3D; res.getPos();
-            &#x2F;&#x2F; 这里有保存scan返回结果的client，意味着在scan整个过程中，除了第一次是null，之后的client是没有变化的
-            client &#x3D; res.getRedisClient();
-            if (pos &#x3D;&#x3D; 0) &#123;
-                if (entries.hasNext()) &#123;
-                    pos &#x3D; -1;
-                    &#x2F;&#x2F; 如果scan完毕，使用下一个entry
-                    entry &#x3D; entries.next();
-                &#125; else &#123;
-                    entry &#x3D; null;
-                &#125;
-            &#125;
-            
-            return new ScanIteration&lt;byte[]&gt;(pos, res.getValues());
-        &#125;
-    &#125;.open();
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>继续跟踪到<code>executorService.readAsync</code>，注意这个<code>NodeSource</code>，保存了<code>MasterSlaveEntry</code>和<code>RedisClient</code>信息</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public &lt;T, R&gt; RFuture&lt;R&gt; readAsync(RedisClient client, MasterSlaveEntry entry, Codec codec, RedisCommand&lt;T&gt; command, Object... params) &#123;
-    RPromise&lt;R&gt; mainPromise &#x3D; createPromise();
-    async(true, new NodeSource(entry, client), codec, command, params, mainPromise, false, false);
-    return mainPromise;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>继续往下走，到了获取链接的地方了</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
-public RFuture&lt;RedisConnection&gt; connectionReadOp(NodeSource source, RedisCommand&lt;?&gt; command) &#123;
-    MasterSlaveEntry entry &#x3D; getEntry(source);
-    if (entry &#x3D;&#x3D; null) &#123;
-        return RedissonPromise.newFailedFuture(createNodeNotFoundException(source));
-    &#125;
-
-    if (source.getRedirect() !&#x3D; null) &#123;
-        return entry.connectionReadOp(command, source.getAddr());
-    &#125;
-    &#x2F;&#x2F; 如果RedisClient不为null，使用RedisClient获取Connection
-    if (source.getRedisClient() !&#x3D; null) &#123;
-        return entry.connectionReadOp(command, source.getRedisClient());
-    &#125;
-    
-    &#x2F;&#x2F; 如果RedisClient为null，使用传入的entry获取Connection
-    return entry.connectionReadOp(command);
-&#125;
-
-private MasterSlaveEntry getEntry(NodeSource source) &#123;
-    if (source.getRedirect() !&#x3D; null) &#123;
-        return getEntry(source.getAddr());
-    &#125;
-
-    MasterSlaveEntry entry &#x3D; source.getEntry();
-    &#x2F;&#x2F; 如果RedisClient不为null，通过RedisClient获取entry
-    if (source.getRedisClient() !&#x3D; null) &#123;
-        entry &#x3D; getEntry(source.getRedisClient());
-    &#125;
-    if (entry &#x3D;&#x3D; null &amp;&amp; source.getSlot() !&#x3D; null) &#123;
-        entry &#x3D; getEntry(source.getSlot());
-    &#125;
-    &#x2F;&#x2F; 如果RedisClient不null，使用传入的entry
-    return entry;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>getEntry中逻辑比较简单</p>
-<ul>
-<li>如果client为空，使用doScan中传入的entry创建connection</li>
-<li>如果client不为空，使用client创建connection</li>
-</ul>
-<p>到这里，整个bug就比较清晰了</p>
-<ol>
-<li>第一次doScan时，client为null，获取connection时选择了一个entry（对应到redis的一个从节点）</li>
-<li>之后doScan时，clent已经赋值了，而且没有切换逻辑，底层每次都会获取到同一个connection</li>
-<li>在三主三从的节点上执行scan，实际时对同一个节点执行了3次scan</li>
-</ol>
-<h2 id="问题解决">问题解决</h2>
-<p>明确了是Redisson的bug了，问题就比较好解决了，去github找Redisson的release note就行了</p>
-<p>在redisson-3.17.1的release中，找到了这样一条fix</p>
-<blockquote>
-<p>Fixed - Spring Data Redis module. Scan In cluster mode, other nodes cannot be scanned</p>
-</blockquote>
-<p>官方修复也很简单，在一个节点scan完毕后，将client设置为null，使下一轮doScan可以切换到不同节点上</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (pos &#x3D;&#x3D; 0) &#123;
-    if (entries.hasNext()) &#123;
-        pos &#x3D; -1;
-        entry &#x3D; entries.next();
-        &#x2F;&#x2F; client设置为null，使其可以切换节点
-        client &#x3D; null;
-    &#125; else &#123;
-        entry &#x3D; null;
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>升级redisson和redisson-spring-boot-starter后，再跑一次scan，现在一切正常了</p>
-<pre class="line-numbers language-none"><code class="language-none">ist size&#x3D;30,list&#x3D;[redisson_scan_0, redisson_scan_7, redisson_scan_13, redisson_scan_14, redisson_scan_4, redisson_scan_17, redisson_scan_26, redisson_scan_18, redisson_scan_10, redisson_scan_22, redisson_scan_8, redisson_scan_3, redisson_scan_9, redisson_scan_16, redisson_scan_27, redisson_scan_5, redisson_scan_23, redisson_scan_1, redisson_scan_12, redisson_scan_29, redisson_scan_20, redisson_scan_15, redisson_scan_19, redisson_scan_25, redisson_scan_11, redisson_scan_2, redisson_scan_6, redisson_scan_21, redisson_scan_24, redisson_scan_28]
-set size&#x3D;30,set&#x3D;[redisson_scan_0, redisson_scan_1, redisson_scan_18, redisson_scan_17, redisson_scan_19, redisson_scan_8, redisson_scan_9, redisson_scan_6, redisson_scan_7, redisson_scan_4, redisson_scan_5, redisson_scan_2, redisson_scan_3, redisson_scan_25, redisson_scan_24, redisson_scan_27, redisson_scan_26, redisson_scan_21, redisson_scan_20, redisson_scan_23, redisson_scan_22, redisson_scan_29, redisson_scan_28, redisson_scan_14, redisson_scan_13, redisson_scan_16, redisson_scan_15, redisson_scan_10, redisson_scan_12, redisson_scan_11]<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>]]></content>
-      <tags>
-        <tag>Bug</tag>
-        <tag>Redisson</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Redisson Cluster连接池Bug</title>
-    <url>/posts/84cbb9e7.html</url>
-    <content><![CDATA[<p>Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。</p>
-<p>本文涉及依赖如下</p>
-<blockquote>
-<p>redis: 5.0.12<br>
-redisson: 3.15.6</p>
-</blockquote>
-<span id="more"></span>
-<h2 id="问题描述">问题描述</h2>
-<p>笔者所在应用的redis cluster一直有个问题，在redis拓扑有变动后就会慢，重启后解决，表现为</p>
-<ul>
-<li>redis水平扩容后变慢</li>
-<li>redis主从切换后变慢</li>
-</ul>
-<p>最近连续出现了几次宿主机问题，不停的重启应用，就沉下心来仔细研究了这个问题</p>
-<h2 id="问题分析">问题分析</h2>
-<h3 id="时间线">时间线</h3>
-<p><img src="/posts/84cbb9e7/redis-failover-timeline.svg" alt="redis-failover-timeline"></p>
-<p>Redis failover时间线：</p>
-<ol>
-<li>T0：出问题前，redis每个节点为一主一从配置</li>
-<li>T1：redis某个master节点出现宕机</li>
-<li>T2：一分钟内，redis重新选主，对应从节点晋升为主节点</li>
-<li>T3：人工添加一个从节点，redis集群恢复健康</li>
-</ol>
-<p>应用调用链时间线：<br>
-<img src="/posts/84cbb9e7/application-timeline.png" alt="application-timeline"></p>
-<ol>
-<li>T0：出问题前，耗时极低</li>
-<li>T1：有大量连接broken pipeline的日志，但耗时正常</li>
-<li>T2：应用发现新master节点，拓扑更新，耗时正常</li>
-<li>T3：添加从节点，应用发现新slave节点，拓扑更新，耗时飙高</li>
-<li>T4：重启应用，耗时恢复正常</li>
-</ol>
-<p>看完这个时间线，明显不再是<code>主从切换导致拓扑刷新失败</code>的锅了</p>
-<h3 id="调用链">调用链</h3>
-<p><img src="/posts/84cbb9e7/trace.png" alt="trace"></p>
-<p>调用链上看，又有一个很奇怪的问题，让人摸不着头脑</p>
-<ul>
-<li>lock和unlock耗时极高，均在1s以上</li>
-<li>redis其他操作耗时正常</li>
-</ul>
-<h2 id="问题复现">问题复现</h2>
-<p>问题比较诡异，redis集群恢复正常了，但redisson却不正常了，而且只有lock和unlock出问题。笔者先查了半天没看出哪里有问题，只好先想办法复现这个问题</p>
-<p>复现代码如下</p>
-<ol>
-<li>先使用<code>insert</code>接口往redis中塞入了几千万个key</li>
-<li>不停触发接口<code>/lock/get/60</code>，让redisson不停的lock和unlock</li>
-<li>操作redis，操作节哪个点可以通过<code>CRC16.crc16(key.getBytes(&quot;UTF-8&quot;)) % 16438</code>计算出<br>
-3.1. 停止master<br>
-3.2. 等待主从切换<br>
-3.3. 添加从节点</li>
-</ol>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
-@RestController
-@RequestMapping(&quot;&#x2F;redisson&quot;)
-public class RedissonController &#123;
-
-    @Setter(onMethod_ &#x3D; @Resource)
-    private RedissonClient redissonClient;
-
-    private final ExecutorService EXECUTOR &#x3D; Executors.newFixedThreadPool(5);
-
-    @GetMapping(&quot;&#x2F;insert&#x2F;&#123;count&#125;&quot;)
-    public String batchInsert(@PathVariable(&quot;count&quot;) int count) &#123;
-        for (int i &#x3D; 0; i &lt; count &#x2F; 200; i++) &#123;
-            RBatch batch &#x3D; redissonClient.createBatch();
-            for (int j &#x3D; 0; j &lt; 200; j++) &#123;
-                batch.getBucket(UUID.randomUUID().toString()).setAsync(UUID.randomUUID().toString());
-            &#125;
-            log.info(&quot;&#123;&#125;&quot;, i);
-            batch.execute();
-        &#125;
-        return &quot;ok&quot;;
-    &#125;
-
-    @GetMapping(&quot;&#x2F;lock&#x2F;get&#x2F;&#123;count&#125;&quot;)
-    public String redisson(@PathVariable(&quot;count&quot;) int count) throws InterruptedException &#123;
-        long time &#x3D; System.currentTimeMillis();
-        redissonClient.getBucket(&quot;123&quot;).set(&quot;abc&quot;);
-        CountDownLatch latch &#x3D; new CountDownLatch(2 * count);
-        for (int i &#x3D; 0; i &lt; count; i++) &#123;
-            EXECUTOR.execute(() -&gt; process(latch));
-            EXECUTOR.execute(() -&gt; process(latch));
-            Thread.sleep(100);
-        &#125;
-        latch.await();
-        log.info(&quot;done&quot;);
-        return String.valueOf((System.currentTimeMillis() - time) &#x2F; count);
-    &#125;
-
-    private void process(CountDownLatch latch) &#123;
-        try &#123;
-            RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
-            long start &#x3D; System.currentTimeMillis();
-            lock.lock();
-            log.info(&quot;lock time:&#123;&#125;&quot;, System.currentTimeMillis() - start);
-            redissonClient.getBucket(&quot;123&quot;).get();
-            if (lock.isHeldByCurrentThread()) &#123;
-                lock.unlock();
-            &#125;
-        &#125; catch (Exception e) &#123;
-            log.error(&quot;&quot;, e);
-        &#125; finally &#123;
-            latch.countDown();
-        &#125;
-    &#125;
-
-    @GetMapping(&quot;&#x2F;lock&#x2F;get&quot;)
-    public String redissonSingle() throws InterruptedException &#123;
-        RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
-        long start &#x3D; System.currentTimeMillis();
-        lock.lock();
-        long cost &#x3D; System.currentTimeMillis() - start;
-        redissonClient.getBucket(&quot;123&quot;).get();
-        if (lock.isHeldByCurrentThread()) &#123;
-            lock.unlock();
-        &#125;
-        return String.valueOf(cost);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>按以上方式操作，问题复现了，<code>lock.lock();</code>耗时超过1s，而正常情况下耗时应该在10ms左右</p>
-<h2 id="问题排查">问题排查</h2>
-<p>问题复现之后，简单debug了一下，也没找到问题，只有开trace日志了</p>
-<p><img src="/posts/84cbb9e7/command.png" alt="command"></p>
-<p>打开trace日志后确实发现了一个可疑点，redisson的lock执行了两个指令</p>
-<ol>
-<li>eval执行lua脚本</li>
-<li>wait 4 1000</li>
-</ol>
-<blockquote>
-<p>Redis WAIT 命令用来阻塞当前客户端，直到所有先前的写入命令成功传输并且至少由指定数量的从节点复制完成。如果执行超过超时时间（以毫秒为单位），则即使尚未完成指定数量的从结点复制，该命令也会返回。</p>
-</blockquote>
-<p>从官方的解释上看，wait执行后会<code>阻塞</code>等待n个从节点复制完毕。trace日志中显示：需要等待4个从节点1s，可我只有1个从节点。</p>
-<p>接着找wait指令执行的地方，<code>CommandBatchService</code>中找到了这样一段代码</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (this.options.getSyncSlaves() &gt; 0) &#123;
-    for (Entry entry : commands.values()) &#123;
-        BatchCommandData&lt;?, ?&gt; waitCommand &#x3D; new BatchCommandData(RedisCommands.WAIT, 
-                            new Object[] &#123; this.options.getSyncSlaves(), this.options.getSyncTimeout() &#125;, index.incrementAndGet());
-        entry.getCommands().add(waitCommand);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>往上找在<code>RedissonBaseLock</code>中找到options，wait的数量来源于<code>availableSlaves</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">BatchOptions options &#x3D; BatchOptions.defaults()
-                        .syncSlaves(entry.getAvailableSlaves(), 1, TimeUnit.SECONDS);<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
-<p>打个断点看下，卧槽牛逼，一个节点被添加了4次。这也解释了为啥只有lock慢，因为lock需要wait，其他命令随便拿都是指向从节点的链接。</p>
-<p><img src="/posts/84cbb9e7/slave.png" alt="slave"></p>
-<p>既然问题都找到这里了，接着往上在<code>ClusterConnectionManager</code>中找添加slave的地方</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">private Set&lt;RedisURI&gt; addRemoveSlaves(MasterSlaveEntry entry, ClusterPartition currentPart, ClusterPartition newPart) &#123;
-
-    &#x2F;&#x2F; 以上省略
-    for (RedisURI uri : addedSlaves) &#123;
-        &#x2F;&#x2F; 这里添加是来着不拒，想添加就添加
-        RFuture&lt;Void&gt; future &#x3D; entry.addSlave(uri);
-        &#x2F;&#x2F; 以下省略
-    &#125;
-    return addedSlaves;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="问题解决">问题解决</h2>
-<p>既然都定位到代码哪一行了，笔者<code>git clone https://github.com/redisson/redisson.git</code>，找到了作者修复方案</p>
-<p><img src="/posts/84cbb9e7/fix.png" alt="fix"></p>
-<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了问题出现的概率。</p>
-<p><img src="/posts/84cbb9e7/release.png" alt="release"></p>
-<p>不得不说，redisson功能很强，但这release note满满的fixed是真让人愁。这是笔者遇到redisson的第三个bug了，bug爆率是真的高。</p>
-]]></content>
-      <tags>
-        <tag>Bug</tag>
-        <tag>Redisson</tag>
       </tags>
   </entry>
   <entry>

@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 7.1.1">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+<link rel="stylesheet" href="/css/prism/prism.css">
+<link rel="stylesheet" href="">
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha256-yIDrPSXHZdOZhAqiBP7CKzIwMQmRCJ8UeB8Jo17YC4o=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"polarisgithub.github.io","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.19.1","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":false,"async":true,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="最近同事反馈了一个偶现的问题，最终定位到了以下代码。 RBucket&lt;String&gt; bucket &#x3D; redissonClient.getBucket(&quot;123&quot;); if(bucket.isExists()) &#123;     cache &#x3D; bucket.get(); &#125; 代码看上去没有问题，但会出现bucket.get()获">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Bug系列 redis exists">
+<meta property="og:url" content="https://polarisgithub.github.io/posts/3b1200db.html">
+<meta property="og:site_name" content="polaris_he">
+<meta property="og:description" content="最近同事反馈了一个偶现的问题，最终定位到了以下代码。 RBucket&lt;String&gt; bucket &#x3D; redissonClient.getBucket(&quot;123&quot;); if(bucket.isExists()) &#123;     cache &#x3D; bucket.get(); &#125; 代码看上去没有问题，但会出现bucket.get()获">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/3b1200db/1.jpg">
+<meta property="og:image" content="https://polarisgithub.github.io/posts/3b1200db/2.jpg">
+<meta property="article:published_time" content="2024-04-29T10:55:38.418Z">
+<meta property="article:modified_time" content="2024-04-29T12:34:37.155Z">
+<meta property="article:author" content="polaris_he">
+<meta property="article:tag" content="Bug">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://polarisgithub.github.io/posts/3b1200db/1.jpg">
+
+
+<link rel="canonical" href="https://polarisgithub.github.io/posts/3b1200db.html">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://polarisgithub.github.io/posts/3b1200db.html","path":"posts/3b1200db.html","title":"Bug系列 redis exists"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Bug系列 redis exists | polaris_he</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<style>.darkmode--activated{--body-bg-color:#282828;--content-bg-color:#333;--card-bg-color:#555;--text-color:#ccc;--blockquote-color:#bbb;--link-color:#ccc;--link-hover-color:#eee;--brand-color:#ddd;--brand-hover-color:#ddd;--table-row-odd-bg-color:#282828;--table-row-hover-bg-color:#363636;--menu-item-bg-color:#555;--btn-default-bg:#222;--btn-default-color:#ccc;--btn-default-border-color:#555;--btn-default-hover-bg:#666;--btn-default-hover-color:#ccc;--btn-default-hover-border-color:#666;--highlight-background:#282b2e;--highlight-foreground:#a9b7c6;--highlight-gutter-background:#34393d;--highlight-gutter-foreground:#9ca9b6}.darkmode--activated img{opacity:.75}.darkmode--activated img:hover{opacity:.9}.darkmode--activated code{color:#69dbdc;background:0 0}button.darkmode-toggle{z-index:9999}.darkmode-ignore,img{display:flex!important}.beian img{display:inline-block!important}</style></head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">polaris_he</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">随便写写</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索 | search" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">14</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索 | search
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup"><div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off" maxlength="80"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close" role="button">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div class="search-result-container no-result">
+  <div class="search-result-icon">
+    <i class="fa fa-spinner fa-pulse fa-5x"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98"><span class="nav-number">1.</span> <span class="nav-text">问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90"><span class="nav-number">2.</span> <span class="nav-text">源码分析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E4%BF%AE%E5%A4%8D"><span class="nav-number">3.</span> <span class="nav-text">问题修复</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="polaris_he"
+      src="/images/avatar.jpeg">
+  <p class="site-author-name" itemprop="name">polaris_he</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">16</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">14</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://polarisgithub.github.io/posts/3b1200db.html">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Bug系列 redis exists | polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Bug系列 redis exists
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2024-04-29 18:55:38 / 修改时间：20:34:37" itemprop="dateCreated datePublished" datetime="2024-04-29T18:55:38+08:00">2024-04-29</time>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>4 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>最近同事反馈了一个偶现的问题，最终定位到了以下代码。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">RBucket&lt;String&gt; bucket &#x3D; redissonClient.getBucket(&quot;123&quot;);
+if(bucket.isExists()) &#123;
+    cache &#x3D; bucket.get();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>代码看上去没有问题，但会出现<code>bucket.get()</code>获取的数据是空。之前一直以为是并发问题，exists判断完后数据正好过期。最近仔细分析了这个问题，不是并发导致的，是isExists方法对过期key返回了true。<br>
+在网上查询了一下，没有多少人讨论这个问题，有零星讨论给出的结论是<code>exists命令不能惰性删除</code>。这个结论是不正确的，本文就从redis源码层面分析下这个问题</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 3.2.3</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题">问题</h2>
+<p>在低版本redis中，对过期key使用exists，在主库执行的exists命令是没问题的，返回0（不存在）；但在从库执行，redis会返回1（存在）</p>
+<blockquote>
+<p>这个bug在redis 4.0.11修复<br>
+<img src="/posts/3b1200db/1.jpg" alt="redis 4.0.11 release notes"></p>
+</blockquote>
+<h2 id="源码分析">源码分析</h2>
+<p>公司redis集群比较古老，用的是3.2.3，直接去找对应源码<a target="_blank" rel="noopener" href="https://github.com/redis/redis/tree/3.2.3">redis 3.2.3</a></p>
+<p>经常读redis源码的都知道，要找redis对应的命令，直接去<code>server.c</code>找</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">struct redisCommand redisCommandTable[] &#x3D; &#123;
+    &#x2F;&#x2F; …… 
+    &#123;&quot;exists&quot;,existsCommand,-2,&quot;rF&quot;,0,NULL,1,-1,1,0,0&#125;,
+    &#x2F;&#x2F; ……
+&#125;;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>找到exists对应的是existsCommand，进一步查找到<code>db.c</code>中</p>
+<p>翻开existsCommand，逻辑很简单</p>
+<ol>
+<li>判断key是否过期</li>
+<li>判断key是否存在</li>
+</ol>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">void existsCommand(client *c) &#123;
+    long long count &#x3D; 0;
+    int j;
+
+    for (j &#x3D; 1; j &lt; c-&gt;argc; j++) &#123;
+        expireIfNeeded(c-&gt;db,c-&gt;argv[j]);
+        if (dbExists(c-&gt;db,c-&gt;argv[j])) count++;
+    &#125;
+    addReplyLongLong(c,count);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从顶层代码看，redis是有对过期key处理的逻辑的，我们进一步看代码</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">int expireIfNeeded(redisDb *db, robj *key) &#123;
+    &#x2F;&#x2F; 获取key过期的时间
+    mstime_t when &#x3D; getExpire(db,key);
+    mstime_t now;
+
+    &#x2F;&#x2F; 一个不过期的key
+    if (when &lt; 0) return 0;
+
+    &#x2F;&#x2F; 服务在启动中就不要搞key过期的事了
+    if (server.loading) return 0;
+
+    &#x2F;&#x2F; 获取当前时间
+    now &#x3D; server.lua_caller ? server.lua_time_start : mstime();
+
+    &#x2F;&#x2F; 从库，判断是否过期就返回了
+    &#x2F;&#x2F; 注意下面主库还有delete key的逻辑
+    if (server.masterhost !&#x3D; NULL) return now &gt; when;
+
+    &#x2F;&#x2F; 没有过期，直接返回了
+    if (now &lt;&#x3D; when) return 0;
+
+    &#x2F;&#x2F; 主库，而且key过期，发布事件并删除key
+    server.stat_expiredkeys++;
+    propagateExpire(db,key);
+    notifyKeyspaceEvent(NOTIFY_EXPIRED,
+        &quot;expired&quot;,key,db-&gt;id);
+    return dbDelete(db,key);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">int dbExists(redisDb *db, robj *key) &#123;
+    &#x2F;&#x2F; 判断key是否存在
+    return dictFind(db-&gt;dict,key-&gt;ptr) !&#x3D; NULL;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看完这两段代码，心里草泥马呼啸而过</p>
+<ol>
+<li>对过期key执行exists时，如果是主库，会同步删除key；如果是从库，什么都不做</li>
+<li>在判断key是否存在，注意这里只使用了<code>db-&gt;dict</code>这个结构，经常读redis源码的都知道，redis过期时间存放在db-&gt;expires中，所有<code>dbExists</code>这个函数的判断时完全忽略过期时间的。</li>
+</ol>
+<h2 id="问题修复">问题修复</h2>
+<p>直接找问题修复的commit:<a target="_blank" rel="noopener" href="https://github.com/redis/redis/commit/5f1fcc599ac1d36f7d6be1f13696fc9c884302a8">fix exists command on slave</a></p>
+<blockquote>
+<p><img src="/posts/3b1200db/2.jpg" alt="fix exists command on slave"></p>
+</blockquote>
+<p>修复不复杂，直接使用<code>lookupKeyRead</code>就行了</p>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">robj *lookupKeyRead(redisDb *db, robj *key) &#123;
+    return lookupKeyReadWithFlags(db,key,LOOKUP_NONE);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">robj *lookupKeyReadWithFlags(redisDb *db, robj *key, int flags) &#123;
+    robj *val;
+
+    if (expireIfNeeded(db,key) &#x3D;&#x3D; 1) &#123;
+        &#x2F;* Key expired. If we are in the context of a master, expireIfNeeded()
+         * returns 0 only when the key does not exist at all, so it&#39;s safe
+         * to return NULL ASAP. *&#x2F;
+        if (server.masterhost &#x3D;&#x3D; NULL) return NULL;
+
+        &#x2F;* However if we are in the context of a slave, expireIfNeeded() will
+         * not really try to expire the key, it only returns information
+         * about the &quot;logical&quot; status of the key: key expiring is up to the
+         * master in order to have a consistent view of master&#39;s data set.
+         *
+         * However, if the command caller is not the master, and as additional
+         * safety measure, the command invoked is a read-only command, we can
+         * safely return NULL here, and provide a more consistent behavior
+         * to clients accessign expired values in a read-only fashion, that
+         * will say the key as non exisitng.
+         *
+         * Notably this covers GETs when slaves are used to scale reads. *&#x2F;
+        if (server.current_client &amp;&amp;
+            server.current_client !&#x3D; server.master &amp;&amp;
+            server.current_client-&gt;cmd &amp;&amp;
+            server.current_client-&gt;cmd-&gt;flags &amp; CMD_READONLY)
+        &#123;
+            return NULL;
+        &#125;
+    &#125;
+    val &#x3D; lookupKey(db,key,flags);
+    if (val &#x3D;&#x3D; NULL)
+        server.stat_keyspace_misses++;
+    else
+        server.stat_keyspace_hits++;
+    return val;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-c" data-language="c"><code class="language-c">int expireIfNeeded(redisDb *db, robj *key) &#123;
+    mstime_t when &#x3D; getExpire(db,key);
+    mstime_t now;
+
+    if (when &lt; 0) return 0; &#x2F;* No expire for this key *&#x2F;
+
+    &#x2F;* Don&#39;t expire anything while loading. It will be done later. *&#x2F;
+    if (server.loading) return 0;
+
+    &#x2F;* If we are in the context of a Lua script, we pretend that time is
+     * blocked to when the Lua script started. This way a key can expire
+     * only the first time it is accessed and not in the middle of the
+     * script execution, making propagation to slaves &#x2F; AOF consistent.
+     * See issue #1525 on Github for more information. *&#x2F;
+    now &#x3D; server.lua_caller ? server.lua_time_start : mstime();
+
+    &#x2F;* If we are running in the context of a slave, return ASAP:
+     * the slave key expiration is controlled by the master that will
+     * send us synthesized DEL operations for expired keys.
+     *
+     * Still we try to return the right information to the caller,
+     * that is, 0 if we think the key should be still valid, 1 if
+     * we think the key is expired at this time. *&#x2F;
+    if (server.masterhost !&#x3D; NULL) return now &gt; when;
+
+    &#x2F;* Return when this key has not expired *&#x2F;
+    if (now &lt;&#x3D; when) return 0;
+
+    &#x2F;* Delete the key *&#x2F;
+    server.stat_expiredkeys++;
+    propagateExpire(db,key,server.lazyfree_lazy_expire);
+    notifyKeyspaceEvent(NOTIFY_EXPIRED,
+        &quot;expired&quot;,key,db-&gt;id);
+    return server.lazyfree_lazy_expire ? dbAsyncDelete(db,key) :
+                                         dbSyncDelete(db,key);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从这里看出，无论是主库还是从库，exists都正确处理了过期key<br>
+同时，如果设置了<code>lazyfree_lazy_expire</code>，exists还可以异步删除过期key</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Bug/" rel="tag"># Bug</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/posts/307c0b65.html" rel="prev" title="Spring AOP初见">
+                  <i class="fa fa-angle-left"></i> Spring AOP初见
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2024</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">polaris_he</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+    <span title="站点总字数">26k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">1:27</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+  <div class="reading-progress-bar"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/prism/prism.js"></script><script src="/js/utils.js"></script><script src="/js/next-boot.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous"></script>
+<script src="/js/third-party/search/local-search.js"></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+
+</body>
+</html>

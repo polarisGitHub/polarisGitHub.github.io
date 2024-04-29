@@ -84,7 +84,7 @@
 
 
 <nav class="site-nav">
-  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">13</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页 | home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于 | about</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签 | tags<span class="badge">14</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类 | categories<span class="badge">2</span></a></li>
       <li class="menu-item menu-item-search">
         <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索 | search
         </a>
@@ -149,7 +149,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">15</span>
+          <span class="site-state-item-count">16</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -160,7 +160,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-count">14</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -185,6 +185,108 @@
     </div>
 
     <div class="main-inner index posts-expand">
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://polarisgithub.github.io/posts/3b1200db.html">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpeg">
+      <meta itemprop="name" content="polaris_he">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | polaris_he">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/posts/3b1200db.html" class="post-title-link" itemprop="url">Bug系列 redis exists</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2024-04-29 18:55:38 / 修改时间：20:34:37" itemprop="dateCreated datePublished" datetime="2024-04-29T18:55:38+08:00">2024-04-29</time>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>4 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>最近同事反馈了一个偶现的问题，最终定位到了以下代码。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">RBucket&lt;String&gt; bucket &#x3D; redissonClient.getBucket(&quot;123&quot;);
+if(bucket.isExists()) &#123;
+    cache &#x3D; bucket.get();
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>代码看上去没有问题，但会出现<code>bucket.get()</code>获取的数据是空。之前一直以为是并发问题，exists判断完后数据正好过期。最近仔细分析了这个问题，不是并发导致的，是isExists方法对过期key返回了true。<br>
+在网上查询了一下，没有多少人讨论这个问题，有零星讨论给出的结论是<code>exists命令不能惰性删除</code>。这个结论是不正确的，本文就从redis源码层面分析下这个问题</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 3.2.3</p>
+</blockquote>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/posts/3b1200db.html#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
 
     
 
@@ -222,9 +324,15 @@
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">发表于</span>
-      
 
-      <time title="创建时间：2024-02-03 22:41:42 / 修改时间：22:42:17" itemprop="dateCreated datePublished" datetime="2024-02-03T22:41:42+08:00">2024-02-03</time>
+      <time title="创建时间：2024-02-03 22:41:42" itemprop="dateCreated datePublished" datetime="2024-02-03T22:41:42+08:00">2024-02-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2024-02-06 12:24:52" itemprop="dateModified" datetime="2024-02-06T12:24:52+08:00">2024-02-06</time>
     </span>
 
   
@@ -308,7 +416,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/posts/84cbb9e7.html" class="post-title-link" itemprop="url">Redisson Cluster连接池Bug</a>
+          <a href="/posts/84cbb9e7.html" class="post-title-link" itemprop="url">Bug系列 Redisson Cluster连接池</a>
         </h2>
 
         <div class="post-meta-container">
@@ -318,9 +426,15 @@
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">发表于</span>
-      
 
-      <time title="创建时间：2024-02-03 22:41:42 / 修改时间：23:17:57" itemprop="dateCreated datePublished" datetime="2024-02-03T22:41:42+08:00">2024-02-03</time>
+      <time title="创建时间：2024-02-03 00:00:00" itemprop="dateCreated datePublished" datetime="2024-02-03T00:00:00+08:00">2024-02-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2024-04-29 20:36:10" itemprop="dateModified" datetime="2024-04-29T20:36:10+08:00">2024-04-29</time>
     </span>
 
   
@@ -405,7 +519,7 @@ redisson: 3.15.6</p>
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/posts/f2e3320d.html" class="post-title-link" itemprop="url">Redisson Scan Bug</a>
+          <a href="/posts/f2e3320d.html" class="post-title-link" itemprop="url">Bug系列 Redisson Scan</a>
         </h2>
 
         <div class="post-meta-container">
@@ -415,9 +529,15 @@ redisson: 3.15.6</p>
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">发表于</span>
-      
 
-      <time title="创建时间：2023-07-29 20:03:25 / 修改时间：20:18:52" itemprop="dateCreated datePublished" datetime="2023-07-29T20:03:25+08:00">2023-07-29</time>
+      <time title="创建时间：2023-07-29 00:00:00" itemprop="dateCreated datePublished" datetime="2023-07-29T00:00:00+08:00">2023-07-29</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2024-04-29 20:34:52" itemprop="dateModified" datetime="2024-04-29T20:34:52+08:00">2024-04-29</time>
     </span>
 
   
@@ -1145,131 +1265,6 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
 
 
 
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://polarisgithub.github.io/posts/2bd24f59.html">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.jpeg">
-      <meta itemprop="name" content="polaris_he">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="polaris_he">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | polaris_he">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/posts/2bd24f59.html" class="post-title-link" itemprop="url">ziplist压缩列表</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-05-16 14:57:08" itemprop="dateCreated datePublished" datetime="2021-05-16T14:57:08+08:00">2021-05-16</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2023-03-28 22:20:24" itemprop="dateModified" datetime="2023-03-28T22:20:24+08:00">2023-03-28</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/redis/" itemprop="url" rel="index"><span itemprop="name">redis</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>489</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>2 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
-压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
-</blockquote>
-<p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
-<p>我们可以在<code>ziplist.h</code>中找到官方对ziplist的定义</p>
-<ul>
-<li>ziplist是一个经过特殊编码的 双向链表 ，它的设计目标就是为了提高存储效率。ziplist可以用于存储字符串或整数，其中整数是按真正的二进制表示进行编码的，而不是编码成字符串序列。 它能以<code>O(1)</code>的时间复杂度在表的两端提供<code>push</code>和<code>pop</code>操作。但是由于每个操作都需要重新分配内存，<code>实际的复杂度</code>和ziplist使用的内存量有关</li>
-<li>从这段定义中我们可以看出ziplist的定位是小数据量下的高效内存存储</li>
-<li><code>hash</code>和<code>sorted set</code>在数据量比较少的情况下都使用了ziplist</li>
-</ul>
-<pre class="line-numbers language-c" data-language="c"><code class="language-c">&#x2F;* The ziplist is a specially encoded dually linked list that is designed
- * to be very memory efficient. It stores both strings and integer values,
- * where integers are encoded as actual integers instead of a series of
- * characters. It allows push and pop operations on either side of the list
- * in O(1) time. However, because every operation requires a reallocation of
- * the memory used by the ziplist, the actual complexity is related to the
- * amount of memory used by the ziplist.
- * &#x2F;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/posts/2bd24f59.html#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
   <nav class="pagination">
     <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="extend next" rel="next" title="下一页" aria-label="下一页" href="/page/2/"><i class="fa fa-angle-right"></i></a>
   </nav>
@@ -1293,13 +1288,13 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
     <span class="post-meta-item-icon">
       <i class="fa fa-chart-line"></i>
     </span>
-    <span title="站点总字数">25k</span>
+    <span title="站点总字数">26k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">1:23</span>
+    <span title="站点阅读时长">1:27</span>
   </span>
 </div>
 <div class="busuanzi-count">
