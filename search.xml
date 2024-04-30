@@ -315,178 +315,6 @@ isBeanNameInUse environment: true<span aria-hidden="true" class="line-numbers-ro
       </tags>
   </entry>
   <entry>
-    <title>Bug系列 Redisson Cluster连接池</title>
-    <url>/posts/84cbb9e7.html</url>
-    <content><![CDATA[<p>Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。</p>
-<p>本文涉及依赖如下</p>
-<blockquote>
-<p>redis: 5.0.12<br>
-redisson: 3.15.6</p>
-</blockquote>
-<span id="more"></span>
-<h2 id="问题描述">问题描述</h2>
-<p>笔者所在应用的redis cluster一直有个问题，在redis拓扑有变动后就会慢，重启后解决，表现为</p>
-<ul>
-<li>redis水平扩容后变慢</li>
-<li>redis主从切换后变慢</li>
-</ul>
-<p>最近连续出现了几次宿主机问题，不停的重启应用，就沉下心来仔细研究了这个问题</p>
-<h2 id="问题分析">问题分析</h2>
-<h3 id="时间线">时间线</h3>
-<p><img src="/posts/84cbb9e7/redis-failover-timeline.svg" alt="redis-failover-timeline"></p>
-<p>Redis failover时间线：</p>
-<ol>
-<li>T0：出问题前，redis每个节点为一主一从配置</li>
-<li>T1：redis某个master节点出现宕机</li>
-<li>T2：一分钟内，redis重新选主，对应从节点晋升为主节点</li>
-<li>T3：人工添加一个从节点，redis集群恢复健康</li>
-</ol>
-<p>应用调用链时间线：<br>
-<img src="/posts/84cbb9e7/application-timeline.png" alt="application-timeline"></p>
-<ol>
-<li>T0：出问题前，耗时极低</li>
-<li>T1：有大量连接broken pipeline的日志，但耗时正常</li>
-<li>T2：应用发现新master节点，拓扑更新，耗时正常</li>
-<li>T3：添加从节点，应用发现新slave节点，拓扑更新，耗时飙高</li>
-<li>T4：重启应用，耗时恢复正常</li>
-</ol>
-<p>看完这个时间线，明显不再是<code>主从切换导致拓扑刷新失败</code>的锅了</p>
-<h3 id="调用链">调用链</h3>
-<p><img src="/posts/84cbb9e7/trace.png" alt="trace"></p>
-<p>调用链上看，又有一个很奇怪的问题，让人摸不着头脑</p>
-<ul>
-<li>lock和unlock耗时极高，均在1s以上</li>
-<li>redis其他操作耗时正常</li>
-</ul>
-<h2 id="问题复现">问题复现</h2>
-<p>问题比较诡异，redis集群恢复正常了，但redisson却不正常了，而且只有lock和unlock出问题。笔者先查了半天没看出哪里有问题，只好先想办法复现这个问题</p>
-<p>复现代码如下</p>
-<ol>
-<li>先使用<code>insert</code>接口往redis中塞入了几千万个key</li>
-<li>不停触发接口<code>/lock/get/60</code>，让redisson不停的lock和unlock</li>
-<li>操作redis，操作节哪个点可以通过<code>CRC16.crc16(key.getBytes(&quot;UTF-8&quot;)) % 16438</code>计算出<br>
-3.1. 停止master<br>
-3.2. 等待主从切换<br>
-3.3. 添加从节点</li>
-</ol>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
-@RestController
-@RequestMapping(&quot;&#x2F;redisson&quot;)
-public class RedissonController &#123;
-
-    @Setter(onMethod_ &#x3D; @Resource)
-    private RedissonClient redissonClient;
-
-    private final ExecutorService EXECUTOR &#x3D; Executors.newFixedThreadPool(5);
-
-    @GetMapping(&quot;&#x2F;insert&#x2F;&#123;count&#125;&quot;)
-    public String batchInsert(@PathVariable(&quot;count&quot;) int count) &#123;
-        for (int i &#x3D; 0; i &lt; count &#x2F; 200; i++) &#123;
-            RBatch batch &#x3D; redissonClient.createBatch();
-            for (int j &#x3D; 0; j &lt; 200; j++) &#123;
-                batch.getBucket(UUID.randomUUID().toString()).setAsync(UUID.randomUUID().toString());
-            &#125;
-            log.info(&quot;&#123;&#125;&quot;, i);
-            batch.execute();
-        &#125;
-        return &quot;ok&quot;;
-    &#125;
-
-    @GetMapping(&quot;&#x2F;lock&#x2F;get&#x2F;&#123;count&#125;&quot;)
-    public String redisson(@PathVariable(&quot;count&quot;) int count) throws InterruptedException &#123;
-        long time &#x3D; System.currentTimeMillis();
-        redissonClient.getBucket(&quot;123&quot;).set(&quot;abc&quot;);
-        CountDownLatch latch &#x3D; new CountDownLatch(2 * count);
-        for (int i &#x3D; 0; i &lt; count; i++) &#123;
-            EXECUTOR.execute(() -&gt; process(latch));
-            EXECUTOR.execute(() -&gt; process(latch));
-            Thread.sleep(100);
-        &#125;
-        latch.await();
-        log.info(&quot;done&quot;);
-        return String.valueOf((System.currentTimeMillis() - time) &#x2F; count);
-    &#125;
-
-    private void process(CountDownLatch latch) &#123;
-        try &#123;
-            RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
-            long start &#x3D; System.currentTimeMillis();
-            lock.lock();
-            log.info(&quot;lock time:&#123;&#125;&quot;, System.currentTimeMillis() - start);
-            redissonClient.getBucket(&quot;123&quot;).get();
-            if (lock.isHeldByCurrentThread()) &#123;
-                lock.unlock();
-            &#125;
-        &#125; catch (Exception e) &#123;
-            log.error(&quot;&quot;, e);
-        &#125; finally &#123;
-            latch.countDown();
-        &#125;
-    &#125;
-
-    @GetMapping(&quot;&#x2F;lock&#x2F;get&quot;)
-    public String redissonSingle() throws InterruptedException &#123;
-        RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
-        long start &#x3D; System.currentTimeMillis();
-        lock.lock();
-        long cost &#x3D; System.currentTimeMillis() - start;
-        redissonClient.getBucket(&quot;123&quot;).get();
-        if (lock.isHeldByCurrentThread()) &#123;
-            lock.unlock();
-        &#125;
-        return String.valueOf(cost);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>按以上方式操作，问题复现了，<code>lock.lock();</code>耗时超过1s，而正常情况下耗时应该在10ms左右</p>
-<h2 id="问题排查">问题排查</h2>
-<p>问题复现之后，简单debug了一下，也没找到问题，只有开trace日志了</p>
-<p><img src="/posts/84cbb9e7/command.png" alt="command"></p>
-<p>打开trace日志后确实发现了一个可疑点，redisson的lock执行了两个指令</p>
-<ol>
-<li>eval执行lua脚本</li>
-<li>wait 4 1000</li>
-</ol>
-<blockquote>
-<p>Redis WAIT 命令用来阻塞当前客户端，直到所有先前的写入命令成功传输并且至少由指定数量的从节点复制完成。如果执行超过超时时间（以毫秒为单位），则即使尚未完成指定数量的从结点复制，该命令也会返回。</p>
-</blockquote>
-<p>从官方的解释上看，wait执行后会<code>阻塞</code>等待n个从节点复制完毕。trace日志中显示：需要等待4个从节点1s，可我只有1个从节点。</p>
-<p>接着找wait指令执行的地方，<code>CommandBatchService</code>中找到了这样一段代码</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (this.options.getSyncSlaves() &gt; 0) &#123;
-    for (Entry entry : commands.values()) &#123;
-        BatchCommandData&lt;?, ?&gt; waitCommand &#x3D; new BatchCommandData(RedisCommands.WAIT, 
-                            new Object[] &#123; this.options.getSyncSlaves(), this.options.getSyncTimeout() &#125;, index.incrementAndGet());
-        entry.getCommands().add(waitCommand);
-    &#125;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<p>往上找在<code>RedissonBaseLock</code>中找到options，wait的数量来源于<code>availableSlaves</code></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">BatchOptions options &#x3D; BatchOptions.defaults()
-                        .syncSlaves(entry.getAvailableSlaves(), 1, TimeUnit.SECONDS);<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
-<p>打个断点看下，卧槽牛逼，一个节点被添加了4次。这也解释了为啥只有lock慢，因为lock需要wait，其他命令随便拿都是指向从节点的链接。</p>
-<p><img src="/posts/84cbb9e7/slave.png" alt="slave"></p>
-<p>既然问题都找到这里了，接着往上在<code>ClusterConnectionManager</code>中找添加slave的地方</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java">private Set&lt;RedisURI&gt; addRemoveSlaves(MasterSlaveEntry entry, ClusterPartition currentPart, ClusterPartition newPart) &#123;
-
-    &#x2F;&#x2F; 以上省略
-    for (RedisURI uri : addedSlaves) &#123;
-        &#x2F;&#x2F; 这里添加是来着不拒，想添加就添加
-        RFuture&lt;Void&gt; future &#x3D; entry.addSlave(uri);
-        &#x2F;&#x2F; 以下省略
-    &#125;
-    return addedSlaves;
-&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="问题解决">问题解决</h2>
-<p>既然都定位到代码哪一行了，笔者<code>git clone https://github.com/redisson/redisson.git</code>，找到了作者修复方案</p>
-<p><img src="/posts/84cbb9e7/fix.png" alt="fix"></p>
-<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了问题出现的概率。</p>
-<p><img src="/posts/84cbb9e7/release.png" alt="release"></p>
-<p>不得不说，redisson功能很强，但这release note满满的fixed是真让人愁。这是笔者遇到redisson的第三个bug了，bug爆率是真的高。</p>
-]]></content>
-      <tags>
-        <tag>Redisson</tag>
-        <tag>Bug</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Bug系列 Redisson Scan</title>
     <url>/posts/f2e3320d.html</url>
     <content><![CDATA[<p><a href="https://github.com/redisson/redisson">Redisson - Easy Redis Java client with features of In-Memory Data Grid</a><br>
@@ -709,6 +537,178 @@ set size&#x3D;30,set&#x3D;[redisson_scan_0, redisson_scan_1, redisson_scan_18, r
       </tags>
   </entry>
   <entry>
+    <title>Bug系列 Redisson Cluster连接池</title>
+    <url>/posts/84cbb9e7.html</url>
+    <content><![CDATA[<p>Redisson的Bug爆率真高啊，最近又遇到一个问题，记录一下。</p>
+<p>本文涉及依赖如下</p>
+<blockquote>
+<p>redis: 5.0.12<br>
+redisson: 3.15.6</p>
+</blockquote>
+<span id="more"></span>
+<h2 id="问题描述">问题描述</h2>
+<p>笔者所在应用的redis cluster一直有个问题，在redis拓扑有变动后就会慢，重启后解决，表现为</p>
+<ul>
+<li>redis水平扩容后变慢</li>
+<li>redis主从切换后变慢</li>
+</ul>
+<p>最近连续出现了几次宿主机问题，不停的重启应用，就沉下心来仔细研究了这个问题</p>
+<h2 id="问题分析">问题分析</h2>
+<h3 id="时间线">时间线</h3>
+<p><img src="/posts/84cbb9e7/redis-failover-timeline.svg" alt="redis-failover-timeline"></p>
+<p>Redis failover时间线：</p>
+<ol>
+<li>T0：出问题前，redis每个节点为一主一从配置</li>
+<li>T1：redis某个master节点出现宕机</li>
+<li>T2：一分钟内，redis重新选主，对应从节点晋升为主节点</li>
+<li>T3：人工添加一个从节点，redis集群恢复健康</li>
+</ol>
+<p>应用调用链时间线：<br>
+<img src="/posts/84cbb9e7/application-timeline.png" alt="application-timeline"></p>
+<ol>
+<li>T0：出问题前，耗时极低</li>
+<li>T1：有大量连接broken pipeline的日志，但耗时正常</li>
+<li>T2：应用发现新master节点，拓扑更新，耗时正常</li>
+<li>T3：添加从节点，应用发现新slave节点，拓扑更新，耗时飙高</li>
+<li>T4：重启应用，耗时恢复正常</li>
+</ol>
+<p>看完这个时间线，明显不再是<code>主从切换导致拓扑刷新失败</code>的锅了</p>
+<h3 id="调用链">调用链</h3>
+<p><img src="/posts/84cbb9e7/trace.png" alt="trace"></p>
+<p>调用链上看，又有一个很奇怪的问题，让人摸不着头脑</p>
+<ul>
+<li>lock和unlock耗时极高，均在1s以上</li>
+<li>redis其他操作耗时正常</li>
+</ul>
+<h2 id="问题复现">问题复现</h2>
+<p>问题比较诡异，redis集群恢复正常了，但redisson却不正常了，而且只有lock和unlock出问题。笔者先查了半天没看出哪里有问题，只好先想办法复现这个问题</p>
+<p>复现代码如下</p>
+<ol>
+<li>先使用<code>insert</code>接口往redis中塞入了几千万个key</li>
+<li>不停触发接口<code>/lock/get/60</code>，让redisson不停的lock和unlock</li>
+<li>操作redis，操作节哪个点可以通过<code>CRC16.crc16(key.getBytes(&quot;UTF-8&quot;)) % 16438</code>计算出<br>
+3.1. 停止master<br>
+3.2. 等待主从切换<br>
+3.3. 添加从节点</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Slf4j
+@RestController
+@RequestMapping(&quot;&#x2F;redisson&quot;)
+public class RedissonController &#123;
+
+    @Setter(onMethod_ &#x3D; @Resource)
+    private RedissonClient redissonClient;
+
+    private final ExecutorService EXECUTOR &#x3D; Executors.newFixedThreadPool(5);
+
+    @GetMapping(&quot;&#x2F;insert&#x2F;&#123;count&#125;&quot;)
+    public String batchInsert(@PathVariable(&quot;count&quot;) int count) &#123;
+        for (int i &#x3D; 0; i &lt; count &#x2F; 200; i++) &#123;
+            RBatch batch &#x3D; redissonClient.createBatch();
+            for (int j &#x3D; 0; j &lt; 200; j++) &#123;
+                batch.getBucket(UUID.randomUUID().toString()).setAsync(UUID.randomUUID().toString());
+            &#125;
+            log.info(&quot;&#123;&#125;&quot;, i);
+            batch.execute();
+        &#125;
+        return &quot;ok&quot;;
+    &#125;
+
+    @GetMapping(&quot;&#x2F;lock&#x2F;get&#x2F;&#123;count&#125;&quot;)
+    public String redisson(@PathVariable(&quot;count&quot;) int count) throws InterruptedException &#123;
+        long time &#x3D; System.currentTimeMillis();
+        redissonClient.getBucket(&quot;123&quot;).set(&quot;abc&quot;);
+        CountDownLatch latch &#x3D; new CountDownLatch(2 * count);
+        for (int i &#x3D; 0; i &lt; count; i++) &#123;
+            EXECUTOR.execute(() -&gt; process(latch));
+            EXECUTOR.execute(() -&gt; process(latch));
+            Thread.sleep(100);
+        &#125;
+        latch.await();
+        log.info(&quot;done&quot;);
+        return String.valueOf((System.currentTimeMillis() - time) &#x2F; count);
+    &#125;
+
+    private void process(CountDownLatch latch) &#123;
+        try &#123;
+            RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
+            long start &#x3D; System.currentTimeMillis();
+            lock.lock();
+            log.info(&quot;lock time:&#123;&#125;&quot;, System.currentTimeMillis() - start);
+            redissonClient.getBucket(&quot;123&quot;).get();
+            if (lock.isHeldByCurrentThread()) &#123;
+                lock.unlock();
+            &#125;
+        &#125; catch (Exception e) &#123;
+            log.error(&quot;&quot;, e);
+        &#125; finally &#123;
+            latch.countDown();
+        &#125;
+    &#125;
+
+    @GetMapping(&quot;&#x2F;lock&#x2F;get&quot;)
+    public String redissonSingle() throws InterruptedException &#123;
+        RLock lock &#x3D; redissonClient.getLock(&quot;AC_LOCK:6:1072&quot;);
+        long start &#x3D; System.currentTimeMillis();
+        lock.lock();
+        long cost &#x3D; System.currentTimeMillis() - start;
+        redissonClient.getBucket(&quot;123&quot;).get();
+        if (lock.isHeldByCurrentThread()) &#123;
+            lock.unlock();
+        &#125;
+        return String.valueOf(cost);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>按以上方式操作，问题复现了，<code>lock.lock();</code>耗时超过1s，而正常情况下耗时应该在10ms左右</p>
+<h2 id="问题排查">问题排查</h2>
+<p>问题复现之后，简单debug了一下，也没找到问题，只有开trace日志了</p>
+<p><img src="/posts/84cbb9e7/command.png" alt="command"></p>
+<p>打开trace日志后确实发现了一个可疑点，redisson的lock执行了两个指令</p>
+<ol>
+<li>eval执行lua脚本</li>
+<li>wait 4 1000</li>
+</ol>
+<blockquote>
+<p>Redis WAIT 命令用来阻塞当前客户端，直到所有先前的写入命令成功传输并且至少由指定数量的从节点复制完成。如果执行超过超时时间（以毫秒为单位），则即使尚未完成指定数量的从结点复制，该命令也会返回。</p>
+</blockquote>
+<p>从官方的解释上看，wait执行后会<code>阻塞</code>等待n个从节点复制完毕。trace日志中显示：需要等待4个从节点1s，可我只有1个从节点。</p>
+<p>接着找wait指令执行的地方，<code>CommandBatchService</code>中找到了这样一段代码</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">if (this.options.getSyncSlaves() &gt; 0) &#123;
+    for (Entry entry : commands.values()) &#123;
+        BatchCommandData&lt;?, ?&gt; waitCommand &#x3D; new BatchCommandData(RedisCommands.WAIT, 
+                            new Object[] &#123; this.options.getSyncSlaves(), this.options.getSyncTimeout() &#125;, index.incrementAndGet());
+        entry.getCommands().add(waitCommand);
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>往上找在<code>RedissonBaseLock</code>中找到options，wait的数量来源于<code>availableSlaves</code></p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">BatchOptions options &#x3D; BatchOptions.defaults()
+                        .syncSlaves(entry.getAvailableSlaves(), 1, TimeUnit.SECONDS);<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<p>打个断点看下，卧槽牛逼，一个节点被添加了4次。这也解释了为啥只有lock慢，因为lock需要wait，其他命令随便拿都是指向从节点的链接。</p>
+<p><img src="/posts/84cbb9e7/slave.png" alt="slave"></p>
+<p>既然问题都找到这里了，接着往上在<code>ClusterConnectionManager</code>中找添加slave的地方</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private Set&lt;RedisURI&gt; addRemoveSlaves(MasterSlaveEntry entry, ClusterPartition currentPart, ClusterPartition newPart) &#123;
+
+    &#x2F;&#x2F; 以上省略
+    for (RedisURI uri : addedSlaves) &#123;
+        &#x2F;&#x2F; 这里添加是来着不拒，想添加就添加
+        RFuture&lt;Void&gt; future &#x3D; entry.addSlave(uri);
+        &#x2F;&#x2F; 以下省略
+    &#125;
+    return addedSlaves;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="问题解决">问题解决</h2>
+<p>既然都定位到代码哪一行了，笔者<code>git clone https://github.com/redisson/redisson.git</code>，找到了作者修复方案</p>
+<p><img src="/posts/84cbb9e7/fix.png" alt="fix"></p>
+<p>作者在addSlave之前判断了是否添加，但严格来说这里还是有并发的问题，只是大大减少了问题出现的概率。</p>
+<p><img src="/posts/84cbb9e7/release.png" alt="release"></p>
+<p>不得不说，redisson功能很强，但这release note满满的fixed是真让人愁。这是笔者遇到redisson的第三个bug了，bug爆率是真的高。</p>
+]]></content>
+      <tags>
+        <tag>Redisson</tag>
+        <tag>Bug</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Bug系列 redis exists</title>
     <url>/posts/3b1200db.html</url>
     <content><![CDATA[<p>最近同事反馈了一个偶现的问题，最终定位到了以下代码。</p>
@@ -716,7 +716,7 @@ set size&#x3D;30,set&#x3D;[redisson_scan_0, redisson_scan_1, redisson_scan_18, r
 if(bucket.isExists()) &#123;
     cache &#x3D; bucket.get();
 &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
-<p>代码看上去没有问题，但会出现<code>bucket.get()</code>获取的数据是空。之前一直以为是并发问题，exists判断完后数据正好过期。最近仔细分析了这个问题，不是并发导致的，是isExists方法对过期key返回了true。<br>
+<p>代码看上去没有问题，但会出现<code>bucket.get()</code>获取的数据是空。之前一直以为是卡点调用，exists判断完后数据正好过期。最近仔细分析了这个问题，不是卡点导致的，是isExists方法对过期未删除的key返回了true。<br>
 在网上查询了一下，没有多少人讨论这个问题，有零星讨论给出的结论是<code>exists命令不能惰性删除</code>。这个结论是不正确的，本文就从redis源码层面分析下这个问题</p>
 <p>本文涉及依赖如下</p>
 <blockquote>
@@ -724,7 +724,7 @@ if(bucket.isExists()) &#123;
 </blockquote>
 <span id="more"></span>
 <h2 id="问题">问题</h2>
-<p>在低版本redis中，对过期key使用exists，在主库执行的exists命令是没问题的，返回0（不存在）；但在从库执行，redis会返回1（存在）</p>
+<p>在低版本redis中，对过期key使用exists，在主库执行的exists命令是没问题的，返回0（不存在）并删除key；但在从库执行，redis会返回1（存在）且不会删除key</p>
 <blockquote>
 <p>这个bug在redis 4.0.11修复<br>
 <img src="/posts/3b1200db/1.jpg" alt="redis 4.0.11 release notes"></p>
@@ -759,7 +759,7 @@ if(bucket.isExists()) &#123;
     mstime_t when &#x3D; getExpire(db,key);
     mstime_t now;
 
-    &#x2F;&#x2F; 一个不过期的key
+    &#x2F;&#x2F; 一个不过期的靓仔
     if (when &lt; 0) return 0;
 
     &#x2F;&#x2F; 服务在启动中就不要搞key过期的事了
@@ -879,6 +879,429 @@ if(bucket.isExists()) &#123;
         <tag>Bug</tag>
         <tag>Redis</tag>
       </tags>
+  </entry>
+  <entry>
+    <title>Bug系列 guava cache</title>
+    <url>/posts/1435c3.html</url>
+    <content><![CDATA[<p>天天维护屎山，总会莫名奇妙溅一身屎。最近遇到了一个比较麻烦的线上问题</p>
+<blockquote>
+<ol>
+<li>偶现，没人能复现</li>
+<li>写代码的同事提桶了，需要掏开屎山</li>
+<li>影响比较大，领导打了几次招呼了，每次重启一台机器就能解决问题</li>
+</ol>
+</blockquote>
+<p>最近彻查了这个问题，发现是guava cache的bug。这个bug在17年就已经提出了，在2024年3月guava最新版本<code>33.1.0-jre</code>中依然存在</p>
+<span id="more"></span>
+<h2 id="窥探下屎山">窥探下屎山</h2>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class Bussiness &#123;
+
+    private static final String REDIS_BIG_KEY &#x3D; &quot;constants big key&quot;;
+    private static final String LOCAL_CACHE_CONSTANTS_KEY &#x3D; &quot;local key&quot;;
+
+    private final LoadingCache&lt;String, String&gt; loadingCache &#x3D; CacheBuilder.newBuilder()
+            .maximumSize(10)
+            .refreshAfterWrite(15, TimeUnit.SECONDS)
+            .build(
+                    new CacheLoader&lt;String, String&gt;() &#123;
+                        @Override
+                        public Map&lt;String, String&gt; load(String key) throws Exception &#123;
+                            String redisCache &#x3D; redissonClient.getBucket(REDIS_BIG_KEY).get();
+                            if (StringUtils.isEmpty(redisCache))&#123;
+                                redisCache &#x3D; JsonUtils.toJsonString(loadDb());
+                                redissonClient.getBucket(REDIS_BIG_KEY).set(redisCache,100,TimeUnit.SECONDS)
+                            &#125;
+                            return redisCache;
+                        &#125;
+                    &#125;);
+
+    @CacheEvict
+    public void clearCache() &#123;
+        redissonClient.getBucket(REDIS_BIG_KEY).delete();
+        loadingCache.invalidateAll();
+    &#125;
+    
+    @Cacheable
+    public Result getComputedResult(String userId)&#123;
+        String cache &#x3D; loadingCache.getUnchecked(LOCAL_CACHE_CONSTANTS_KEY);
+        &#x2F;&#x2F; 计算
+        return result;
+    &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>以上就是核心代码，做的事不多，用了3层缓存</p>
+<ol>
+<li>db中存放的是配置json，需要把db中所有相关配置全部捞出来</li>
+<li>第一层缓存是redis，存储了所有的配置数据，是一个热key，也是一个大key，value大小大概有几十兆，当时上线把redis搞挂了</li>
+<li>为了避免对redis的冲击，开发人员简单的在redis外加了个guava本地缓存，短时间过期，采用refresh的方式加载数据</li>
+<li>获取配置后有一系列计算，计算完成后，使用<code>spring cache with caffeine</code> 缓存了计算结果</li>
+<li>在配置变更后，会广播MQ，消费者会做两件事
+<ol>
+<li>删除redis缓存</li>
+<li>删除本地缓存</li>
+</ol>
+</li>
+</ol>
+<h2 id="问题排查">问题排查</h2>
+<p>可以看到代码逻辑比较简单，缓存倒是套了一层有一层，排查是哪个缓存的问题都花了点功夫</p>
+<ol>
+<li>运营反馈C端偶现没有读取到最新配置，通常是连续刷新会有一次不对，再刷新就好了</li>
+<li>收到反馈，每次都是重启第一台机器就好了。这个一度误导了排查的方向，以为是实例级别的问题</li>
+</ol>
+<h3 id="第一次排查">第一次排查</h3>
+<p>第一次接触到这个问题是心里比较崩溃，代码里面没有日志，又有两层本地缓存，完全两眼一抹黑。尝试了很久也没复现。只能猜测和尝试修复</p>
+<ol>
+<li>检查redis缓存是对的，不然也不会只有一台实例有问题。说明缓存清除的逻辑是生效的，也检查了MQ是在事务提交之后发送，不存在MQ读取未提交数据的情况</li>
+<li>基于对google和guava的信任，去除了外层的caffeine缓存</li>
+<li>业务代码补充了部分日志</li>
+<li>由于每次都是同一台机器出问题，摘除了这条机器</li>
+<li>由于核心链路流量不大，对来自核心链路的流量采用不读取缓存，直接读取db的策略(对db读取的逻辑也做了一系列优化，不过这是后话了)</li>
+</ol>
+<p>做完这四点后，当时天真的以为这个问题应该已经解决的。但是现实就是这么不给面子，一个月后直接打脸</p>
+<h3 id="第二次排查">第二次排查</h3>
+<p>一个月后，运营又反馈了同样的问题，由于有第一次排查的基础，现在定位问题比较方便了</p>
+<ol>
+<li>caffeine已经去除了，要出问题也是guava的问题</li>
+<li>业务日也看到guava cache没有获取到最新的数据，依然返回老数据</li>
+</ol>
+<p>这下直接将问题锁定到了guava cache上，但也不确定是哪里的问题。google了半天也没有人报告类似的情况。于是就干了几件事</p>
+<ol>
+<li>添加了<code>recordStats()</code>，记录缓存状态</li>
+<li>CacheLoader添加了数据加载日志 <pre class="line-numbers language-java" data-language="java"><code class="language-java">private final LoadingCache&lt;String, String&gt; loadingCache &#x3D; CacheBuilder.newBuilder()
+    &#x2F;&#x2F; ……
+    .recordStats()
+    .build(new CacheLoader&lt;String, String&gt;() &#123;
+        @Override
+        public Map&lt;String, String&gt; load(String key) throws Exception &#123;
+            log.info(&quot;cache load&quot;);
+            &#x2F;&#x2F; ……
+        &#125;
+    &#125;);<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li>将guava升级到最新版本</li>
+</ol>
+<p>把这三个改动发布后，就开始读guava cache的代码了<br>
+第一次读guava cache的代码，发现了一个可疑的地方</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">@Override
+public void invalidateAll() &#123;
+    localCache.clear();
+&#125;
+
+@Override
+public void clear() &#123;
+    for (Segment&lt;K, V&gt; segment : segments) &#123;
+        segment.clear();
+    &#125;
+&#125;
+
+void clear() &#123;
+    if (count !&#x3D; 0) &#123; &#x2F;&#x2F; read-volatile
+        lock();
+        try &#123;
+            &#x2F;&#x2F; ……
+            for (int i &#x3D; 0; i &lt; table.length(); ++i) &#123;
+                table.set(i, null);
+            &#125;
+            &#x2F;&#x2F; ……
+            count &#x3D; 0; &#x2F;&#x2F; write-volatile
+        &#125; finally &#123;
+            unlock();
+            postWriteCleanup();
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<ol>
+<li>guava cache在执行<code>invalidateAll</code>时是对每个segment执行了clear操作</li>
+<li>clear逻辑没有问题，将对应的值设置为null了</li>
+<li>clear有一个前置条件<code>count != 0</code>，如果因为<code>Race condition</code>导致了cache的状态错误，invalidateAll的真实逻辑可能执行不了</li>
+<li>想着有设置过期时间，理论上是key过期也会被清除，就没没有深究</li>
+</ol>
+<p>读完了guava cache只发现了一个可疑点，没有发现明显的问题。只好先把问题放在一边了</p>
+<h3 id="第三次排查">第三次排查</h3>
+<p>大概又过了大半个月，运营有反馈问题了。由于第二次排查的铺垫，现在问题比较明显了</p>
+<ol>
+<li>问题复现后，<code>cache load</code>的日志不再出现了，说明cache停止了load</li>
+<li>stats打印的cache状态也表示cache停止了load</li>
+<li>load停止那段时间运营有配置修改</li>
+</ol>
+<p>现在比较怀疑是在load的同时执行了缓存清除的操作，直接写代码复现</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">public class Cache &#123;
+    private static final ExecutorService RPC &#x3D; Executors.newCachedThreadPool();
+
+    private static final ExecutorService RPC &#x3D; Executors.newCachedThreadPool();
+
+    private static final LoadingCache&lt;String, String&gt; CACHE_LOADER &#x3D; CacheBuilder.newBuilder()
+            .refreshAfterWrite(1, TimeUnit.MILLISECONDS)
+            .recordStats()
+            .build(new CacheLoader&lt;&gt;() &#123;
+                @Override
+                public String load(String s) throws InterruptedException &#123;
+                    System.out.println(&quot;load&quot;);
+                    Thread.sleep(100);
+                    System.out.println(&quot;load end&quot;);
+                    return UUID.randomUUID().toString();
+                &#125;
+            &#125;);
+
+    public static void main(String[] args) throws ExecutionException, InterruptedException &#123;
+        System.out.println(&quot;first get&quot;);
+        CACHE_LOADER.getUnchecked(&quot;&quot;);
+        RPC.submit(() -&gt; CACHE_LOADER.getUnchecked(&quot;&quot;));
+        System.out.println(&quot;begin loop get&quot;);
+        for (int i &#x3D; 0; i &lt; 10; i++) &#123;
+            Thread.sleep(90);
+            System.out.println(&quot;invalidateAll&quot;);
+            CACHE_LOADER.invalidateAll();
+            System.out.println(&quot;cache result:&quot; + CACHE_LOADER.get(&quot;&quot;));
+        &#125;
+        System.out.println(&quot;end loop get&quot;);
+        System.out.println(CACHE_LOADER.stats());
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这段代码模拟了在load的同时去执行invalidateAll</p>
+<pre class="line-numbers language-text" data-language="text"><code class="language-text">first get
+load
+load end
+begin loop get
+load
+invalidateAll
+load end
+load
+load end
+cache result:8c672dc3-6e67-4e82-abe6-b93ab98aa574
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+invalidateAll
+cache result:2fdad524-e7b2-4c46-887c-b66f026ac6e6
+end loop get
+CacheStats&#123;hitCount=10, missCount=2, loadSuccessCount=3, loadExceptionCount=0, totalLoadTime=342966197, evictionCount=1&#125;
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>从执行的结果可以看出，loadingCache在load了三次后就不在继续load数据了，从CacheStats也可以看出相同的结论。<br>
+在guava的issue中也找到了同样的问题，2017年的issue现在还是open。蚌埠住了</p>
+<blockquote>
+<p><a href="https://github.com/google/guava/issues/2971">LoadingCache stops loading forever after race condition #2971</a></p>
+</blockquote>
+<h2 id="BUG详探">BUG详探</h2>
+<p>既然后复现代码了，我们直接打断点看问题</p>
+<h3 id="直接原因">直接原因</h3>
+<p>invalidateAll明确可以看到，cache的size已经是0了<br>
+<img src="/posts/1435c3/1.jpg" alt="invalidateAll"><br>
+segments里面实际是有数据，但count为0<br>
+上文已经看到了清除逻辑，count为0的segment会跳过clear操作。所以对出现这种情况的cache来说，数据清除功能已经失效了<br>
+<img src="/posts/1435c3/2.jpg" alt="segments"></p>
+<p>我们来看get的时候发生了啥<br>
+经常读cache的朋友都知道底层会走到这里</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">V get(K key, int hash, CacheLoader&lt;? super K, V&gt; loader) throws ExecutionException &#123;
+      checkNotNull(key);
+      checkNotNull(loader);
+      try &#123;
+        &#x2F;&#x2F; count出现了，refresh主要走这个分支
+        if (count !&#x3D; 0) &#123; 
+          ReferenceEntry&lt;K, V&gt; e &#x3D; getEntry(key, hash);
+          if (e !&#x3D; null) &#123;
+            long now &#x3D; map.ticker.read();
+            V value &#x3D; getLiveValue(e, now);
+            if (value !&#x3D; null) &#123;
+              recordRead(e, now);
+              statsCounter.recordHits(1);
+              &#x2F;&#x2F; refresh在这里处理的
+              return scheduleRefresh(e, key, hash, value, now, loader);
+            &#125;
+            ValueReference&lt;K, V&gt; valueReference &#x3D; e.getValueReference();
+            if (valueReference.isLoading()) &#123;
+              return waitForLoadingValue(e, key, valueReference);
+            &#125;
+          &#125;
+        &#125;
+        &#x2F;&#x2F; 这里加锁load，由于count&#x3D;0，获取缓存走到了这个分支
+        return lockedGetOrLoad(key, hash, loader);
+      &#125; catch (ExecutionException ee) &#123;
+        Throwable cause &#x3D; ee.getCause();
+        if (cause instanceof Error) &#123;
+          throw new ExecutionError((Error) cause);
+        &#125; else if (cause instanceof RuntimeException) &#123;
+          throw new UncheckedExecutionException(cause);
+        &#125;
+        throw ee;
+      &#125; finally &#123;
+        postReadCleanup();
+      &#125;
+    &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>由于count值的错误，走到了<code>lockedGetOrLoad</code>分支，而不是<code>scheduleRefresh</code><br>
+接着看lockedGetOrLoad逻辑，这里只展示了核心部分代码</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">V lockedGetOrLoad(K key, int hash, CacheLoader&lt;? super K, V&gt; loader) throws ExecutionException &#123;
+    ReferenceEntry&lt;K, V&gt; e;
+    ValueReference&lt;K, V&gt; valueReference &#x3D; null;
+    LoadingValueReference&lt;K, V&gt; loadingValueReference &#x3D; null;
+    boolean createNewEntry &#x3D; true;
+
+    lock();
+    try &#123;
+        &#x2F;&#x2F; ……
+        &#x2F;&#x2F; 虽然count是0，但table里面是有数据的
+        ReferenceEntry&lt;K, V&gt; first &#x3D; table.get(index);
+
+        for (e &#x3D; first; e !&#x3D; null; e &#x3D; e.getNext()) &#123;
+            K entryKey &#x3D; e.getKey();
+            if (e.getHash() &#x3D;&#x3D; hash
+                &amp;&amp; entryKey !&#x3D; null
+                &amp;&amp; map.keyEquivalence.equivalent(key, entryKey)) &#123;
+            valueReference &#x3D; e.getValueReference();
+            if (valueReference.isLoading()) &#123;
+                createNewEntry &#x3D; false;
+            &#125; else &#123;
+                &#x2F;&#x2F; 获取到了旧数据
+                V value &#x3D; valueReference.get();
+                &#x2F;&#x2F; 关键逻辑：如果没有value，或者value过期，会重新获取数据。否则直接返回value
+                &#x2F;&#x2F; 但这里的过期是需要配置expireAfter*(),refreshAfterWrite不在这里判断
+                if (value &#x3D;&#x3D; null) &#123;
+                    enqueueNotification(entryKey, hash, value, valueReference.getWeight(), RemovalCause.COLLECTED);
+                &#125; else if (map.isExpired(e, now)) &#123;
+                    enqueueNotification(entryKey, hash, value, valueReference.getWeight(), RemovalCause.EXPIRED);
+                &#125; else &#123;
+                    recordLockedRead(e, now);
+                    statsCounter.recordHits(1);
+                    return value;
+                &#125;
+                &#x2F;&#x2F; ……
+            &#125;
+                break;
+            &#125;
+        &#125;
+    &#x2F;&#x2F; ……
+    &#125;
+&#125;
+
+&#x2F;&#x2F; 只判断expiresAfterAccess和expiresAfterWrite
+boolean isExpired(ReferenceEntry&lt;K, V&gt; entry, long now) &#123;
+    checkNotNull(entry);
+    if (expiresAfterAccess() &amp;&amp; (now - entry.getAccessTime() &gt;&#x3D; expireAfterAccessNanos)) &#123;
+      return true;
+    &#125;
+    if (expiresAfterWrite() &amp;&amp; (now - entry.getWriteTime() &gt;&#x3D; expireAfterWriteNanos)) &#123;
+      return true;
+    &#125;
+    return false;
+  &#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>看完这块逻辑就很清楚了，缓存不再load的问题得到完美解释</p>
+<ol>
+<li><code>refreshAfterWrite</code>在缓存有数据时走<code>scheduleRefresh</code>逻辑，先返回旧值，再load数据</li>
+<li><code>refreshAfterWrite</code>在缓存没有数据走<code>lockedGetOrLoad</code>逻辑，直接加载数据</li>
+<li><code>lockedGetOrLoad</code>是同步加载key，过期判断只和<code>expiresAfterAccess</code>或<code>expiresAfterWrite</code>有关</li>
+<li>cache出现状态错误，在缓存中有数据时进入<code>lockedGetOrLoad</code>逻辑。如果没有配置<code>expiresAfterAccess</code>或<code>expiresAfterWrite</code>，缓存将不再检查数据是否过期，也不会再load数据，将直接返回过期数据</li>
+<li>cache出现状态错误，<code>invalidateAll</code>将不再具备清除缓存的能力</li>
+</ol>
+<h3 id="Race-condition">Race condition</h3>
+<p>这个case中count的操作方法是<code>storeLoadedValue</code>和<code>clear</code>中。count有<code>volatile</code>关键字，而且count操作包裹在lock和unlock中，对count的读写没有并发问题。</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">boolean storeLoadedValue(
+        K key, int hash, LoadingValueReference&lt;K, V&gt; oldValueReference, V newValue) &#123;
+    lock();
+    try &#123;
+        long now &#x3D; map.ticker.read();
+        preWriteCleanup(now);
+        &#x2F;&#x2F; ……
+        int newCount &#x3D; this.count + 1;
+        this.count &#x3D; newCount; 
+        evictEntries(newEntry);
+        return true;
+    &#125; finally &#123;
+        unlock();
+        postWriteCleanup();
+    &#125;
+&#125;
+
+void clear() &#123;
+    if (count !&#x3D; 0) &#123; 
+        lock();
+        try &#123;
+            &#x2F;&#x2F; ……
+            count &#x3D; 0;
+        &#125; finally &#123;
+            unlock();
+            postWriteCleanup();
+        &#125;
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>仔细阅读<code>storeLoadedValue</code>方法</p>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">boolean storeLoadedValue(
+        K key, int hash, LoadingValueReference&lt;K, V&gt; oldValueReference, V newValue) &#123;
+    lock();
+    try &#123;
+        &#x2F;&#x2F; ……
+        for (ReferenceEntry&lt;K, V&gt; e &#x3D; first; e !&#x3D; null; e &#x3D; e.getNext()) &#123;
+            &#x2F;&#x2F; ……
+            &#x2F;&#x2F; 注意这里，有count--的操作
+            &#x2F;&#x2F; 进入这段逻辑后，就会出现count&#x3D;0，但缓存中有值的状态
+            if (oldValueReference &#x3D;&#x3D; valueReference|| (entryValue &#x3D;&#x3D; null &amp;&amp; valueReference !&#x3D; UNSET)) &#123;
+                ++modCount;
+                if (oldValueReference.isActive()) &#123;
+                    RemovalCause cause &#x3D; (entryValue &#x3D;&#x3D; null) ? RemovalCause.COLLECTED : RemovalCause.REPLACED;
+                    enqueueNotification(key, hash, entryValue, oldValueReference.getWeight(), cause);
+                    newCount--;
+                &#125;
+                setValue(e, key, newValue, now);
+                this.count &#x3D; newCount; &#x2F;&#x2F; write-volatile
+                evictEntries(e);
+                return true;
+            &#125;
+        &#x2F;&#x2F; ……
+        &#125;
+        return true;
+    &#125; finally &#123;
+        unlock();
+        postWriteCleanup();
+    &#125;
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>这里有个count--的操作，进入这段逻辑后，就会出现count=0，但缓存中有值的状态<br>
+<img src="/posts/1435c3/3.jpg" alt="race condition"></p>
+<p>这个Race Condition比较麻烦</p>
+<ol>
+<li>第一次load数据时，缓存为空，走<code>lockedGetOrLoad</code>逻辑，正常加载数据</li>
+<li>异步线程读取缓存，这时缓存不为空，走<code>scheduleRefresh</code>异步加载数据</li>
+<li>在<code>2</code>正在异步加载数据时，另外一个线程首先调用了<code>invalidateAll</code>清除了缓存，然后立刻通过<code>get</code>方法load缓存，由于这时缓存中没有数据，走了<code>lockedGetOrLoad</code>逻辑</li>
+<li>cache获取的数据是来自<code>ReferenceEntry&lt;K, V&gt; first = table.get(index);</code></li>
+<li>由于并发，<code>2</code>走到<code>storeLoadedValue</code>时，读出的<code>ReferenceEntry</code>来自<code>3</code>的，但方法传入的<code>oldValueReference</code>和<code>newValue</code>来自<code>2</code>。这里就产生了逻辑错误，导致这个问题的产生</li>
+</ol>
+<h2 id="问题解决">问题解决</h2>
+<p>代码都读完了，问题很好解决</p>
+<ol>
+<li>配置<code>expireAfterWrite</code></li>
+<li>不使用invalidateAll，使用<code>invalidate</code>失效指定key</li>
+</ol>
+<pre class="line-numbers language-java" data-language="java"><code class="language-java">private final LoadingCache&lt;String, String&gt; loadingCache &#x3D; CacheBuilder.newBuilder()
+            .maximumSize(10)
+            .refreshAfterWrite(15, TimeUnit.SECONDS)
+            .expireAfterWrite(20, TimeUnit.SECONDS)
+            .build(
+            new CacheLoader&lt;String, String&gt;() &#123;
+                @Override
+                public Map&lt;String, String&gt; load(String key) throws Exception &#123;
+                    String redisCache &#x3D; redissonClient.getBucket(REDIS_BIG_KEY).get();
+                    if (StringUtils.isEmpty(redisCache))&#123;
+                        redisCache &#x3D; JsonUtils.toJsonString(loadDb());
+                        redissonClient.getBucket(REDIS_BIG_KEY).set(redisCache,100,TimeUnit.SECONDS)
+                    &#125;
+                    return redisCache;
+                &#125;
+            &#125;);
+
+public void clearCache() &#123;
+    redissonClient.getBucket(REDIS_BIG_KEY).delete();
+    loadingCache.invalidate(LOCAL_CACHE_CONSTANTS_KEY);
+&#125;<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+]]></content>
   </entry>
   <entry>
     <title>MockMvc对form/multipart支持的问题</title>
