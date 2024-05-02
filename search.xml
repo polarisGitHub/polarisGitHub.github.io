@@ -1094,7 +1094,7 @@ CacheStats&#123;hitCount=10, missCount=2, loadSuccessCount=3, loadExceptionCount
 <p><a href="https://github.com/google/guava/issues/2971">LoadingCache stops loading forever after race condition #2971</a></p>
 </blockquote>
 <h2 id="BUG详探">BUG详探</h2>
-<p>既然后复现代码了，我们直接打断点看问题</p>
+<p>既然代码已经复现，我们直接打断点看问题</p>
 <h3 id="直接原因">直接原因</h3>
 <p>invalidateAll明确可以看到，cache的size已经是0了<br>
 <img src="/posts/1435c3/1.jpg" alt="invalidateAll"><br>
