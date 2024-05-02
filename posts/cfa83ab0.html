@@ -194,10 +194,10 @@
 </div>
   <div class="links-of-author animated">
       <span class="links-of-author-item">
-        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
       </span>
       <span class="links-of-author-item">
-        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
       </span>
   </div>
 
@@ -303,12 +303,12 @@
     
     <div class="post-body" itemprop="articleBody"><p><strong>最近重装了系统，重新编译了下2022.5.1，编译过程基本一致，有些许差别</strong></p>
 <blockquote>
-<p><a target="_blank" rel="noopener" href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a target="_blank" rel="noopener" href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://rdm.dev/">RedisDesktopManager</a>是我平时工作中特别喜欢的Redis工具，有一个遗憾就是作者开放了RDM的<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/uglide/RedisDesktopManager">源代码</a>，但没有提供对应的二进制包。本文就如何通过SourceCode编译到Windows下的可执行文件做一个记录。<br>
 在此感谢RedisDesktopManager的作者<strong>Igor Malinovskiy</strong></p>
 </blockquote>
 <span id="more"></span>
 <h2 id="前言">前言</h2>
-<p><a target="_blank" rel="noopener" href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="http://docs.redisdesktop.com/en/latest/install/#build-from-source">RDM已经提供了编译安装方法</a>,只是提供的步骤比较简单，中间略过了很多步骤，本文将完整的编译过程记录下来。</p>
 <blockquote>
 <p>本次编译过程基于RedisDesktopManager（2021.10）</p>
 </blockquote>
@@ -322,7 +322,7 @@ Windows 11 22H2</p>
 <ol>
 <li>使用以下命令clone RedisDesktopManager的项目仓库
 <blockquote>
-<p>git clone --recursive <a target="_blank" rel="noopener" href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
+<p>git clone --recursive <a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/uglide/RedisDesktopManager.git">https://github.com/uglide/RedisDesktopManager.git</a></p>
 </blockquote>
 </li>
 <li>需要注意submodule处理
@@ -339,16 +339,16 @@ Windows 11 22H2</p>
 <img src="/posts/cfa83ab0/2.png" alt="项目概述"></p>
 </blockquote>
 <h3 id="Microsoft-Visual-Studio-Community-2022-64-位">Microsoft Visual Studio Community 2022 (64 位)</h3>
-<p><a target="_blank" rel="noopener" href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://visualstudio.microsoft.com/zh-hans/">下载VS2022社区版在线安装包</a>，选择使用C++在线安装<br>
 <img src="/posts/cfa83ab0/1.png" alt="选择使用C++在线安装"></p>
 <h3 id="下载QT5-15">下载QT5.15</h3>
-<p>Qt5.15只能在线安装，下载<a target="_blank" rel="noopener" href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
+<p>Qt5.15只能在线安装，下载<a target="_blank" rel="noopener external nofollow noreferrer" href="http://iso.mirrors.ustc.edu.cn/qtproject/archive/online_installers/4.2/qt-unified-windows-x86-4.2.0-online.exe">qt-unified-windows-x86-4.2.0-online.exe</a>。需要安装Qt5.15和Qt charts</p>
 <blockquote>
 <p>Qt下载时间很长，网不好容易断，请保持耐心</p>
 </blockquote>
 <p><img src="/posts/cfa83ab0/3.png" alt="Qt安装"></p>
 <h3 id="Python-3-9-9">Python 3.9.9</h3>
-<p>下载<a target="_blank" rel="noopener" href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
+<p>下载<a target="_blank" rel="noopener external nofollow noreferrer" href="https://www.python.org/downloads/release/python-399/">Python3.9.9</a>，需要注意</p>
 <ul>
 <li>Python要安装到<code>指定目录</code>，不然后面需要手动指定Python的位置</li>
 </ul>
@@ -356,9 +356,9 @@ Windows 11 22H2</p>
 <img src="/posts/cfa83ab0/5.png" alt="Python安装"><br>
 <img src="/posts/cfa83ab0/6.png" alt="Python安装"></p>
 <h3 id="Cmake">Cmake</h3>
-<p>下载<a target="_blank" rel="noopener" href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
+<p>下载<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/Kitware/CMake/releases/download/v3.22.1/cmake-3.22.1-windows-x86_64.msi">Cmake</a>，一路next就行了</p>
 <h3 id="nuget">nuget</h3>
-<p>下载<a target="_blank" rel="noopener" href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
+<p>下载<a target="_blank" rel="noopener external nofollow noreferrer" href="https://dist.nuget.org/win-x86-commandline/latest/nuget.exe">nuget.exe</a>，放到3rdparty下</p>
 <h2 id="Python依赖安装">Python依赖安装</h2>
 <p>使用以下命令安装Python依赖</p>
 <blockquote>
@@ -371,8 +371,8 @@ Windows 11 22H2</p>
 <p>bitstring<br>
 cbor<br>
 msgpack<br>
-git+<a target="_blank" rel="noopener" href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
-git+<a target="_blank" rel="noopener" href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
+git+<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/mrnom/phpserialize.git#egg=phpserialize">https://github.com/mrnom/phpserialize.git#egg=phpserialize</a><br>
+git+<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/uglide/redis-rdb-tools#egg=rdbtools">https://github.com/uglide/redis-rdb-tools#egg=rdbtools</a><br>
 python-lzf</p>
 </blockquote>
 </li>
@@ -464,7 +464,7 @@ make</p>
 <p>将<code>bin\windows\release\rdm.exe</code>拷贝到<code>build\windows\installer\resources</code>下</p>
 </li>
 <li>
-<p>为了提供Python运行环境，下载<a target="_blank" rel="noopener" href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
+<p>为了提供Python运行环境，下载<a target="_blank" rel="noopener external nofollow noreferrer" href="https://www.python.org/ftp/python/3.9.9/python-3.9.9-embed-amd64.zip">python-3.9.9-embed-amd64</a>，并将<code>python39.dll</code>和<code>python39.zip</code>拷贝到<code>build\windows\installer\resources</code></p>
 </li>
 <li>
 <p>执行以下命令</p>
@@ -473,7 +473,7 @@ make</p>
 </blockquote>
 </li>
 <li>
-<p>下载<a target="_blank" rel="noopener" href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
+<p>下载<a target="_blank" rel="noopener external nofollow noreferrer" href="https://nsis.sourceforge.io/Download">nsis</a>制作Windows安装包</p>
 </li>
 <li>
 <p>安装好<code>nsis</code>后打开<code>build\windows\installer\installer.nsi</code></p>
@@ -488,7 +488,7 @@ make</p>
 </li>
 </ol>
 <h2 id="完结散花">完结散花</h2>
-<p><a target="_blank" rel="noopener" href="https://www.aliyundrive.com/s/goXTba7Bfgo">RedisDesktopManager2022.5.1 Windows 64bit 安装包</a></p>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://www.aliyundrive.com/s/goXTba7Bfgo">RedisDesktopManager2022.5.1 Windows 64bit 安装包</a></p>
 
     </div>
 

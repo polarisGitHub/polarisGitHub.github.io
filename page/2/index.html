@@ -171,10 +171,10 @@
 </div>
   <div class="links-of-author animated">
       <span class="links-of-author-item">
-        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
       </span>
       <span class="links-of-author-item">
-        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
       </span>
   </div>
 
@@ -272,7 +272,7 @@
     
     <div class="post-body" itemprop="articleBody">
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+<p><strong>本文源码<a target="_blank" rel="noopener external nofollow noreferrer" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
 intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c</code>中</p>
 </blockquote>
 <p>intset，顾名思义，只有int的集合，这种集合完全符合redis内存节约狂魔的称号。如果<code>集合</code>或<code>有序集合</code>的元素只有数字（最大2<sup>64</sup>-1)，底层的数据结构很可能使用的intset。</p>
@@ -383,7 +383,7 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
     
     <div class="post-body" itemprop="articleBody">
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+<p><strong>本文源码<a target="_blank" rel="noopener external nofollow noreferrer" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
 压缩列表的定义在<code>ziplist.h</code>中，实现在<code>ziplist.c</code></p>
 </blockquote>
 <p>压缩列表和其他几个数据结构还不太一样，很难直接想到有什么应用场景，而且压缩列表的<code>压缩</code>两字就注明了这是一个不寻常的数据结构。</p>
@@ -508,7 +508,7 @@ intset的数据结构，定义在<code>intset.h</code>，实现在<code>intset.c
     
     <div class="post-body" itemprop="articleBody">
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+<p><strong>本文源码<a target="_blank" rel="noopener external nofollow noreferrer" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
 跳表的定义在<code>server.h</code>中，实现在<code>t_zset.c</code></p>
 </blockquote>
 <p>跳表是个很神奇的数据结构，简单但效率高，没有<strong>红黑树</strong>复杂，却有O(logn)的查找效率。其实我觉得<code>只有右儿子的B+树</code>和跳表挺类似的，都是多级索引来达到O(logn)的效率。<br>
@@ -623,9 +623,9 @@ redis中，只有有序集合zset使用了跳表</p>
 <p>本文分析使用Spring Boot 2.4.1，对应Spring Framework 5.3.1</p>
 </blockquote>
 <p>好吧，我写这篇文章时，问题已经被Spring官方修复了。在<code>5.3.2</code>进行release。<br>
-这是我当时给github提的issue：<a target="_blank" rel="noopener" href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
+这是我当时给github提的issue：<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/spring-projects/spring-framework/issues/26097">MockHttpServletRequest getParameter(String name) can not get string value parts</a>，由于我捉急英文水平和沟通方式，官方在回复我认为不是一个问题后我就没理睬了。今天才发现已经解决，我们就来看看这个问题怎么产生的，和对应的<code>Servlet3.0</code>协议是怎么描述这部分的。</p>
 <blockquote>
-<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a target="_blank" rel="noopener" href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
+<p>MockMvc ignores MultipartFile registrations when both files and parts are registered <a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/spring-projects/spring-framework/issues/26166">#26166</a></p>
 </blockquote>
           <!--noindex-->
             <div class="post-button">
@@ -736,17 +736,17 @@ redis中，只有有序集合zset使用了跳表</p>
           <blockquote>
 <p>本文基于Spring Boot 2.4.5</p>
 </blockquote>
-<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a target="_blank" rel="noopener" href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
+<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a target="_blank" rel="noopener external nofollow noreferrer" href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
 <ol>
 <li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
 <li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
 <li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
 <li>@target、@within对子类新增方法都不起作用。</li>
 </ol>
-<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a target="_blank" rel="noopener" href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
+<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a target="_blank" rel="noopener external nofollow noreferrer" href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
 <blockquote>
-<p><a target="_blank" rel="noopener" href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
-<a target="_blank" rel="noopener" href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
+<a target="_blank" rel="noopener external nofollow noreferrer" href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
 </blockquote>
 <p>现在我们来翻译翻译什么是@target的惊喜。</p>
           <!--noindex-->
@@ -856,7 +856,7 @@ redis中，只有有序集合zset使用了跳表</p>
     
     <div class="post-body" itemprop="articleBody">
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+<p><strong>本文源码<a target="_blank" rel="noopener external nofollow noreferrer" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
 dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code>中</p>
 </blockquote>
 <p>hash也是redis中很常用的一种数据结构，其实各个语言的hash，map或字典的实现都大同小异。redis的hash实现有ziplist和dict两种策略。本文主要分析字典</p>
@@ -967,7 +967,7 @@ dict的数据结构，定义在<code>dict.h</code>，实现在<code>dict.c</code
     
     <div class="post-body" itemprop="articleBody">
           <blockquote>
-<p><strong>本文源码<a target="_blank" rel="noopener" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
+<p><strong>本文源码<a target="_blank" rel="noopener external nofollow noreferrer" href="https://download.redis.io/releases/redis-5.0.12.tar.gz">redis5.0.12</a></strong><br>
 Simple Dynamic String定义在<code>sds.h</code>，实现在<code>sds.c</code>中</p>
 </blockquote>
 <p>使用redis时，字符串是我们最先接触，也是最常用的数据结构。但redis中并没有使用C语言中常用的String类型，而是自己实现了Simple Dynamic String（简单动态字符串SDS）。</p>

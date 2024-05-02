@@ -181,10 +181,10 @@
 </div>
   <div class="links-of-author animated">
       <span class="links-of-author-item">
-        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
       </span>
       <span class="links-of-author-item">
-        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
       </span>
   </div>
 
@@ -298,7 +298,7 @@ if(bucket.isExists()) &#123;
 <img src="/posts/3b1200db/1.jpg" alt="redis 4.0.11 release notes"></p>
 </blockquote>
 <h2 id="源码分析">源码分析</h2>
-<p>公司redis集群比较古老，用的是3.2.3，直接去找对应源码<a target="_blank" rel="noopener" href="https://github.com/redis/redis/tree/3.2.3">redis 3.2.3</a></p>
+<p>公司redis集群比较古老，用的是3.2.3，直接去找对应源码<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/redis/redis/tree/3.2.3">redis 3.2.3</a></p>
 <p>经常读redis源码的都知道，要找redis对应的命令，直接去<code>server.c</code>找</p>
 <pre class="line-numbers language-c" data-language="c"><code class="language-c">struct redisCommand redisCommandTable[] &#x3D; &#123;
     &#x2F;&#x2F; …… 
@@ -360,7 +360,7 @@ if(bucket.isExists()) &#123;
 <li>在判断key是否存在，注意这里只使用了<code>db-&gt;dict</code>这个结构，经常读redis源码的都知道，redis过期时间存放在db-&gt;expires中，所有<code>dbExists</code>这个函数的判断时完全忽略过期时间的。</li>
 </ol>
 <h2 id="问题修复">问题修复</h2>
-<p>直接找问题修复的commit:<a target="_blank" rel="noopener" href="https://github.com/redis/redis/commit/5f1fcc599ac1d36f7d6be1f13696fc9c884302a8">fix exists command on slave</a></p>
+<p>直接找问题修复的commit:<a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/redis/redis/commit/5f1fcc599ac1d36f7d6be1f13696fc9c884302a8">fix exists command on slave</a></p>
 <blockquote>
 <p><img src="/posts/3b1200db/2.jpg" alt="fix exists command on slave"></p>
 </blockquote>

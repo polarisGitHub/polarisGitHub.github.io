@@ -180,10 +180,10 @@
 </div>
   <div class="links-of-author animated">
       <span class="links-of-author-item">
-        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+        <a href="https://github.com/polarisGitHub" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;polarisGitHub" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
       </span>
       <span class="links-of-author-item">
-        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+        <a href="mailto:polaris_he@163.com" title="E-Mail → mailto:polaris_he@163.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
       </span>
   </div>
 
@@ -290,17 +290,17 @@
     <div class="post-body" itemprop="articleBody"><blockquote>
 <p>本文基于Spring Boot 2.4.5</p>
 </blockquote>
-<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a target="_blank" rel="noopener" href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
+<p>AOP是Spring中比较常用的编程技巧，AspectJ定义pointcut也很方便。网上的资料对<a target="_blank" rel="noopener external nofollow noreferrer" href="https://endwas.cn/blog/75">AspectJ</a>的语法也讲解很多了。但对<code>@target</code>和<code>@within</code>都讲解的很模糊，能找到的说明一般都是：</p>
 <ol>
 <li>我们对被@target、@within注解的类中的方法会进行增强，但只有@within子类重写的方法会生效。</li>
 <li>对于被@target注解的子类，若子类调用父类的方法，而没有重写父类的方法那么就会被增强，但@within不会。</li>
 <li>对于被@within注解的父类，若父类方法子类没有重写，那么子类调用父类的方法，就会被增强，但@target不会 （2，3区别在于一个是@target子类调用父类的方法，一个是子类调用@within父类的方法）</li>
 <li>@target、@within对子类新增方法都不起作用。</li>
 </ol>
-<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a target="_blank" rel="noopener" href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
+<p>其实在使用@target以及其他几个类似的语法会给我们一个惊喜。这块网上很少有人提到，包括<a target="_blank" rel="noopener external nofollow noreferrer" href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#aop-introductions">Spring Reference</a>也没有详细说明，网上也有网友在问这个问题，也没有好的解答：</p>
 <blockquote>
-<p><a target="_blank" rel="noopener" href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
-<a target="_blank" rel="noopener" href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://ask.csdn.net/questions/758272">spring Aop @args() 导致启动报错</a><br>
+<a target="_blank" rel="noopener external nofollow noreferrer" href="https://segmentfault.com/q/1010000022320564">Spring aop @target注解问题</a></p>
 </blockquote>
 <p>现在我们来翻译翻译什么是@target的惊喜。</p>
 <span id="more"></span>
@@ -488,18 +488,18 @@ public boolean matches(Method method, Class&lt;?&gt; targetClass, boolean hasInt
 <blockquote>
 <p>造成这个问题的主要是Aspectj的语义，Aspectj使用织入，而Spring AOP采用的动态代理实现AOP。</p>
 <p>Aspectj和Spring AOP是AOP实现的两种方式，只是<code>@Aspectj</code>让Spring能使用Aspectj的语法</p>
-<p>既然使用Aspectj语法，<a target="_blank" rel="noopener" href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
+<p>既然使用Aspectj语法，<a target="_blank" rel="noopener external nofollow noreferrer" href="https://www.eclipse.org/aspectj/doc/released/adk15notebook/annotations-pointcuts-and-advice.html#runtime-type-matching-and-context-exposure">这个case在语义层面是需要 <strong>Runtime type matching</strong></a>，所以@target会代理所有bean在运行期判定。</p>
 </blockquote>
 <p>但我认为这块是有问题的</p>
 <ol>
 <li>注释中和Aspectj语法提到<code>this</code>,<code>target</code>,<code>args</code>,<code>@this</code>,<code>@target</code>,<code>@annotaiton</code>,<code>@args</code>都会使用在运行期判断，但实际测试只有<code>@target</code>，<code>@args</code>被特殊处理了。</li>
 <li><code>@target</code>的解析类是<code>ThisOrTargetAnnotationPointcut</code>，从类的名上看处理了<code>@this</code>和<code>@target</code>，但<code>@this</code>并不被Spring支持，应该是要处理<code>@this</code>的一些语义，但没实现完。从<code>@this</code>语义上看，和运行上下文是强相关的。</li>
-<li>从<a target="_blank" rel="noopener" href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
-</a>和<a target="_blank" rel="noopener" href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
+<li>从<a target="_blank" rel="noopener external nofollow noreferrer" href="https://blog.csdn.net/zl3450341/article/details/7673979">跟我学aspectj之十一 ----- target() this() within()的区别<br>
+</a>和<a target="_blank" rel="noopener external nofollow noreferrer" href="https://blog.csdn.net/yangshangwei/article/details/77861658">Spring-AOP @AspectJ切点函数之target()和this()</a>上看，<code>this</code>在<code>Spring AOP</code>和<code>Aspectj</code>上的语义似乎不一样，这块我确认了Spring AOP，有时间了要试试原生Aspectj</li>
 </ol>
 <p>最后，官方回复上看，似乎认定了是一个bug</p>
-<p><a target="_blank" rel="noopener" href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
-<p><a target="_blank" rel="noopener" href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/spring-projects/spring-framework/issues/20092">@target PointCut causes unrelated beans to be proxied [SPR-15533]</a></p>
+<p><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/spring-projects/spring-framework/issues/6859">@target() advices beans it should not [SPR-2168] #6859</a></p>
 
     </div>
 
